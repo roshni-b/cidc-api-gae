@@ -1,0 +1,10 @@
+eve-sqlalchemy==0.7.0
+eve-swagger==0.0.11
+flask-migrate==2.5.2
+python-dotenv==0.10.3
+requests==2.22.0
+six==1.12.0
+google-cloud-storage==1.16.1
+python-jose==3.0.1
+psycopg2-binary==2.8.3
+gunicorn

@@ -1,0 +1,13 @@
+runtime: python37
+env: standard
+entrypoint: gunicorn -b :$PORT --chdir cidc-api app:app
+
+env_variables:
+  ENV: 'staging'
+  SECRETS_BUCKET_NAME: 'cidc-secrets-staging'
+  AUTH0_DOMAIN: 'cidc-test.auth0.com'
+  AUTH0_AUDIENCE: 'staging-api'
+  AUTH0_CLIENT_ID: 'bSKzO5tsLCkIgR3VegLAOHsnKEIErYNP'
+  CLOUD_SQL_INSTANCE_NAME: 'cidc-dfci-staging:us-central1:cidc-postgres'
+  CLOUD_SQL_DB_USER: 'postgres'
+  CLOUD_SQL_DB_NAME: 'cidc'
