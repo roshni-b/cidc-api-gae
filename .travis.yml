@@ -5,3 +5,4 @@ install:
   - pip install -r requirements.txt
 script:
   - pytest
+  - black --check cidc-api --target-version=py36

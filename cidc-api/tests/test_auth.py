@@ -29,4 +29,3 @@ def test_bearer_auth_failure(get_user_email: MagicMock, find_or_create: MagicMoc
     assert not authenticated
     get_user_email.assert_called_once_with(TOKEN)
     find_or_create.assert_not_called()
-
