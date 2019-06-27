@@ -1,10 +1,28 @@
 language: "python"
 python:
   - "3.6"
+cache:
+  directories:
+    - $HOME/google-cloud-sdk/
 env:
-  - PYTHONPATH=$PYTHONPATH:$(pwd)/cidc-api
+  global:
+    - PYTHONPATH=$PYTHONPATH:$(pwd)/cidc-api
+    - CLOUDSDK_CORE_DISABLE_PROMPTS=1
+    - GOOGLE_APPLICATION_CREDENTIALS=$HOME/credentials.json
+before_install:
+  # Install and configure the gcloud SDK. Values for these environment 
+  # variables must be set in the Travis CI console for this to work:
+  #   GCLOUD_SERVICE_ACCOUNT_JSON : Travis CI service account credentials
+  #   [TODO: deployment-related environment variables]
+  - if [ ! -d ${HOME}/google-cloud-sdk/bin ]; then
+      rm -rf $HOME/google-cloud-sdk;
+      curl https://sdk.cloud.google.com | bash > /dev/null;
+    fi
+  - source $HOME/google-cloud-sdk/path.bash.inc
+  - echo "${GCLOUD_SERVICE_ACCOUNT_JSON}" | base64 --decode > $GOOGLE_APPLICATION_CREDENTIALS
+  - gcloud auth activate-service-account --key-file $GOOGLE_APPLICATION_CREDENTIALS
 install:
   - pip install -r requirements.txt -r requirements.dev.txt
 script:
-  - pytest
-  - black cidc-api --check
+  - PYTHONPATH=$PYTHONPATH:$HOME/cidc-api pytest
+  - black --check cidc-api --target-version=py36
