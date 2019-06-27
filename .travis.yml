@@ -1,6 +1,8 @@
 language: "python"
 python:
   - "3.6"
+env:
+  - PYTHONPATH=$PYTHONPATH:$(pwd)/cidc-api
 install:
   - pip install -r requirements.txt -r requirements.dev.txt
 script:

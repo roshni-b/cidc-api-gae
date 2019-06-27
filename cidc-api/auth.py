@@ -1,4 +1,5 @@
 import json
+from logging import getLogger
 from typing import List, Tuple
 
 import requests
