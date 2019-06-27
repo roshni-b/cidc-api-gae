@@ -1,7 +1,8 @@
 from unittest.mock import patch, MagicMock
 
+from flask import Flask
+
 import auth
-from app import app
 
 # TODO: actually test a roundtrip auth flow with auth0?
 
@@ -14,7 +15,7 @@ EMAIL = "test@email.com"
 @patch("auth.get_user_email", return_value=EMAIL)
 def test_bearer_auth_success(get_user_email: MagicMock, find_or_create: MagicMock):
     """Check that auth succeeds when get_user_email succeeds."""
-    with app.app_context():
+    with Flask(__name__).app_context():
         ba = auth.BearerAuth()
         authenticated = ba.check_auth(TOKEN, [], RESOURCE, "GET")
         assert authenticated
@@ -26,7 +27,7 @@ def test_bearer_auth_success(get_user_email: MagicMock, find_or_create: MagicMoc
 @patch("auth.get_user_email", side_effect=Exception)
 def test_bearer_auth_failure(get_user_email: MagicMock, find_or_create: MagicMock):
     """Check that auth succeeds when get_user_email fails."""
-    with app.app_context():
+    with Flask(__name__).app_context():
         ba = auth.BearerAuth()
         authenticated = ba.check_auth(TOKEN, [], RESOURCE, "GET")
         assert not authenticated
