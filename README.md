@@ -5,11 +5,11 @@ The next generation of the CIDC API, reworked to use Google Cloud-managed servic
 ## Development <!-- omit in TOC -->
 
 - [Install Python dependencies](#Install-Python-dependencies)
-- [Database](#Database)
+- [Database Management](#Database-Management)
   - [Setting up a local development database](#Setting-up-a-local-development-database)
   - [Connecting to a Cloud SQL database instance](#Connecting-to-a-Cloud-SQL-database-instance)
-  - [Running Migrations](#Running-Migrations)
-- [Running Locally](#Running-Locally)
+  - [Running database migrations](#Running-database-migrations)
+- [Serving Locally](#Serving-Locally)
 - [Testing](#Testing)
 - [Code Formatting](#Code-Formatting)
 - [Deployment](#Deployment)
@@ -21,7 +21,7 @@ Install both the production and development dependencies.
 pip install -r requirements.txt -r requirements.dev.txt
 ```
 
-### Database
+### Database Management
 
 #### Setting up a local development database
 In production, the CIDC API connects to a PostgreSQL instance hosted by Google Cloud SQL, but for local development, you should generally use a local PostgreSQL instance.
@@ -51,7 +51,7 @@ For more details on creating and running migrations, see [Running Migrations](#R
 #### Connecting to a Cloud SQL database instance
 [TODO]
 
-#### Running Migrations
+#### Running database migrations
 This project uses [`Flask Migrate`](https://flask-migrate.readthedocs.io/en/latest/) for managing database migrations. To create a new migration and upgrade the database specified in your `.env` config, run the following from inside the `cidc-api` directory:
 ```bash
 export FLASK_APP=app.py
@@ -66,7 +66,7 @@ flask db downgrade
 ```
 If you're updating `models.py`, you should create a migration and commit the resulting 
 
-### Running Locally
+### Serving Locally
 
 Once you have a development database set up and running, run the API server:
 ```bash
