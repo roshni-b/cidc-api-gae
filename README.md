@@ -13,6 +13,8 @@ The next generation of the CIDC API, reworked to use Google Cloud-managed servic
 - [Testing](#Testing)
 - [Code Formatting](#Code-Formatting)
 - [Deployment](#Deployment)
+  - [CI/CD](#CICD)
+  - [Deploying by hand](#Deploying-by-hand)
 
 
 ## Install Python dependencies
@@ -87,9 +89,22 @@ This project uses [`black`](https://black.readthedocs.io/en/stable/) for code st
 We recommend setting up autoformatting-on-save in your IDE of choice so that you don't have to worry about running `black` on your code.
 
 ## Deployment
-Deploy the application to Google App Engine by running the following:
+
+### CI/CD
+
+This project uses [Travis CI](https://travis-ci.org/) for continuous integration and deployment. To deploy an update to this application, follow these steps:
+1. Create a new branch locally, commit updates to it, then push that branch to this repository.
+2. Make a pull request from your branch into `master`. This will trigger Travis to run various tests and report back success or failure. You can't merge your PR until it passes the Travis build, so if the build fails, you'll probably need to fix your code.
+3. Once the Travis build passes (and pending approval from collaborators reviewing the PR), merge your changes into `master`. This will trigger Travis to re-run tests on the code then deploy changes to the staging API.
+4. Try out your deployed changes on the staging API once the Travis build completes.
+5. If you're satisfied that staging should be deployed into production, make a PR from `master` into `production`. 
+6. Once the PR build passes, merge `master` into `production`. This will trigger Travis to deploy the changes on staging to the production API.
+
+For more information or to update the Travis pipeline, check out the configuration in `.travis.yml`.
+
+### Deploying by hand
+Should you ever need to deploy the application to Google App Engine by hand, you can do so by running the following:
 ```bash
 gcloud app deploy <app.staging.yaml or app.prod.yaml> --project <gcloud project id>
 ```
-
-Going forward, deployment will happen as part the Travis CI pipeline, and we shouldn't need to deploy by hand.
+That being said, avoid doing this! Deploying this way circumvents the safety checks built into the CI/CD pipeline and can lead to inconsistencies between the code running on GAE and the code present in this repository. Luckily, though, GAE's built-in versioning system makes it hard to do anything catastrophic :-)
