@@ -44,16 +44,12 @@ if not POSTGRES_URI:
         config["query"] = {
             "host": "/cloudsql/%s" % environ.get("CLOUD_SQL_INSTANCE_NAME")
         }
-    elif environ.get("CLOUD_SQL_DB_HOST"):
+    else:
         # If CLOUD_SQL_DB_HOST is defined, we're connecting via
         # the database's public IP address. Google secures this
         # IP address for us, but it's still a good idea to keep
         # it a secret.
         config["host"] = secrets.get("CLOUD_SQL_DB_HOST")
-    else:
-        raise EnvironmentError(
-            "POSTGRES_URI, CLOUD_SQL_INSTANCE_NAME, or CLOUD_SQL_DB_IP must be defined to connect to the database"
-        )
 
     POSTGRES_URI = str(URL(**config))
 
