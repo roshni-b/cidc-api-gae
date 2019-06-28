@@ -2,7 +2,7 @@
 
 The next generation of the CIDC API, reworked to use Google Cloud-managed services. This API is built with the Eve REST API framework backed by Google Cloud SQL, running on Google App Engine.
 
-## Development <!-- omit in TOC -->
+# Development <!-- omit in TOC -->
 
 - [Install Python dependencies](#Install-Python-dependencies)
 - [Database Management](#Database-Management)
@@ -15,15 +15,15 @@ The next generation of the CIDC API, reworked to use Google Cloud-managed servic
 - [Deployment](#Deployment)
 
 
-### Install Python dependencies
+## Install Python dependencies
 Install both the production and development dependencies.
 ```python
 pip install -r requirements.txt -r requirements.dev.txt
 ```
 
-### Database Management
+## Database Management
 
-#### Setting up a local development database
+### Setting up a local development database
 In production, the CIDC API connects to a PostgreSQL instance hosted by Google Cloud SQL, but for local development, you should generally use a local PostgreSQL instance.
 
 To do so, first install and start PostgreSQL:
@@ -48,10 +48,10 @@ FLASK_APP=app.py flask db upgrade
 ```
 For more details on creating and running migrations, see [Running Migrations](#Running-Migrations).
 
-#### Connecting to a Cloud SQL database instance
+### Connecting to a Cloud SQL database instance
 [TODO]
 
-#### Running database migrations
+### Running database migrations
 This project uses [`Flask Migrate`](https://flask-migrate.readthedocs.io/en/latest/) for managing database migrations. To create a new migration and upgrade the database specified in your `.env` config, run the following from inside the `cidc-api` directory:
 ```bash
 export FLASK_APP=app.py
@@ -66,14 +66,14 @@ flask db downgrade
 ```
 If you're updating `models.py`, you should create a migration and commit the resulting 
 
-### Serving Locally
+## Serving Locally
 
 Once you have a development database set up and running, run the API server:
 ```bash
 python cidc-api/app.py
 ```
 
-### Testing
+## Testing
 This project uses [`pytest`](https://docs.pytest.org/en/latest/) for testing. 
 
 To run the tests, simply run:
@@ -81,12 +81,12 @@ To run the tests, simply run:
 pytest
 ```
 
-### Code Formatting
+## Code Formatting
 This project uses [`black`](https://black.readthedocs.io/en/stable/) for code styling. 
 
 We recommend setting up autoformatting-on-save in your IDE of choice so that you don't have to worry about running `black` on your code.
 
-### Deployment
+## Deployment
 Deploy the application to Google App Engine by running the following:
 ```bash
 gcloud app deploy <app.staging.yaml or app.prod.yaml> --project <gcloud project id>
