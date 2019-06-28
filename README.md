@@ -1,5 +1,11 @@
 # CIDC API <!-- omit in TOC -->
 
+| Environment | Branch                                                                   | Status                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| production  | [production](https://github.com/CIMAC-CIDC/cidc-api-gae/tree/production) | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=production)](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae) |
+| staging     | [master](https://github.com/CIMAC-CIDC/cidc-api-gae)                     | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=master)](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae)     |
+
+
 The next generation of the CIDC API, reworked to use Google Cloud-managed services. This API is built with the Eve REST API framework backed by Google Cloud SQL, running on Google App Engine.
 
 # Development <!-- omit in TOC -->
