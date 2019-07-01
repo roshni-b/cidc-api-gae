@@ -8,7 +8,7 @@
 
 The next generation of the CIDC API, reworked to use Google Cloud-managed services. This API is built with the Eve REST API framework backed by Google Cloud SQL, running on Google App Engine.
 
-# Development <!-- omit in TOC -->
+# Development <!-- omit in TOC -->****
 
 - [Install Python dependencies](#Install-Python-dependencies)
 - [Database Management](#Database-Management)
@@ -21,6 +21,7 @@ The next generation of the CIDC API, reworked to use Google Cloud-managed servic
 - [Deployment](#Deployment)
   - [CI/CD](#CICD)
   - [Deploying by hand](#Deploying-by-hand)
+- [Connecting](#Connecting)
 
 
 ## Install Python dependencies
@@ -114,3 +115,10 @@ Should you ever need to deploy the application to Google App Engine by hand, you
 gcloud app deploy <app.staging.yaml or app.prod.yaml> --project <gcloud project id>
 ```
 That being said, avoid doing this! Deploying this way circumvents the safety checks built into the CI/CD pipeline and can lead to inconsistencies between the code running on GAE and the code present in this repository. Luckily, though, GAE's built-in versioning system makes it hard to do anything catastrophic :-)
+
+## Connecting
+Currently, the staging API is hosted at staging-api.cimac-network.org and the production instance is hosted at api.cimac-network.org.
+
+To connect to the staging API locally, obtain an authorization token using the Auth0 [cidc-test API debugger](https://cidc-test.us8.webtask.io/auth0-authentication-api-debugger) (you'll need Auth0 access to do this). Set the application to API v2. Navigate to the OAuth2 / OIDC tab, set the audience to staging-api, then click "OAUTH2 / OIDC LOGIN" under user flows. Once you've logged in, copy the resulting `access_token` from the provided hash fragment. Include the header  `Authorization: Bearer YOUR_ACCESS_TOKEN` in requests you make to the staging API, and your requests should be properly authenticated. If your access token expires, generate a new one following this same procedure.
+
+An Auth0 API debugger is not yet configured for the production API, but once it is, the process for connecting there will be similar.
