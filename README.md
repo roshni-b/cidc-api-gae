@@ -58,7 +58,24 @@ FLASK_APP=app.py flask db upgrade
 For more details on creating and running migrations, see [Running Migrations](#Running-Migrations).
 
 ### Connecting to a Cloud SQL database instance
-[TODO]
+
+Install the [Cloud SQL Proxy](https://cloud.google.com/sql/docs/mysql/quickstart-proxy-test):
+```bash
+curl -o /usr/local/bin/cloud_sql_proxy https://dl.google.com/cloudsql/cloud_sql_proxy.darwin.amd64
+chmod +x /usr/local/bin/cloud_sql_proxy
+```
+
+Proxy to the staging Cloud SQL instance:
+```bash
+cloud_sql_proxy --instance=cidc-dfci-staging:us-central1:cidc-postgres=tcp:5432
+```
+
+In your `.env` file, comment out `POSTGRES_URI` and uncomment all environment variables prefixed with `CLOUD_SQL_`. Restart your local API instance, and it will connect to the staging Cloud SQL instance via the local proxy.
+
+If you wish to connect to the Cloud SQL instance via the postgres REPL, run:
+```bash
+gcloud sql connect cidc-postgres
+```
 
 ### Running database migrations
 This project uses [`Flask Migrate`](https://flask-migrate.readthedocs.io/en/latest/) for managing database migrations. To create a new migration and upgrade the database specified in your `.env` config, run the following from inside the `cidc-api` directory:
