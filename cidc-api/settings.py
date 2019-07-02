@@ -44,12 +44,17 @@ if not POSTGRES_URI:
         config["query"] = {
             "host": "/cloudsql/%s" % environ.get("CLOUD_SQL_INSTANCE_NAME")
         }
+    elif environ.get("CLOUD_SQL_PROXY_HOST") and environ.get("CLOUD_SQL_PROXY_PORT"):
+        # If CLOUD_SQL_PROXY_HOST/PORT are defined, we're connecting
+        # to Cloud SQL via a local cloud_sql_proxy.
+        config["host"] = environ.get("CLOUD_SQL_PROXY_HOST")
+        config["port"] = environ.get("CLOUD_SQL_PROXY_PORT")
     else:
-        # If CLOUD_SQL_DB_HOST is defined, we're connecting via
-        # the database's public IP address. Google secures this
-        # IP address for us, but it's still a good idea to keep
-        # it a secret.
-        config["host"] = secrets.get("CLOUD_SQL_DB_HOST")
+        raise Exception(
+            "Either POSTGRES_URI, CLOUD_SQL_INSTANCE_NAME, or "
+            + "CLOUD_SQL_PROXY_HOST/PORT must be defined to connect "
+            + "to a database."
+        )
 
     POSTGRES_URI = str(URL(**config))
 
