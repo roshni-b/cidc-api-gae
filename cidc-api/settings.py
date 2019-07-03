@@ -3,19 +3,26 @@ from os import environ
 from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 from dotenv import load_dotenv
 
-from secrets import CloudStorageSecretManager
 from models import Users
 
 load_dotenv()
 
 # Configure secrets manager
-secrets = CloudStorageSecretManager(environ.get("SECRETS_BUCKET_NAME"))
+if environ.get("TESTING"):
+    from unittest.mock import MagicMock
+
+    # If we're testing, we shouldn't need access to secrets in GCS
+    secrets = MagicMock()
+else:
+    from secrets import CloudStorageSecretManager
+
+    secrets_bucket = environ.get("SECRETS_BUCKET_NAME")
+    secrets = CloudStorageSecretManager(secrets_bucket)
 
 # Auth0 configuration
 AUTH0_DOMAIN = environ.get("AUTH0_DOMAIN")
-AUTH0_AUDIENCE = environ.get("AUTH0_AUDIENCE")
 AUTH0_CLIENT_ID = environ.get("AUTH0_CLIENT_ID")
-AUTH0_CLIENT_SECRET = secrets.get("AUTH0_CLIENT_SECRET")
+ALGORITHMS = ["RS256"]
 
 # Deployment environment
 ENV = environ.get("ENV", "staging")

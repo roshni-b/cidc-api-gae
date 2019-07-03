@@ -35,7 +35,7 @@ before_install:
 install:
   - pip install -r requirements.txt -r requirements.dev.txt
 script:
-  - PYTHONPATH=$PYTHONPATH:$HOME/cidc-api pytest
+  - TESTING=True pytest
   - black --check cidc-api --target-version=py36
 
 deploy:
