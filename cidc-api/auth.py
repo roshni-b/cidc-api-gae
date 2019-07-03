@@ -1,17 +1,33 @@
-import json
-from logging import getLogger
-from typing import List, Tuple
+import logging
+from typing import List
 
 import requests
 from eve.auth import TokenAuth
-from flask import current_app as app, _request_ctx_stack
 from jose import jwt
 
 from models import Users
+from settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID
 
-ALGORITHMS = ["RS256"]
 
-# TODO: better error handling all around
+logger = logging.getLogger("cidc-api.auth")
+
+
+class AuthError(ValueError):
+    def __init__(self, error_code: str, message: str, status_code: int = 401):
+        """
+        An error resulting in a failure to authenticate a user.
+
+        Args:
+            error_code: an error code, e.g., 'token_expired'
+            message: a human-friendly description of the error
+            status_code: the HTTP status code to include in the response
+        """
+        self.error_code = error_code
+        self.message = message
+        self.status_code = status_code
+
+    def json(self):
+        return {"error_code": self.error_code, "message": self.message}
 
 
 class BearerAuth(TokenAuth):
@@ -19,109 +35,126 @@ class BearerAuth(TokenAuth):
     Handles bearer token authorization.
     """
 
-    def check_auth(self, token, allowed_roles, resource, method):
+    def check_auth(
+        self, id_token: str, allowed_roles: List[str], resource: str, method: str
+    ) -> bool:
         """
-        Validates the user's access token.
-        Arguments:
-            token {str} -- a JWT access token.
-            allowed_roles {List[str]} -- Array of strings of user roles.
-            resource {str} -- Endpoint being accessed.
-            method {str} -- HTTP method (GET, POST, PATCH, DELETE)
+        Validates the user's id_token, extracts user info if valid.
+        If this is a registration attempt, create 
+
+        Args:
+            id_token: A JWT id_token
+            allowed_roles: Array of strings of user roles
+            resource: Endpoint being accessed
+            method: HTTP method (GET, POST, PATCH, DELETE)
+        
+        Returns:
+            bool: True if the user successfully authenticated, False otherwise.
+        
+        TODO: role-based resource/method-level authorization
+        """
+        profile = self.token_auth(id_token)
+
+        Users.find_or_create(profile["email"])
+
+        return True
+
+    def token_auth(self, id_token: str) -> dict:
+        """
+        Checks if the supplied id_token is valid, and, if so,
+        decodes and returns its payload.
+
+        Args:
+            id_token: a JWT id_token.
+
+        Returns:
+            dict: the user's decoded profile info.
+
+        TODO: implement token caching
+        """
+        public_key = self.get_issuer_public_key(id_token)
+
+        payload = self.decode_id_token(id_token, public_key)
+
+        logger.info("Authenticated user: " + payload["email"])
+
+        return payload
+
+    def get_issuer_public_key(self, token: str) -> dict:
+        """
+        Get the appropriate public key to check this token for authenticity.
+
+        Args:
+            token: an encoded JWT.
+        
+        Raises:
+            AuthError: if no public key can be found.
+            
+        Returns:
+            str: the public key.
         """
         try:
-            # Attempt to obtain the current user's email from the access token.
-            # TODO: implement token caching. Checking with Auth0 every time is very slow.
-            email = get_user_email(token)
+            header = jwt.get_unverified_header(token)
+        except jwt.JWTError as e:
+            raise AuthError("invalid_signature", str(e))
 
-            assert email
+        # Get public keys from our Auth0 domain
+        jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
+        jwks = requests.get(jwks_url).json()
 
-            Users.find_or_create(email)
+        # Obtain the public key used to sign this token
+        public_key = None
+        for key in jwks["keys"]:
+            if key["kid"] == header["kid"]:
+                public_key = key
 
-            # Authentication succeeded
-            return True
-        except Exception as e:
-            # TODO: be more selective about what errors constitute an auth error,
-            # leading to a rejection of the auth attempt, versus a server error.
-            app.logger.error(e)
+        # If no matching public key was found, we can't validate the token
+        if not public_key:
+            raise AuthError(
+                "no_public_key", "Found no public key with id %s" % header["kid"]
+            )
 
-            # Authentication failed
-            return False
+        return public_key
 
+    def decode_id_token(self, token: str, public_key: dict) -> dict:
+        """
+        Decodes the token and checks it for validity.
 
-def validate_payload(token: str, rsa_key: dict, audience: str) -> dict:
-    """
-    Decodes the token and checks it for validity.
-    Arguments:
-        token {str} -- JWT
-        rsa_key {dict} -- rsa_key
-        audience {str} -- parameter to use as the audience.
-    Returns:
-        dict -- Decoded token as a dictionary.
-    """
-    # TODO: handle expiration and claims errors
+        Args:
+            token: the JWT to validate and decode
+            public_key: public_key
 
-    return jwt.decode(
-        token,
-        rsa_key,
-        algorithms=ALGORITHMS,
-        audience=audience,
-        issuer="https://%s/" % app.config["AUTH0_DOMAIN"],
-        options={
-            "verify_signature": True,
-            "verify_aud": True,
-            "verify_iat": True,
-            "verify_exp": True,
-            "verify_nbf": True,
-            "verify_iss": True,
-            "verify_sub": True,
-            "verify_jti": True,
-            "verify_at_hash": False,
-            "leeway": 0,
-        },
-    )
+        Raises:
+            AuthError: 
+                - if token is expired
+                - if token has invalid claims
+                - if token signature is invalid in any way
 
+        Returns:
+            dict: the decoded token as a dictionary.
+        """
+        try:
+            payload = jwt.decode(
+                token,
+                public_key,
+                algorithms=ALGORITHMS,
+                # TODO: is this what we want?
+                audience=AUTH0_CLIENT_ID,
+                issuer=f"https://{AUTH0_DOMAIN}/",
+                options={"verify_at_hash": False},
+            )
+        except jwt.ExpiredSignatureError as e:
+            raise AuthError("expired_token", str(e))
+        except jwt.JWTClaimsError as e:
+            raise AuthError("invalid_claims", str(e))
+        except jwt.JWTError as e:
+            raise AuthError("invalid_signature", str(e))
 
-def get_user_email(token):
-    """
-    Checks if the supplied token is valid.
-    Arguments:
-        token {str} -- JWT token.
-    Raises:
-        AuthError -- [description]
-    Returns:
-        str -- Authorized user's email.
-    """
-    unverified_header = jwt.get_unverified_header(token)
+        # Currently, only id_tokens are accepted for authentication.
+        # Going forward, we could also accept access tokens that we
+        # use to query the userinfo endpoint.
+        if "email" not in payload:
+            msg = "An id_token with an 'email' field is required to authenticate"
+            raise AuthError("id_token_required", msg)
 
-    # Get public keys from our Auth0 domain
-    jwks_url = "https://%s/.well-known/jwks.json" % app.config["AUTH0_DOMAIN"]
-    jwks = requests.get(jwks_url).json()
-
-    # Obtain the public key used to sign this token
-    rsa_key = None
-    for key in jwks["keys"]:
-        if key["kid"] == unverified_header["kid"]:
-            rsa_key = {
-                "kty": key["kty"],
-                "kid": key["kid"],
-                "use": key["use"],
-                "n": key["n"],
-                "e": key["e"],
-            }
-
-    # If no matching public key was found, we can't validate the token
-    assert rsa_key
-
-    # Validate that the provided token was issued by Auth0
-    payload = validate_payload(token, rsa_key, app.config["AUTH0_AUDIENCE"])
-
-    # Use the obtained authorization token to access user info
-    userinfo_url = "https://%s/userinfo" % app.config["AUTH0_DOMAIN"]
-    userinfo = requests.get(
-        userinfo_url, headers={"Authorization": f"Bearer {token}"}
-    ).json()
-
-    _request_ctx_stack.top.current_user = userinfo
-    app.logger.info("Authenticated user: " + userinfo["email"])
-
-    return userinfo["email"]
+        return payload

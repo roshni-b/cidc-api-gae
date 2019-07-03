@@ -6,23 +6,20 @@ class SecretNotFoundError(Exception):
     pass
 
 
-default_client = storage.Client()
-
-
 class CloudStorageSecretManager:
     """
         Get and set secrets (e.g., API keys, db passwords) in Google Cloud Storage
         to leverage GCS's default at-rest encryption.
     """
 
-    def __init__(self, bucket_name, gcs_client=default_client):
+    def __init__(self, bucket_name):
         """
             Initialize a CloudStorageSecretManager with a connection to a Cloud Storage bucket.
         """
         assert bucket_name, "a bucket name is required to manage secrets"
 
         self.bucket_name = bucket_name
-        self.bucket = gcs_client.get_bucket(bucket_name)
+        self.bucket = storage.Client().get_bucket(bucket_name)
 
     def get(self, secret_name):
         """

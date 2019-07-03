@@ -136,6 +136,6 @@ That being said, avoid doing this! Deploying this way circumvents the safety che
 ## Connecting
 Currently, the staging API is hosted at staging-api.cimac-network.org and the production instance is hosted at api.cimac-network.org.
 
-To connect to the staging API locally, obtain an authorization token using the Auth0 [cidc-test API debugger](https://cidc-test.us8.webtask.io/auth0-authentication-api-debugger) (you'll need Auth0 access to do this). Set the application to API v2. Navigate to the OAuth2 / OIDC tab, set the audience to staging-api, then click "OAUTH2 / OIDC LOGIN" under user flows. Once you've logged in, copy the resulting `access_token` from the provided hash fragment. Include the header  `Authorization: Bearer YOUR_ACCESS_TOKEN` in requests you make to the staging API, and your requests should be properly authenticated. If your access token expires, generate a new one following this same procedure.
+To connect to the staging API with `curl` or a REST API client like Insomnia, get an id token from stagingportal.cimac-network.org, and include the header  `Authorization: Bearer YOUR_ID_TOKEN` in requests you make to the staging API. If your token expires, generate a new one following this same procedure.
 
-An Auth0 API debugger is not yet configured for the production API, but once it is, the process for connecting there will be similar.
+To connect to the production API locally, follow the same procedure, but instead get your token from portal.cimac-network.org.
