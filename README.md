@@ -22,7 +22,7 @@ The next generation of the CIDC API, reworked to use Google Cloud-managed servic
   - [CI/CD](#CICD)
   - [Deploying by hand](#Deploying-by-hand)
 - [Connecting](#Connecting)
-
+- [Provisioning the system from scratch](#Provisioning-the-system-from-scratch)
 
 ## Install Python dependencies
 Install both the production and development dependencies.
@@ -139,3 +139,7 @@ Currently, the staging API is hosted at staging-api.cimac-network.org and the pr
 To connect to the staging API with `curl` or a REST API client like Insomnia, get an id token from stagingportal.cimac-network.org, and include the header  `Authorization: Bearer YOUR_ID_TOKEN` in requests you make to the staging API. If your token expires, generate a new one following this same procedure.
 
 To connect to the production API locally, follow the same procedure, but instead get your token from portal.cimac-network.org.
+
+## Provisioning the system from scratch
+
+For an overview of how to set up the CIDC API service from scratch, see the step-by-step guide in `PROVISION.md`.

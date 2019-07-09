@@ -7,8 +7,10 @@ from models import Users
 
 load_dotenv()
 
+TESTING = environ.get("TESTING") == "True"
+
 # Configure secrets manager
-if environ.get("TESTING"):
+if TESTING:
     from unittest.mock import MagicMock
 
     # If we're testing, we shouldn't need access to secrets in GCS
