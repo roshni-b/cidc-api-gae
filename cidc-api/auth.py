@@ -55,7 +55,7 @@ class BearerAuth(TokenAuth):
         """
         profile = self.token_auth(id_token)
 
-        Users.find_or_create(profile["email"])
+        Users.create(profile["email"])
 
         return True
 

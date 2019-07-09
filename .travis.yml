@@ -4,6 +4,10 @@ python:
 cache:
   directories:
     - $HOME/google-cloud-sdk/
+services:
+  - postgresql
+addons:
+  postgresql: "9.6"
 env:
   global:
     - PYTHONPATH=$PYTHONPATH:$(pwd)/cidc-api
@@ -34,8 +38,12 @@ before_install:
   - gcloud auth activate-service-account --key-file $GOOGLE_APPLICATION_CREDENTIALS
 install:
   - pip install -r requirements.txt -r requirements.dev.txt
+before_script:
+  - psql -c "create user cidcdev with password '1234'"
+  - psql -c "create database cidctest"
+  - psql -c "grant all privileges on database cidctest to cidcdev"
 script:
-  - TESTING=True pytest
+  - pytest
   - black --check cidc-api --target-version=py36
 
 deploy:

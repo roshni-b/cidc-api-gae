@@ -28,7 +28,7 @@ def test_check_auth_smoketest(monkeypatch, bearer_auth):
     # No AuthErrors
     monkeypatch.setattr(bearer_auth, "token_auth", lambda _: PAYLOAD)
     # No database errors
-    monkeypatch.setattr("models.Users.find_or_create", lambda _: True)
+    monkeypatch.setattr("models.Users.create", lambda _: True)
     # Authentication should succeed
     authenticated = bearer_auth.check_auth(TOKEN, [], RESOURCE, "GET")
     assert authenticated

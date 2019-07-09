@@ -40,11 +40,17 @@ To do so, first install and start PostgreSQL:
 brew install postgresql
 brew services start postgresql # launches the postgres service whenever your computer launches
 ```
-By default, the postgres service listens on port 5432. Next, create your local `cidc` development database and the `cidcdev` user:
+By default, the postgres service listens on port 5432. Next, create the `cidcdev` user, your local `cidc` development database, and a local `cidctest` database that the unit/integration tests will use:
 ```bash
-psql -c "create database cidc"
 psql -c "create user cidcdev with password '1234'"
+
+# Database to use for local development
+psql -c "create database cidc"
 psql -c "grant all privileges on database cidc to cidcdev"
+
+# Database to use for automated testing
+psql -c "create database cidctest"
+psql -c "grant all privileges on database cidctest to cidcdev"
 ```
 Now, you should be able to connect to your development database with the URI `postgres://cidcdev:1234@localhost:5432/cidc`. Or, in the postgres REPL:
 ```bash

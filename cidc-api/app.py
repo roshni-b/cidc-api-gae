@@ -23,17 +23,16 @@ db = app.data.driver
 BaseModel.metadata.bind = db.engine
 db.Model = BaseModel
 
-if not app.config["TESTING"]:
-    # Configure flask-migrate and upgrade the database
-    # Note: while upgrades are performed automatically,
-    # generating the migrations should be performed by hand
-    # using the flask-migrate CLI, and the resulting files
-    # should be checked into source control.
-    Migrate(app, db)
-    with app.app_context():
-        app.logger.info("Upgrading the database...")
-        upgrade(MIGRATIONS)
-        app.logger.info("Done upgrading the database.")
+# Configure flask-migrate and upgrade the database
+# Note: while upgrades are performed automatically,
+# generating the migrations should be performed by hand
+# using the flask-migrate CLI, and the resulting files
+# should be checked into source control.
+Migrate(app, db)
+with app.app_context():
+    app.logger.info("Upgrading the database...")
+    upgrade(MIGRATIONS)
+    app.logger.info("Done upgrading the database.")
 
 # Configure the swagger site
 # TODO: flesh this out
