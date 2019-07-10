@@ -1,25 +1,26 @@
+import sys
 import json
 import pytest
 
-from app import app as eve_app
-from auth import AuthError
-from test_auth import throw_auth_error
+from errors import AuthError, ServerError
+from test_errors import make_raiser
 
 
 @pytest.fixture
 def app():
-    return eve_app
+    from app import app as eve_app
+
+    yield eve_app
+
+    # Clear the global app context between tests
+    del sys.modules["app"]
 
 
-@pytest.fixture
-def client(app):
-    return app.test_client()
-
-
-def test_auth_error(monkeypatch, app, client):
-    """Test that the AuthError handler is registered and catches errors"""
-    app.before_request(throw_auth_error)
-    response = client.get("/")
+@pytest.mark.parametrize("error", [ServerError("foo", "bar"), AuthError("foo", "bar")])
+def test_error_handlers(monkeypatch, app, error):
+    """Test that the error handlers catch errors as expected"""
+    app.before_request(make_raiser(error))
+    response = app.test_client().get("/")
     data = json.loads(response.data)
-    assert data == {"error_code": "foo", "message": "bar"}
-    assert response.status_code == 401
+    assert data == error.json()
+    assert response.status_code == error.status_code

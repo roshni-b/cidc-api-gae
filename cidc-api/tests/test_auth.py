@@ -2,7 +2,10 @@ import pytest
 from jose import jwt
 from unittest.mock import MagicMock
 
-from auth import BearerAuth, AuthError
+from errors import AuthError
+from auth import BearerAuth
+
+from test_errors import make_raiser
 
 TOKEN = "test-token"
 RESOURCE = "test-resource"
@@ -13,8 +16,7 @@ HEADER = {"kid": 1}
 PAYLOAD = {"email": EMAIL}
 
 
-def throw_auth_error(*args, **kwargs):
-    raise AuthError("foo", "bar")
+throw_auth_error = make_raiser(AuthError("foo", "bar"))
 
 
 @pytest.fixture

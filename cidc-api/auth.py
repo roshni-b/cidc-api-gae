@@ -5,29 +5,12 @@ import requests
 from eve.auth import TokenAuth
 from jose import jwt
 
+from errors import AuthError
 from models import Users
 from settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID
 
 
 logger = logging.getLogger("cidc-api.auth")
-
-
-class AuthError(ValueError):
-    def __init__(self, error_code: str, message: str, status_code: int = 401):
-        """
-        An error resulting in a failure to authenticate a user.
-
-        Args:
-            error_code: an error code, e.g., 'token_expired'
-            message: a human-friendly description of the error
-            status_code: the HTTP status code to include in the response
-        """
-        self.error_code = error_code
-        self.message = message
-        self.status_code = status_code
-
-    def json(self):
-        return {"error_code": self.error_code, "message": self.message}
 
 
 class BearerAuth(TokenAuth):
