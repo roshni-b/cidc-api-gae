@@ -84,9 +84,9 @@ gcloud sql connect cidc-postgres
 ```
 
 ### Running database migrations
-This project uses [`Flask Migrate`](https://flask-migrate.readthedocs.io/en/latest/) for managing database migrations. To create a new migration and upgrade the database specified in your `.env` config, run the following from inside the `cidc-api` directory:
+This project uses [`Flask Migrate`](https://flask-migrate.readthedocs.io/en/latest/) for managing database migrations. To create a new migration and upgrade the database specified in your `.env` config:
 ```bash
-export FLASK_APP=app.py
+export FLASK_APP=cidc-api/app.py
 # Generate the migration script
 flask db migrate
 # Apply changes to the database

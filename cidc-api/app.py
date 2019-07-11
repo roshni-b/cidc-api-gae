@@ -14,7 +14,7 @@ from auth import BearerAuth
 
 ABSPATH = dirname(abspath(__file__))
 SETTINGS = join(ABSPATH, "settings.py")
-MIGRATIONS = join(ABSPATH, "migrations")
+MIGRATIONS = join(ABSPATH, "..", "migrations")
 
 # Instantiate the Eve app
 app = Eve(auth=BearerAuth, data=SQL, validator=ValidatorSQL, settings=SETTINGS)
@@ -29,7 +29,7 @@ db.Model = BaseModel
 # generating the migrations should be performed by hand
 # using the flask-migrate CLI, and the resulting files
 # should be checked into source control.
-Migrate(app, db)
+Migrate(app, db, MIGRATIONS)
 with app.app_context():
     app.logger.info("Upgrading the database...")
     upgrade(MIGRATIONS)
