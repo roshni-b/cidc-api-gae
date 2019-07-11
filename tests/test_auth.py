@@ -1,11 +1,9 @@
 import pytest
 from jose import jwt
 from unittest.mock import MagicMock
+from werkzeug.exceptions import Unauthorized
 
-from errors import AuthError
 from auth import BearerAuth
-
-from test_errors import make_raiser
 
 TOKEN = "test-token"
 RESOURCE = "test-resource"
@@ -16,7 +14,14 @@ HEADER = {"kid": 1}
 PAYLOAD = {"email": EMAIL}
 
 
-throw_auth_error = make_raiser(AuthError("foo", "bar"))
+def make_raiser(exception):
+    def raise_e(*args, **kwargs):
+        raise exception
+
+    return raise_e
+
+
+throw_auth_error = make_raiser(Unauthorized("foo"))
 
 
 @pytest.fixture
@@ -27,7 +32,7 @@ def bearer_auth(monkeypatch):
 
 def test_check_auth_smoketest(monkeypatch, bearer_auth):
     """Check that authentication succeeds if no errors are thrown"""
-    # No AuthErrors
+    # No authorization errors
     monkeypatch.setattr(bearer_auth, "token_auth", lambda _: PAYLOAD)
     # No database errors
     monkeypatch.setattr("models.Users.create", lambda _: True)
@@ -37,11 +42,11 @@ def test_check_auth_smoketest(monkeypatch, bearer_auth):
 
 
 def test_check_auth_auth_error(monkeypatch, bearer_auth):
-    """Check that authentication fails if an AuthError is thrown by BearerAuth.token_auth"""
-    # Raise an AuthError
+    """Check that authentication fails if an Unauthorized is thrown by BearerAuth.token_auth"""
+    # Raise an Unauthorized exception
     monkeypatch.setattr(bearer_auth, "token_auth", throw_auth_error)
     # Authentication should fail and bubble this error up
-    with pytest.raises(AuthError):
+    with pytest.raises(Unauthorized):
         bearer_auth.check_auth(TOKEN, [], RESOURCE, "GET")
 
 
@@ -65,17 +70,17 @@ def test_token_auth(monkeypatch, bearer_auth):
 
     assert bearer_auth.token_auth(TOKEN) == PAYLOAD
 
-    # Should raise an AuthError if get_issuer_public_key raises one
+    # Should raise an Unauthorized exception if get_issuer_public_key raises one
     monkeypatch.setattr(bearer_auth, "get_issuer_public_key", throw_auth_error)
-    with pytest.raises(AuthError):
+    with pytest.raises(Unauthorized):
         bearer_auth.token_auth(TOKEN)
 
     # Reset get_issuer_public_key to not raise an exception
     monkeypatch.setattr(bearer_auth, "get_issuer_public_key", get_public_key)
 
-    # Should raise an AuthError if decode_id_token raises one
+    # Should raise an Unauthorized exception if decode_id_token raises one
     monkeypatch.setattr(bearer_auth, "decode_id_token", throw_auth_error)
-    with pytest.raises(AuthError):
+    with pytest.raises(Unauthorized):
         bearer_auth.token_auth(TOKEN)
 
 
@@ -105,36 +110,34 @@ def test_get_issuer_public_key(monkeypatch, bearer_auth):
 
     # The response doesn't contain the public key we're looking for
     monkeypatch.setattr("requests.get", make_response({"keys": []}))
-    with pytest.raises(AuthError, match="no_public_key"):
+    with pytest.raises(Unauthorized):
         bearer_auth.get_issuer_public_key(TOKEN)
 
 
 def test_decode_id_token(monkeypatch, bearer_auth):
     """Test that id_token-decoding logic works"""
 
-    def make_raiser(exception):
-        def raise_e(*args, **kwargs):
-            raise exception()
+    error_msg = "test error text"
 
-        return raise_e
-
-    monkeypatch.setattr("jose.jwt.decode", make_raiser(jwt.ExpiredSignatureError))
-    with pytest.raises(AuthError, match="expired_token"):
+    monkeypatch.setattr(
+        "jose.jwt.decode", make_raiser(jwt.ExpiredSignatureError(error_msg))
+    )
+    with pytest.raises(Unauthorized, match=error_msg) as e:
         bearer_auth.decode_id_token(TOKEN, PUBLIC_KEY)
 
-    monkeypatch.setattr("jose.jwt.decode", make_raiser(jwt.JWTClaimsError))
-    with pytest.raises(AuthError, match="invalid_claims"):
+    monkeypatch.setattr("jose.jwt.decode", make_raiser(jwt.JWTClaimsError(error_msg)))
+    with pytest.raises(Unauthorized, match=error_msg):
         bearer_auth.decode_id_token(TOKEN, PUBLIC_KEY)
 
-    monkeypatch.setattr("jose.jwt.decode", make_raiser(jwt.JWTError))
-    with pytest.raises(AuthError, match="invalid_signature"):
+    monkeypatch.setattr("jose.jwt.decode", make_raiser(jwt.JWTError(error_msg)))
+    with pytest.raises(Unauthorized, match=error_msg):
         bearer_auth.decode_id_token(TOKEN, PUBLIC_KEY)
 
     def no_email(*args, **kwargs):
         return {}
 
     monkeypatch.setattr("jose.jwt.decode", no_email)
-    with pytest.raises(AuthError, match="id_token_required"):
+    with pytest.raises(Unauthorized):
         bearer_auth.decode_id_token(TOKEN, PUBLIC_KEY)
 
     def correct_email(*args, **kwargs):

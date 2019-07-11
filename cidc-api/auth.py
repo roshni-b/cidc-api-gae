@@ -4,8 +4,8 @@ from typing import List
 import requests
 from eve.auth import TokenAuth
 from jose import jwt
+from werkzeug.exceptions import Unauthorized
 
-from errors import AuthError
 from models import Users
 from settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID
 
@@ -71,7 +71,7 @@ class BearerAuth(TokenAuth):
             token: an encoded JWT.
         
         Raises:
-            AuthError: if no public key can be found.
+            Unauthorized: if no public key can be found.
             
         Returns:
             str: the public key.
@@ -79,7 +79,7 @@ class BearerAuth(TokenAuth):
         try:
             header = jwt.get_unverified_header(token)
         except jwt.JWTError as e:
-            raise AuthError("invalid_signature", str(e))
+            raise Unauthorized(str(e))
 
         # Get public keys from our Auth0 domain
         jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
@@ -93,9 +93,7 @@ class BearerAuth(TokenAuth):
 
         # If no matching public key was found, we can't validate the token
         if not public_key:
-            raise AuthError(
-                "no_public_key", "Found no public key with id %s" % header["kid"]
-            )
+            raise Unauthorized("Found no public key with id %s" % header["kid"])
 
         return public_key
 
@@ -108,7 +106,7 @@ class BearerAuth(TokenAuth):
             public_key: public_key
 
         Raises:
-            AuthError: 
+            Unauthorized: 
                 - if token is expired
                 - if token has invalid claims
                 - if token signature is invalid in any way
@@ -127,17 +125,17 @@ class BearerAuth(TokenAuth):
                 options={"verify_at_hash": False},
             )
         except jwt.ExpiredSignatureError as e:
-            raise AuthError("expired_token", str(e))
+            raise Unauthorized(str(e))
         except jwt.JWTClaimsError as e:
-            raise AuthError("invalid_claims", str(e))
+            raise Unauthorized(str(e))
         except jwt.JWTError as e:
-            raise AuthError("invalid_signature", str(e))
+            raise Unauthorized(str(e))
 
         # Currently, only id_tokens are accepted for authentication.
         # Going forward, we could also accept access tokens that we
         # use to query the userinfo endpoint.
         if "email" not in payload:
             msg = "An id_token with an 'email' field is required to authenticate"
-            raise AuthError("id_token_required", msg)
+            raise Unauthorized(msg)
 
         return payload

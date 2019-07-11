@@ -8,7 +8,6 @@ from eve_swagger import swagger
 from flask import jsonify
 from flask_migrate import Migrate, upgrade
 
-from errors import register_error_handlers
 from models import BaseModel
 from auth import BearerAuth
 
@@ -52,9 +51,6 @@ app.config["SWAGGER_INFO"] = {
     },
     "schemes": ["http", "https"],
 }
-
-# Register custom error handlers with the API server
-register_error_handlers(app)
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000)
