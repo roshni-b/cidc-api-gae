@@ -52,7 +52,7 @@ psql -c "grant all privileges on database cidc to cidcdev"
 psql -c "create database cidctest"
 psql -c "grant all privileges on database cidctest to cidcdev"
 ```
-Now, you should be able to connect to your development database with the URI `postgres://cidcdev:1234@localhost:5432/cidc`. Or, in the postgres REPL:
+Now, you should be able to connect to your development database with the URI `postgresql://cidcdev:1234@localhost:5432/cidc`. Or, in the postgres REPL:
 ```bash
 psql cidc
 ```
