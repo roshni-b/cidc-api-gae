@@ -9,3 +9,6 @@ python-jose==3.0.1
 psycopg2-binary==2.8.3
 werkzeug==0.15.4
 gunicorn
+
+# CIMAC-CIDC modules
+git+https://github.com/cimac-cidc/cidc-schemas@release
