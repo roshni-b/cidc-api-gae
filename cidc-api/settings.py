@@ -7,32 +7,42 @@ from models import Users, TrialMetadata
 
 load_dotenv()
 
+
+def get_secrets_manager(is_testing):
+    """Get a secrets manager based on whether the app is running in test mode"""
+    if is_testing:
+        from unittest.mock import MagicMock
+
+        # If we're testing, we shouldn't need access to secrets in GCS
+        return MagicMock()
+    else:
+        from secrets import CloudStorageSecretManager
+
+        secrets_bucket = environ.get("SECRETS_BUCKET_NAME")
+        return CloudStorageSecretManager(secrets_bucket)
+
+
+## Configure application environment
+ENV = environ.get("ENV", "staging")
+assert ENV in ("dev", "staging", "prod")
+DEBUG = ENV == "dev" and environ.get("DEBUG")
 TESTING = environ.get("TESTING") == "True"
+## End application environment config
 
-# Configure secrets manager
-if TESTING:
-    from unittest.mock import MagicMock
+secrets = get_secrets_manager(TESTING)
 
-    # If we're testing, we shouldn't need access to secrets in GCS
-    secrets = MagicMock()
-else:
-    from secrets import CloudStorageSecretManager
-
-    secrets_bucket = environ.get("SECRETS_BUCKET_NAME")
-    secrets = CloudStorageSecretManager(secrets_bucket)
-
-# Auth0 configuration
+## Configure Auth0
 AUTH0_DOMAIN = environ.get("AUTH0_DOMAIN")
 AUTH0_CLIENT_ID = environ.get("AUTH0_CLIENT_ID")
 ALGORITHMS = ["RS256"]
+## End Auth0 config
 
-# Deployment environment
-ENV = environ.get("ENV", "staging")
-assert ENV in ("dev", "staging", "prod")
+## Configure GCS
+GOOGLE_UPLOAD_BUCKET = environ.get("GOOGLE_UPLOAD_BUCKET")
+# TODO: additional buckets for pipeline data etc.?
+## End GCS config
 
-DEBUG = ENV == "dev" and environ.get("DEBUG")
-
-# Database configuration
+## Configure database
 POSTGRES_URI = environ.get("POSTGRES_URI")
 if TESTING:
     # Connect to the test database
@@ -73,8 +83,9 @@ elif not POSTGRES_URI:
 assert POSTGRES_URI
 SQLALCHEMY_DATABASE_URI = POSTGRES_URI
 SQLALCHEMY_TRACK_MODIFICATIONS = False
+## End database config
 
-
+## Configure Eve REST API
 RESOURCE_METHODS = ["GET", "POST"]
 ITEM_METHODS = ["GET", "PUT", "PATCH"]
 
@@ -83,3 +94,4 @@ _domain_config = {
     "trial-metadata": ResourceConfig(TrialMetadata),
 }
 DOMAIN = DomainConfig(_domain_config).render()
+## End Eve REST API config

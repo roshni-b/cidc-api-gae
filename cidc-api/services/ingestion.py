@@ -2,13 +2,17 @@
 Endpoints for validating and ingesting metadata and data.
 """
 import json
+import datetime
 from typing import BinaryIO, Tuple
 
 from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
 
+from google.cloud import storage
 from eve.auth import requires_auth
 from flask import Blueprint, request, jsonify
 from cidc_schemas import constants, validate_xlsx
+
+from settings import GOOGLE_UPLOAD_BUCKET
 
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 
@@ -82,4 +86,70 @@ def validate():
 @ingestion_api.route("/upload", methods=["POST"])
 @requires_auth("ingestion.upload")
 def upload():
+    """Ingest the metadata associated with a completed upload."""
     raise NotImplemented()
+
+
+@ingestion_api.route("/signed-upload-urls", methods=["POST"])
+@requires_auth("ingestion.signed-upload-urls")
+def signed_upload_urls():
+    """
+    Given a request whose body contains a directory name and a list of object names,
+    return a JSON object mapping object names to signed GCS upload URLs for those objects.
+
+    Note: a signed URL gives time-restricted, method-restricted access to one of our GCS
+    storage buckets
+
+    TODO: In the long run, this endpoint *needs* user-level rate-limiting or similar. If we don't keep 
+    track of how recently we've issued signed URLs to a certain user, then that user can
+    keep acquiring signed URLs over and over, effectively circumventing the time-restrictions
+    built into these URLs. For now, though, since only people on the development team are
+    registered in the app, we don't need to worry about this.
+
+    Sample request body:
+    {
+        "directory_name": "my-assay-run-id",
+        "object_names": ["my-fastq-1.fastq.gz", "my-fastq-2.fastq.gz"]
+    }
+
+    Sample response body:
+    {
+        "my-fastq-1.fastq.gz": [a signed URL with PUT permissions],
+        "my-fastq-2.fastq.gz": [a signed URL with PUT permissions]
+    }
+    """
+    # Validate the request body
+    if not request.json:
+        raise BadRequest("expected JSON request body.")
+    if not "directory_name" in request.json and "object_names" in request.json:
+        raise BadRequest(
+            "expected keys 'directory_name' and 'object_names' in request body."
+        )
+
+    directory_name = request.json["directory_name"]
+    object_urls = {}
+    # Build up the mapping of object names to buckets
+    for object_name in request.json["object_names"]:
+        # Prepend objects with the given directory name
+        full_object_name = f"{directory_name}/{object_name}"
+        object_url = get_signed_url(full_object_name)
+        object_urls[object_name] = object_url
+
+    return jsonify(object_urls)
+
+
+def get_signed_url(object_name: str, method: str = "PUT", expiry_mins: int = 5) -> str:
+    """
+    Generate a signed URL for `object_name` to give a client temporary access.
+
+    See: https://cloud.google.com/storage/docs/access-control/signing-urls-with-helpers
+    """
+    storage_client = storage.Client()
+    bucket = storage_client.get_bucket(GOOGLE_UPLOAD_BUCKET)
+    blob = bucket.blob(object_name)
+
+    # Generate the signed URL, allowing a client to use `method` for `expiry_mins` minutes
+    expiration = datetime.timedelta(minutes=expiry_mins)
+    url = blob.generate_signed_url(version="v4", expiration=expiration, method=method)
+
+    return url
