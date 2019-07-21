@@ -1,9 +1,31 @@
+import hashlib
+from typing import BinaryIO
+
 from flask import current_app as app
-from sqlalchemy import Column, DateTime, Integer, String, Enum, Index, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import (
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    VARCHAR,
+    Enum,
+    Index,
+    func,
+    and_,
+    cast,
+)
+from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
 from sqlalchemy.ext.declarative import declarative_base
 
 BaseModel = declarative_base()
+
+
+def make_etag(*args):
+    """Make an _etag by stringify, concatenating, and hashing the provided args"""
+    argstr = "|".join([str(arg) for arg in args])
+    argbytes = bytes(argstr, "utf-8")
+    return hashlib.md5(argbytes).hexdigest()
 
 
 class CommonColumns(BaseModel):
@@ -21,6 +43,7 @@ ORGS = ["CIDC", "DFCI", "ICAHN", "STANFORD", "ANDERSON"]
 
 class Users(CommonColumns):
     __tablename__ = "users"
+
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     first_n = Column(String)
@@ -31,13 +54,17 @@ class Users(CommonColumns):
     def create(email: str):
         """
             Create a new record for a user if one doesn't exist
-            for the given email.
+            for the given email. Return the user record associated
+            with that email.
         """
         session = app.data.driver.session
-        if not session.query(Users).filter_by(email=email).first():
+        user = session.query(Users).filter_by(email=email).first()
+        if not user:
             app.logger.info(f"Creating new user with email {email}")
-            session.add(Users(email=email))
+            user = Users(email=email)
+            session.add(user)
             session.commit()
+        return user
 
 
 class TrialMetadata(CommonColumns):
@@ -76,3 +103,49 @@ class TrialMetadata(CommonColumns):
             new_trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata)
             session.add(new_trial)
             session.commit()
+
+
+STATUSES = ["started", "completed", "errored"]
+
+
+class UploadJobs(CommonColumns):
+    __tablename__ = "upload_jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    # The current status of the upload job
+    status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
+    # The object names for the files to be uploaded
+    gcs_file_uris = Column(ARRAY(String, dimensions=1), nullable=False)
+    # TODO: track the GCS URI of the .xlsx file used for this upload
+    # gcs_xlsx_uri = Column(String, nullable=False)
+    # The parsed JSON metadata blob associated with this upload
+    metadata_json_patch = Column(JSONB, nullable=False)
+    # Link to the user who created this upload job
+    uploader_email = Column(String, ForeignKey("users.email", onupdate="CASCADE"))
+
+    # Create a GIN index on the GCS object names
+    _gcs_objects_idx = Index("gcs_objects_idx", gcs_file_uris, postgresql_using="gin")
+
+    @staticmethod
+    def create(uploader_email: str, gcs_file_uris: list, metadata: dict):
+        """Create a new upload job for the given trial metadata patch."""
+        session = app.data.driver.session
+
+        job = UploadJobs(
+            gcs_file_uris=gcs_file_uris,
+            metadata_json_patch=metadata,
+            uploader_email=uploader_email,
+            status="started",
+            _etag=make_etag(gcs_file_uris, metadata),
+        )
+        session.add(job)
+        session.commit()
+
+        return job
+
+    @staticmethod
+    def find_by_id(id: int):
+        """Find the record with this id"""
+        session = app.data.driver.session
+
+        return session.query(UploadJobs).get(id)

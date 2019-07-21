@@ -1,20 +1,29 @@
 """
 Endpoints for validating and ingesting metadata and data.
 """
+import os
 import json
 import datetime
-from typing import BinaryIO, Tuple
+from typing import BinaryIO, Tuple, List
 
 from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
 
 from google.cloud import storage
+from eve import Eve
 from eve.auth import requires_auth
-from flask import Blueprint, request, jsonify
-from cidc_schemas import constants, validate_xlsx
+from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
+from cidc_schemas import constants, validate_xlsx, prism
 
-from settings import GOOGLE_UPLOAD_BUCKET
+import gcs_iam
+from models import UploadJobs, STATUSES
+from settings import GOOGLE_UPLOAD_BUCKET, HINT_TO_SCHEMA, SCHEMA_TO_HINT
 
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
+
+
+def register_ingestion_hooks(app: Eve):
+    """Set up ingestion-related hooks on an Eve app instance"""
+    app.on_post_PATCH_upload_jobs = on_post_PATCH_upload_jobs
 
 
 def is_xlsx(filename: str) -> bool:
@@ -22,19 +31,18 @@ def is_xlsx(filename: str) -> bool:
     return filename.endswith(".xlsx")
 
 
-def extract_schema_and_xlsx() -> Tuple[str, BinaryIO]:
+def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
     """
     Validate that a request has the required structure, then extract 
-    the schema id and template file from the request. The request URL
-    must have a query parameter "schema" referencing a valid schema id
-    and request body with content-type multipart/form containing a data entry
-    "template" with an attached .xlsx file.
+    the schema id and template file from the request. The request must
+    have a multipart/form body with one field "schema" referencing a valid schema id
+    and another field "template" with an attached .xlsx file.
 
     Raises:
         BadRequest: if the above requirements aren't satisfied
 
     Returns:
-        Tuple[str, str]: the requested schema identifier and a path to a tempfile containing the xlsx template
+        Tuple[str, str, dict]: the schema hint, the schema path, and the open xlsx file
     """
     # If there is no form attribute on the request object,
     # then either one wasn't supplied, or it was malformed
@@ -49,17 +57,23 @@ def extract_schema_and_xlsx() -> Tuple[str, BinaryIO]:
 
     # Check that the template file appears to be a .xlsx file
     xlsx_file = request.files["template"]
-    if not is_xlsx(xlsx_file.filename):
+    if xlsx_file.filename and not is_xlsx(xlsx_file.filename):
         raise BadRequest("Expected a .xlsx file")
 
     # Check that a schema id was provided and that a corresponding schema exists
-    schema_id = request.args.get("schema")
+    schema_id = request.form.get("schema")
     if not schema_id:
-        raise BadRequest("Expected a value for URL query param 'schema'")
-    if schema_id not in constants.SCHEMA_LIST:
+        raise BadRequest("Expected a form entry for 'schema'")
+    if schema_id in HINT_TO_SCHEMA:
+        schema_hint = schema_id
+        schema_path = HINT_TO_SCHEMA[schema_hint]
+    elif schema_id in SCHEMA_TO_HINT:
+        schema_hint = SCHEMA_TO_HINT[schema_id]
+        schema_path = schema_id
+    else:
         raise BadRequest(f"No known schema with id {schema_id}")
 
-    return schema_id, xlsx_file
+    return schema_hint, schema_path, xlsx_file
 
 
 @ingestion_api.route("/validate", methods=["POST"])
@@ -71,7 +85,7 @@ def validate():
     TODO: add this endpoint to the OpenAPI docs
     """
     # Extract info from the request context
-    schema_path, template_file = extract_schema_and_xlsx()
+    _, schema_path, template_file = extract_schema_and_xlsx()
 
     # Validate the .xlsx file with respect to the schema
     try:
@@ -80,20 +94,104 @@ def validate():
         # TODO: log the traceback for this error
         raise InternalServerError(str(e))
 
-    return jsonify({"errors": [] if type(error_list) == bool else error_list})
+    json = {"errors": []}
+    if type(error_list) == bool:
+        # The spreadsheet is valid
+        return jsonify(json)
+    else:
+        # The spreadsheet is invalid
+        json["errors"] = error_list
+        return jsonify(json)
 
 
 @ingestion_api.route("/upload", methods=["POST"])
 @requires_auth("ingestion.upload")
 def upload():
-    """Ingest the metadata associated with a completed upload."""
-    raise NotImplemented()
+    """
+    Initiate a metadata/data ingestion job.
+
+    Request: multipart/form
+        schema: the schema identifier for this template
+        template: the .xlsx file to process
+    Response: application/json
+        url_mapping: a mapping from client's local filepaths to GCS object names
+        to which they've been granted access.
+        gcs_bucket: the bucket to upload objects to.
+        job_id: the unique identifier for this upload job in the database
+        job_etag: the job record's etag, required by Eve for safe updates
+    
+    # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
+    """
+    # Run basic validations on the provided Excel file
+    validations = validate()
+    if len(validations.json["errors"]) > 0:
+        return validations
+
+    schema_hint, schema_path, xlsx_file = extract_schema_and_xlsx()
+
+    # TODO: this path-resolution should happen internally in prism
+    full_schema_path = os.path.join(constants.SCHEMA_DIR, schema_path)
+
+    # Extract the clinical trial metadata blob contained in the .xlsx file,
+    # along with information about the files the template references.
+    metadata_json, file_infos = prism.prismify(xlsx_file, full_schema_path, schema_hint)
+
+    upload_moment = str(datetime.datetime.now()).replace(" ", "_")
+    url_mapping = {}
+    for file_info in file_infos:
+        gcs_uri_dir, local_path = file_info["gs_key"], file_info["local_path"]
+
+        # Build the path to the "directory" in GCS where the
+        # local file should be uploaded. Attach a timestamp (upload_moment)
+        # to prevent collisions with previous uploads of this file.
+        gcs_uri_prefix = f"{gcs_uri_dir}/{upload_moment}"
+
+        # Store the full path to GCS object for this file
+        # in the url mapping to be sent back to the user.
+        gcs_uri = f"{gcs_uri_prefix}/{local_path}"
+        url_mapping[local_path] = gcs_uri_prefix
+
+    # Save the upload job to the database
+    xlsx_bytes = xlsx_file.read()
+    gcs_uris = url_mapping.values()
+    user_email = _request_ctx_stack.top.current_user.email
+    job = UploadJobs.create(user_email, gcs_uris, metadata_json)
+
+    # Grant the user upload access to the upload bucket
+    gcs_iam.grant_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
+
+    response = {
+        "job_id": job.id,
+        "job_etag": job._etag,
+        "url_mapping": url_mapping,
+        "gcs_bucket": GOOGLE_UPLOAD_BUCKET,
+    }
+    return jsonify(response)
+
+
+def on_post_PATCH_upload_jobs(request: Request, payload: Response):
+    """Revoke the user's write access to the objects they've uploaded to."""
+    if not payload.json and not "id" in payload.json:
+        raise BadRequest("Unexpected payload while updating upload_jobs")
+
+    # TODO: handle the case where the user has more than one upload running,
+    # in which case we shouldn't revoke the user's write access until they
+    # have no remaining jobs with status "started". This will require
+    # adding a "created_by" field or similar to the upload_jobs object.
+
+    # Revoke the user's write access
+    user_email = _request_ctx_stack.top.current_user.email
+    gcs_iam.revoke_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
 
 
 @ingestion_api.route("/signed-upload-urls", methods=["POST"])
 @requires_auth("ingestion.signed-upload-urls")
 def signed_upload_urls():
     """
+    NOTE: We will use IAM for managing bucket access instead of signed URLs, 
+    because this will allow us to leverage gsutil on the client side. This
+    endpoint isn't currently in use.
+
     Given a request whose body contains a directory name and a list of object names,
     return a JSON object mapping object names to signed GCS upload URLs for those objects.
 

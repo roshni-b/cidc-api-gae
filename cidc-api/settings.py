@@ -3,7 +3,7 @@ from os import environ
 from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 from dotenv import load_dotenv
 
-from models import Users, TrialMetadata
+from models import Users, TrialMetadata, UploadJobs
 
 load_dotenv()
 
@@ -39,6 +39,7 @@ ALGORITHMS = ["RS256"]
 
 ## Configure GCS
 GOOGLE_UPLOAD_BUCKET = environ.get("GOOGLE_UPLOAD_BUCKET")
+GOOGLE_UPLOAD_ROLE = "roles/storage.objectCreator"
 # TODO: additional buckets for pipeline data etc.?
 ## End GCS config
 
@@ -85,13 +86,24 @@ SQLALCHEMY_DATABASE_URI = POSTGRES_URI
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 ## End database config
 
+## Configure application constants
+SUPPORTED_ASSAYS = ["wes"]
+SUPPORTED_MANIFESTS = []
+HINT_TO_SCHEMA = {
+    "wes": "templates/metadata/wes_template.json",
+    "pbmc": "templates/pbmc_template.json",
+}
+SCHEMA_TO_HINT = dict((schema, hint) for hint, schema in HINT_TO_SCHEMA.items())
+## End configure constants
+
 ## Configure Eve REST API
 RESOURCE_METHODS = ["GET", "POST"]
 ITEM_METHODS = ["GET", "PUT", "PATCH"]
 
 _domain_config = {
     "users": ResourceConfig(Users),
-    "trial-metadata": ResourceConfig(TrialMetadata),
+    "trial_metadata": ResourceConfig(TrialMetadata),
+    "upload_jobs": ResourceConfig(UploadJobs),
 }
 DOMAIN = DomainConfig(_domain_config).render()
 ## End Eve REST API config

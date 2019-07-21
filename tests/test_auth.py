@@ -1,9 +1,11 @@
 import pytest
 from jose import jwt
 from unittest.mock import MagicMock
+from flask import _request_ctx_stack
 from werkzeug.exceptions import Unauthorized
 
 from auth import BearerAuth
+from models import Users
 
 TOKEN = "test-token"
 RESOURCE = "test-resource"
@@ -30,15 +32,17 @@ def bearer_auth(monkeypatch):
     return BearerAuth()
 
 
-def test_check_auth_smoketest(monkeypatch, bearer_auth):
+def test_check_auth_smoketest(monkeypatch, app, bearer_auth):
     """Check that authentication succeeds if no errors are thrown"""
     # No authorization errors
     monkeypatch.setattr(bearer_auth, "token_auth", lambda _: PAYLOAD)
     # No database errors
-    monkeypatch.setattr("models.Users.create", lambda _: True)
+    monkeypatch.setattr("models.Users.create", lambda _: Users(email=EMAIL))
     # Authentication should succeed
-    authenticated = bearer_auth.check_auth(TOKEN, [], RESOURCE, "GET")
-    assert authenticated
+    with app.test_request_context("/"):
+        authenticated = bearer_auth.check_auth(TOKEN, [], RESOURCE, "GET")
+        assert authenticated
+        assert _request_ctx_stack.top.current_user.email == EMAIL
 
 
 def test_check_auth_auth_error(monkeypatch, bearer_auth):

@@ -2,8 +2,9 @@ import logging
 from typing import List
 
 import requests
-from eve.auth import TokenAuth
+from eve.auth import TokenAuth, requires_auth
 from jose import jwt
+from flask import _request_ctx_stack
 from werkzeug.exceptions import Unauthorized
 
 from models import Users
@@ -38,7 +39,9 @@ class BearerAuth(TokenAuth):
         """
         profile = self.token_auth(id_token)
 
-        Users.create(profile["email"])
+        user = Users.create(profile["email"])
+
+        _request_ctx_stack.top.current_user = user
 
         return True
 

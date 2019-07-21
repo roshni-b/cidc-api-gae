@@ -3,13 +3,16 @@ from functools import wraps
 import pytest
 
 from app import app
-from models import Users, TrialMetadata
+from models import Users, TrialMetadata, UploadJobs
+
+from .util import assert_same_elements
 
 
 @pytest.fixture
 def db():
     """Provide a clean test database session"""
     session = app.data.driver.session
+    session.query(UploadJobs).delete()
     session.query(Users).delete()
     session.query(TrialMetadata).delete()
     session.commit()
@@ -72,3 +75,18 @@ def test_update_trial_metadata(db):
 
     with pytest.raises(NotImplementedError, match="updates not yet supported"):
         TrialMetadata.patch_trial_metadata(TRIAL_ID, updated_metadata)
+
+
+@db_test
+def test_create_upload_job(db):
+    """Try to create an upload job"""
+    new_user = Users.create(EMAIL)
+
+    gcs_file_uris = ["my/first/wes/blob1", "my/first/wes/blob2"]
+    metadata_json_patch = {"foo": "bar"}
+
+    # Create a fresh upload job
+    new_job = UploadJobs.create(EMAIL, gcs_file_uris, metadata_json_patch)
+    job = db.query(UploadJobs).filter_by(id=new_job.id).first()
+    assert_same_elements(new_job.gcs_file_uris, job.gcs_file_uris)
+    assert job.status == "started"
