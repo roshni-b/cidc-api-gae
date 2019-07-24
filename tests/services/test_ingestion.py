@@ -101,8 +101,8 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
             extract_schema_and_xlsx()
 
 
-def test_upload_not_implemented(app_no_auth, wes_xlsx, test_user, monkeypatch):
-    """Ensure the upload endpoint returns a not implemented error"""
+def test_upload(app_no_auth, wes_xlsx, test_user, monkeypatch):
+    """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 
     grant_write = MagicMock()
