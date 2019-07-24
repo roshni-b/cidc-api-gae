@@ -149,7 +149,7 @@ def upload():
         # Store the full path to GCS object for this file
         # in the url mapping to be sent back to the user.
         gcs_uri = f"{gcs_uri_prefix}/{local_path}"
-        url_mapping[local_path] = gcs_uri_prefix
+        url_mapping[local_path] = gcs_uri
 
     # Save the upload job to the database
     xlsx_bytes = xlsx_file.read()

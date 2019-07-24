@@ -121,6 +121,7 @@ def test_upload(app_no_auth, wes_xlsx, test_user, monkeypatch):
     gcs_object_name = url_mapping[local_path]
     assert local_path in url_mapping
     assert gcs_object_name.startswith(gcs_prefix)
+    assert gcs_object_name.endswith(local_path)
 
     # Check that we tried to grant IAM upload access to gcs_object_name
     iam_args = (GOOGLE_UPLOAD_BUCKET, test_user.email)
