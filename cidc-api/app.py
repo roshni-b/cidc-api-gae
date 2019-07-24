@@ -16,10 +16,6 @@ ABSPATH = dirname(abspath(__file__))
 SETTINGS = join(ABSPATH, "settings.py")
 MIGRATIONS = join(ABSPATH, "..", "migrations")
 
-ABSPATH = dirname(abspath(__file__))
-SETTINGS = join(ABSPATH, "settings.py")
-MIGRATIONS = join(ABSPATH, "migrations")
-
 # Instantiate the Eve app
 app = Eve(auth=BearerAuth, data=SQL, validator=ValidatorSQL, settings=SETTINGS)
 
