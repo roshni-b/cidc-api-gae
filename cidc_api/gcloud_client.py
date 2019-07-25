@@ -5,7 +5,7 @@ import datetime
 from google.cloud import storage
 from google.cloud import pubsub
 
-from settings import (
+from config.settings import (
     GOOGLE_UPLOAD_ROLE,
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_UPLOAD_TOPIC,

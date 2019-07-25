@@ -1,5 +1,5 @@
 from gcloud_client import grant_upload_access, revoke_upload_access, _iam_id
-from settings import GOOGLE_UPLOAD_ROLE
+from config.settings import GOOGLE_UPLOAD_ROLE
 
 EMAIL = "test@email.com"
 

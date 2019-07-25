@@ -28,7 +28,7 @@ throw_auth_error = make_raiser(Unauthorized("foo"))
 
 @pytest.fixture
 def bearer_auth(monkeypatch):
-    monkeypatch.setattr("secrets.CloudStorageSecretManager", MagicMock)
+    monkeypatch.setattr("config.secrets.CloudStorageSecretManager", MagicMock)
     return BearerAuth()
 
 

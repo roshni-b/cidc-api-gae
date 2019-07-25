@@ -1,7 +1,7 @@
 """Endpoints providing info related to this API"""
 from flask import Blueprint, jsonify
 
-from settings import SUPPORTED_ASSAYS
+from config.settings import SUPPORTED_ASSAYS
 
 info_api = Blueprint("info", __name__, url_prefix="/info")
 

@@ -15,7 +15,7 @@ from cidc_schemas import constants, validate_xlsx, prism
 
 import gcloud_client
 from models import UploadJobs, STATUSES
-from settings import GOOGLE_UPLOAD_BUCKET, HINT_TO_SCHEMA, SCHEMA_TO_HINT
+from config.settings import GOOGLE_UPLOAD_BUCKET, HINT_TO_SCHEMA, SCHEMA_TO_HINT
 
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 

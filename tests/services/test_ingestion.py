@@ -9,7 +9,7 @@ from werkzeug.exceptions import (
     NotImplemented,
 )
 
-from settings import GOOGLE_UPLOAD_BUCKET
+from config.settings import GOOGLE_UPLOAD_BUCKET
 from services.ingestion import extract_schema_and_xlsx
 
 from . import open_data_file

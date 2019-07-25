@@ -8,7 +8,7 @@ from flask import _request_ctx_stack
 from werkzeug.exceptions import Unauthorized
 
 from models import Users
-from settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID
+from config.settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID
 
 
 logger = logging.getLogger("cidc_api.auth")
