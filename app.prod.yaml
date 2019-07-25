@@ -11,4 +11,6 @@ env_variables:
   CLOUD_SQL_INSTANCE_NAME: 'cidc-dfci:us-central1:cidc-postgres'
   CLOUD_SQL_DB_USER: 'postgres'
   CLOUD_SQL_DB_NAME: 'cidc'
+  GOOGLE_PROJECT_ID: 'cidc-dfci'
   GOOGLE_UPLOAD_BUCKET: 'cidc-uploads-prod'
+  GOOGLE_UPLOAD_TOPIC: 'uploads'

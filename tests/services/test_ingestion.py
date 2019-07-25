@@ -106,7 +106,7 @@ def test_upload(app_no_auth, wes_xlsx, test_user, monkeypatch):
     client = app_no_auth.test_client()
 
     grant_write = MagicMock()
-    monkeypatch.setattr("gcs_iam.grant_upload_access", grant_write)
+    monkeypatch.setattr("gcloud_client.grant_upload_access", grant_write)
 
     res = client.post(UPLOAD, data=form_data("wes.xlsx", wes_xlsx, "wes"))
     assert res.json
@@ -124,22 +124,37 @@ def test_upload(app_no_auth, wes_xlsx, test_user, monkeypatch):
     assert gcs_object_name.endswith(local_path)
 
     # Check that we tried to grant IAM upload access to gcs_object_name
-    iam_args = (GOOGLE_UPLOAD_BUCKET, test_user.email)
-    grant_write.assert_called_with(*iam_args)
+    grant_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
 
-    # Check that we tried to revoke IAM upload access after updating the
+    # Track whether we revoke IAM upload access after updating the job status
     revoke_write = MagicMock()
-    monkeypatch.setattr("gcs_iam.revoke_upload_access", revoke_write)
+    monkeypatch.setattr("gcloud_client.revoke_upload_access", revoke_write)
+
+    # Track whether we publish an upload success to pub/sub after updating the job status
+    publish_success = MagicMock()
+    monkeypatch.setattr("gcloud_client.publish_upload_success", publish_success)
 
     job_id = res.json["job_id"]
     update_url = f"/upload_jobs/{job_id}"
+
+    # Report an upload failure
     res = client.patch(
         update_url,
-        json={"status": "completed"},
+        json={"status": "errored"},
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
-    revoke_write.assert_called_with(*iam_args)
+    revoke_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
+    # This was an upload failure, so success shouldn't have been published
+    publish_success.assert_not_called()
+
+    # Report an upload success
+    res = client.patch(
+        update_url,
+        json={"status": "completed"},
+        headers={"If-Match": res.json["_etag"]},
+    )
+    publish_success.assert_called_with(job_id)
 
 
 def test_signed_upload_urls(app_no_auth, monkeypatch):

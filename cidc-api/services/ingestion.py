@@ -8,13 +8,12 @@ from typing import BinaryIO, Tuple, List
 
 from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
 
-from google.cloud import storage
 from eve import Eve
 from eve.auth import requires_auth
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
 from cidc_schemas import constants, validate_xlsx, prism
 
-import gcs_iam
+import gcloud_client
 from models import UploadJobs, STATUSES
 from settings import GOOGLE_UPLOAD_BUCKET, HINT_TO_SCHEMA, SCHEMA_TO_HINT
 
@@ -158,7 +157,7 @@ def upload():
     job = UploadJobs.create(user_email, gcs_uris, metadata_json)
 
     # Grant the user upload access to the upload bucket
-    gcs_iam.grant_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
+    gcloud_client.grant_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
 
     response = {
         "job_id": job.id,
@@ -171,17 +170,23 @@ def upload():
 
 def on_post_PATCH_upload_jobs(request: Request, payload: Response):
     """Revoke the user's write access to the objects they've uploaded to."""
-    if not payload.json and not "id" in payload.json:
+    if not payload.json or not "id" in payload.json:
         raise BadRequest("Unexpected payload while updating upload_jobs")
 
     # TODO: handle the case where the user has more than one upload running,
     # in which case we shouldn't revoke the user's write access until they
-    # have no remaining jobs with status "started". This will require
-    # adding a "created_by" field or similar to the upload_jobs object.
+    # have no remaining jobs with status "started".
+
+    job_id = payload.json["id"]
+    status = request.json["status"]
+
+    # If this is a successful upload job, publish this info to Pub/Sub
+    if status == "completed":
+        gcloud_client.publish_upload_success(job_id)
 
     # Revoke the user's write access
     user_email = _request_ctx_stack.top.current_user.email
-    gcs_iam.revoke_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
+    gcloud_client.revoke_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
 
 
 @ingestion_api.route("/signed-upload-urls", methods=["POST"])
@@ -230,24 +235,7 @@ def signed_upload_urls():
     for object_name in request.json["object_names"]:
         # Prepend objects with the given directory name
         full_object_name = f"{directory_name}/{object_name}"
-        object_url = get_signed_url(full_object_name)
+        object_url = gcloud_client.get_signed_url(full_object_name)
         object_urls[object_name] = object_url
 
     return jsonify(object_urls)
-
-
-def get_signed_url(object_name: str, method: str = "PUT", expiry_mins: int = 5) -> str:
-    """
-    Generate a signed URL for `object_name` to give a client temporary access.
-
-    See: https://cloud.google.com/storage/docs/access-control/signing-urls-with-helpers
-    """
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(GOOGLE_UPLOAD_BUCKET)
-    blob = bucket.blob(object_name)
-
-    # Generate the signed URL, allowing a client to use `method` for `expiry_mins` minutes
-    expiration = datetime.timedelta(minutes=expiry_mins)
-    url = blob.generate_signed_url(version="v4", expiration=expiration, method=method)
-
-    return url

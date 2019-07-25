@@ -37,11 +37,12 @@ AUTH0_CLIENT_ID = environ.get("AUTH0_CLIENT_ID")
 ALGORITHMS = ["RS256"]
 ## End Auth0 config
 
-## Configure GCS
+## Configure GCP
+GOOGLE_PROJECT_ID = environ.get("GOOGLE_PROJECT_ID")
 GOOGLE_UPLOAD_BUCKET = environ.get("GOOGLE_UPLOAD_BUCKET")
+GOOGLE_UPLOAD_TOPIC = environ.get("GOOGLE_UPLOAD_TOPIC")
 GOOGLE_UPLOAD_ROLE = "roles/storage.objectCreator"
-# TODO: additional buckets for pipeline data etc.?
-## End GCS config
+## End GCP config
 
 ## Configure database
 POSTGRES_URI = environ.get("POSTGRES_URI")
