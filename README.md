@@ -2,8 +2,8 @@
 
 | Environment | Branch                                                                   | Status                                                                                                                                |
 | ----------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| production  | [production](https://github.com/CIMAC-CIDC/cidc-api-gae/tree/production) | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=production)](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae) |
-| staging     | [master](https://github.com/CIMAC-CIDC/cidc-api-gae)                     | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=master)](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae)     |
+| production  | [production](https://github.com/CIMAC-CIDC/cidc_api-gae/tree/production) | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=production)](https://travis-ci.org/CIMAC-CIDC/cidc_api-gae) |
+| staging     | [master](https://github.com/CIMAC-CIDC/cidc_api-gae)                     | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=master)](https://travis-ci.org/CIMAC-CIDC/cidc_api-gae)     |
 
 
 The next generation of the CIDC API, reworked to use Google Cloud-managed services. This API is built with the Eve REST API framework backed by Google Cloud SQL, running on Google App Engine.
@@ -57,7 +57,7 @@ Now, you should be able to connect to your development database with the URI `po
 psql cidc
 ```
 
-Next, you'll need to set up the appropriate tables, indexes, etc. in your local database. To do so, `cd` into the `cidc-api` directory, then run:
+Next, you'll need to set up the appropriate tables, indexes, etc. in your local database. To do so, `cd` into the `cidc_api` directory, then run:
 ```bash
 FLASK_APP=app.py flask db upgrade
 ```
@@ -86,7 +86,7 @@ gcloud sql connect cidc-postgres
 ### Running database migrations
 This project uses [`Flask Migrate`](https://flask-migrate.readthedocs.io/en/latest/) for managing database migrations. To create a new migration and upgrade the database specified in your `.env` config:
 ```bash
-export FLASK_APP=cidc-api/app.py
+export FLASK_APP=cidc_api/app.py
 # Generate the migration script
 flask db migrate
 # Apply changes to the database
@@ -102,7 +102,7 @@ If you're updating `models.py`, you should create a migration and commit the res
 
 Once you have a development database set up and running, run the API server:
 ```bash
-python cidc-api/app.py
+python cidc_api/app.py
 ```
 
 ## Testing

@@ -4,11 +4,11 @@ import sys
 import pytest
 from flask import _request_ctx_stack
 
-# Add cidc-api modules to path
+# Add cidc_api modules to path
 test_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(test_dir, "..", "cidc-api"))
+sys.path.insert(0, os.path.join(test_dir, "..", "cidc_api"))
 
-# Can only import cidc-api modules after the above paths are set
+# Can only import cidc_api modules after the above paths are set
 from models import Users
 
 os.environ["TESTING"] = "True"

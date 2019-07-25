@@ -11,7 +11,7 @@ from models import Users
 from settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID
 
 
-logger = logging.getLogger("cidc-api.auth")
+logger = logging.getLogger("cidc_api.auth")
 
 
 class BearerAuth(TokenAuth):

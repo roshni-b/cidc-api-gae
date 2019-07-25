@@ -47,11 +47,11 @@ app.config["SWAGGER_INFO"] = {
     "termsOfService": "[TODO]",
     "contact": {
         "name": "support",
-        "url": "https://github.com/cimac-cidc/cidc-api-gae/blob/master/README.md",
+        "url": "https://github.com/cimac-cidc/cidc_api-gae/blob/master/README.md",
     },
     "license": {
         "name": "MIT",
-        "url": "https://github.com/dfci/cidc-api-gae/blob/master/LICENSE",
+        "url": "https://github.com/dfci/cidc_api-gae/blob/master/LICENSE",
     },
     "schemes": ["http", "https"],
 }

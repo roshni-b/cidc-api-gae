@@ -10,7 +10,7 @@ addons:
   postgresql: "9.6"
 env:
   global:
-    - PYTHONPATH=$PYTHONPATH:$(pwd)/cidc-api
+    - PYTHONPATH=$PYTHONPATH:$(pwd)/cidc_api
     - CLOUDSDK_CORE_DISABLE_PROMPTS=1
     - GOOGLE_APPLICATION_CREDENTIALS=$HOME/credentials.json
     - GCLOUD_PROJECT_ID_STAGING=cidc-dfci-staging
@@ -44,7 +44,7 @@ before_script:
   - psql -c "grant all privileges on database cidctest to cidcdev"
 script:
   - pytest
-  - black --check cidc-api --target-version=py36
+  - black --check cidc_api --target-version=py36
 
 deploy:
   - provider: gae
