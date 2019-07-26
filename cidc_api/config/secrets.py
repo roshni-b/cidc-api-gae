@@ -10,7 +10,7 @@ def get_secrets_manager(is_testing):
         # If we're testing, we shouldn't need access to secrets in GCS
         return MagicMock()
     else:
-        secrets_bucket = environ.get("config.secrets_BUCKET_NAME")
+        secrets_bucket = environ.get("config.GOOGLE_SECRETS_BUCKET")
         return CloudStorageSecretManager(secrets_bucket)
 
 

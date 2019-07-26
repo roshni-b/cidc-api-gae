@@ -3,7 +3,7 @@ from os import environ
 from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 from dotenv import load_dotenv
 
-from . import db, secrets
+from . import db
 from models import Users, TrialMetadata, UploadJobs
 
 load_dotenv()
@@ -16,8 +16,6 @@ DEBUG = ENV == "dev" and environ.get("DEBUG")
 TESTING = environ.get("TESTING") == "True"
 ## End application environment config
 
-secrets = secrets.get_secrets_manager(TESTING)
-
 ## Configure Auth0
 AUTH0_DOMAIN = environ.get("AUTH0_DOMAIN")
 AUTH0_CLIENT_ID = environ.get("AUTH0_CLIENT_ID")
@@ -25,7 +23,7 @@ ALGORITHMS = ["RS256"]
 ## End Auth0 config
 
 ## Configure GCP
-GOOGLE_PROJECT_ID = environ.get("GOOGLE_PROJECT_ID")
+GOOGLE_CLOUD_PROJECT = environ.get("GOOGLE_CLOUD_PROJECT")
 GOOGLE_UPLOAD_BUCKET = environ.get("GOOGLE_UPLOAD_BUCKET")
 GOOGLE_UPLOAD_TOPIC = environ.get("GOOGLE_UPLOAD_TOPIC")
 GOOGLE_UPLOAD_ROLE = "roles/storage.objectCreator"

@@ -9,7 +9,7 @@ from config.settings import (
     GOOGLE_UPLOAD_ROLE,
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_UPLOAD_TOPIC,
-    GOOGLE_PROJECT_ID,
+    GOOGLE_CLOUD_PROJECT,
 )
 
 
@@ -71,7 +71,7 @@ def get_signed_url(object_name: str, method: str = "PUT", expiry_mins: int = 5) 
 def publish_upload_success(job_id: int):
     """Publish to the uploads topic that the upload job with the provided `job_id` succeeded."""
     publisher = pubsub.PublisherClient()
-    topic = publisher.topic_path(GOOGLE_PROJECT_ID, GOOGLE_UPLOAD_TOPIC)
+    topic = publisher.topic_path(GOOGLE_CLOUD_PROJECT, GOOGLE_UPLOAD_TOPIC)
 
     # The Pub/Sub publisher client returns a concurrent.futures.Future
     # containing info about whether the publishing was successful.
