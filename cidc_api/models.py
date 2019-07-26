@@ -1,4 +1,5 @@
 import hashlib
+from functools import wraps
 from typing import BinaryIO
 
 from flask import current_app as app
@@ -15,6 +16,7 @@ from sqlalchemy import (
     and_,
     cast,
 )
+from sqlalchemy.orm.session import Session
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -26,6 +28,24 @@ def make_etag(*args):
     argstr = "|".join([str(arg) for arg in args])
     argbytes = bytes(argstr, "utf-8")
     return hashlib.md5(argbytes).hexdigest()
+
+
+def with_default_session(f):
+    """
+    For some `f` expecting a database session instance as a keyword argument,
+    set the default value of the session keyword argument to the current app's
+    database driver's session. We need to do this in a decorator rather than
+    inline in the function definition because the current app is only available
+    once the app is running and an application context has been pushed.
+    """
+
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if "session" not in kwargs:
+            kwargs["session"] = app.data.driver.session
+        return f(*args, **kwargs)
+
+    return wrapped
 
 
 class CommonColumns(BaseModel):
@@ -51,13 +71,15 @@ class Users(CommonColumns):
     organization = Column(Enum(*ORGS, name="orgs"))
 
     @staticmethod
-    def create(email: str):
+    @with_default_session
+    def create(email: str, session: Session = None):
         """
             Create a new record for a user if one doesn't exist
             for the given email. Return the user record associated
             with that email.
         """
-        session = app.data.driver.session
+        assert session
+
         user = session.query(Users).filter_by(email=email).first()
         if not user:
             app.logger.info(f"Creating new user with email {email}")
@@ -78,7 +100,8 @@ class TrialMetadata(CommonColumns):
     _metadata_idx = Index("metadata_idx", metadata_json, postgresql_using="gin")
 
     @staticmethod
-    def patch_trial_metadata(trial_id: str, metadata: dict):
+    @with_default_session
+    def patch_trial_metadata(trial_id: str, metadata: dict, session: Session = None):
         """
             Applies updates to an existing trial metadata record,
             or create a new one if it does not exist.
@@ -89,7 +112,7 @@ class TrialMetadata(CommonColumns):
 
             TODO: implement metadata merging, either here or in cidc_schemas
         """
-        session = app.data.driver.session
+        assert session
 
         # Look for an existing trial
         trial = session.query(TrialMetadata).filter_by(trial_id=trial_id).first()
@@ -127,9 +150,15 @@ class UploadJobs(CommonColumns):
     _gcs_objects_idx = Index("gcs_objects_idx", gcs_file_uris, postgresql_using="gin")
 
     @staticmethod
-    def create(uploader_email: str, gcs_file_uris: list, metadata: dict):
+    @with_default_session
+    def create(
+        uploader_email: str,
+        gcs_file_uris: list,
+        metadata: dict,
+        session: Session = None,
+    ):
         """Create a new upload job for the given trial metadata patch."""
-        session = app.data.driver.session
+        assert session
 
         job = UploadJobs(
             gcs_file_uris=gcs_file_uris,
@@ -144,8 +173,9 @@ class UploadJobs(CommonColumns):
         return job
 
     @staticmethod
-    def find_by_id(id: int):
+    @with_default_session
+    def find_by_id(id: int, session: Session = None):
         """Find the record with this id"""
-        session = app.data.driver.session
+        assert session
 
         return session.query(UploadJobs).get(id)

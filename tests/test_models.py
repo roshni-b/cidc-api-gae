@@ -3,7 +3,7 @@ from functools import wraps
 import pytest
 
 from app import app
-from models import Users, TrialMetadata, UploadJobs
+from models import Users, TrialMetadata, UploadJobs, with_default_session
 
 from .util import assert_same_elements
 
@@ -90,3 +90,16 @@ def test_create_upload_job(db):
     job = db.query(UploadJobs).filter_by(id=new_job.id).first()
     assert_same_elements(new_job.gcs_file_uris, job.gcs_file_uris)
     assert job.status == "started"
+
+
+def test_with_default_session(app_no_auth):
+    """Test that the with_default_session decorator provides defaults as expected"""
+
+    @with_default_session
+    def check_default_session(expected_session_value, session=None):
+        assert session == expected_session_value
+
+    with app_no_auth.app_context():
+        check_default_session(app_no_auth.data.driver.session)
+        fake_session = "some other db session"
+        check_default_session(fake_session, session=fake_session)
