@@ -18,7 +18,7 @@ def get_sqlachemy_database_uri(testing: bool = False) -> str:
         # we're connecting to a Cloud SQL instance.
 
         config: dict = {
-            "drivername": "postgres",
+            "drivername": "postgresql",
             "username": environ.get("CLOUD_SQL_DB_USER"),
             "password": secrets.get("CLOUD_SQL_DB_PASS"),
             "database": environ.get("CLOUD_SQL_DB_NAME"),
