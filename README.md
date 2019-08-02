@@ -10,19 +10,19 @@ The next generation of the CIDC API, reworked to use Google Cloud-managed servic
 
 # Development <!-- omit in TOC -->****
 
-- [Install Python dependencies](#Install-Python-dependencies)
-- [Database Management](#Database-Management)
-  - [Setting up a local development database](#Setting-up-a-local-development-database)
-  - [Connecting to a Cloud SQL database instance](#Connecting-to-a-Cloud-SQL-database-instance)
-  - [Running database migrations](#Running-database-migrations)
-- [Serving Locally](#Serving-Locally)
-- [Testing](#Testing)
-- [Code Formatting](#Code-Formatting)
-- [Deployment](#Deployment)
-  - [CI/CD](#CICD)
-  - [Deploying by hand](#Deploying-by-hand)
-- [Connecting](#Connecting)
-- [Provisioning the system from scratch](#Provisioning-the-system-from-scratch)
+- [Install Python dependencies](#install-python-dependencies)
+- [Database Management](#database-management)
+  - [Setting up a local development database](#setting-up-a-local-development-database)
+  - [Connecting to a Cloud SQL database instance](#connecting-to-a-cloud-sql-database-instance)
+  - [Running database migrations](#running-database-migrations)
+- [Serving Locally](#serving-locally)
+- [Testing](#testing)
+- [Code Formatting](#code-formatting)
+- [Deployment](#deployment)
+  - [CI/CD](#cicd)
+  - [Deploying by hand](#deploying-by-hand)
+- [Connecting](#connecting)
+- [Provisioning the system from scratch](#provisioning-the-system-from-scratch)
 
 ## Install Python dependencies
 Install both the production and development dependencies.
@@ -78,9 +78,14 @@ cloud_sql_proxy --instance=cidc-dfci-staging:us-central1:cidc-postgres=tcp:5432
 
 In your `.env` file, comment out `POSTGRES_URI` and uncomment all environment variables prefixed with `CLOUD_SQL_`. Restart your local API instance, and it will connect to the staging Cloud SQL instance via the local proxy.
 
-If you wish to connect to the Cloud SQL instance via the postgres REPL, run:
+If you wish to connect to the staging Cloud SQL instance via the postgres REPL, download and run the CIDC sql proxy tool (a wrapper for `cloud_sql_proxy`):
 ```bash
-gcloud sql connect cidc-postgres
+# Download the proxy
+curl https://raw.githubusercontent.com/CIMAC-CIDC/cidc-devops/v2/scripts/cidc_sql_proxy.sh -o /usr/local/bin/cidc_sql_proxy
+chmod +x /usr/local/bin/cidc_sql_proxy
+
+# Run the proxy
+cidc_sql_proxy staging # or cidc_sql_proxy prod
 ```
 
 ### Running database migrations
