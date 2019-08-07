@@ -38,3 +38,10 @@ deploy:
     config: app.prod.yaml
     on:
       branch: production
+  # We deploy data model code to PyPI for use in, e.g., cidc-cloud-functions
+  - provider: pypi
+    username: jlurye-ksg
+    password: $PYPI_PASSWORD
+    skip_existing: true
+    on:
+      branch: master

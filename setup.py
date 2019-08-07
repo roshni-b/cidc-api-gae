@@ -4,7 +4,7 @@ from setuptools import setup
 
 setup(
     name="cidc_api_modules",
-    description="SQLAlchemy data models used in the CIDC API",
+    description="SQLAlchemy data models and configuration tools used in the CIDC API",
     python_requires=">=3.6",
     install_requires=[
         "flask==1.1.1",
