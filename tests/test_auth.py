@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 from jose import jwt
 from unittest.mock import MagicMock
 from flask import _request_ctx_stack
@@ -6,6 +7,8 @@ from werkzeug.exceptions import Unauthorized
 
 from auth import BearerAuth
 from models import Users
+
+from .test_models import db_test
 
 TOKEN = "test-token"
 RESOURCE = "test-resource"
@@ -34,8 +37,14 @@ def bearer_auth(monkeypatch):
 
 def test_check_auth_smoketest(monkeypatch, app, bearer_auth):
     """Check that authentication succeeds if no errors are thrown"""
-    # No authorization errors
+    # No authentication errors
     monkeypatch.setattr(bearer_auth, "token_auth", lambda _: PAYLOAD)
+    # No authorization errors
+    def fake_role_auth(*args):
+        _request_ctx_stack.top.current_user = Users(email=EMAIL)
+        return True
+
+    monkeypatch.setattr(bearer_auth, "role_auth", fake_role_auth)
     # No database errors
     monkeypatch.setattr("models.Users.create", lambda _: Users(email=EMAIL))
     # Authentication should succeed
@@ -149,3 +158,57 @@ def test_decode_id_token(monkeypatch, bearer_auth):
 
     monkeypatch.setattr("jose.jwt.decode", correct_email)
     assert bearer_auth.decode_id_token(TOKEN, PUBLIC_KEY) == PAYLOAD
+
+
+@db_test
+def test_role_auth(bearer_auth, app, db):
+    """Check that role-based authorization works as expected."""
+    profile = {"email": EMAIL}
+
+    with app.test_request_context():
+        # Unregistered user should not be authorized to do anything to any resource except "users"
+        with pytest.raises(Unauthorized, match="not registered"):
+            bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
+
+        # Unregistered user should not be able to GET users
+        with pytest.raises(Unauthorized, match="not registered"):
+            bearer_auth.role_auth(profile, [], "users", "GET")
+
+        # Unregistered user should be able to POST users
+        assert bearer_auth.role_auth(profile, [], "users", "POST")
+
+    # Add the user to the db but don't approve yet
+    Users.create(profile)
+
+    with app.test_request_context():
+        # Unapproved user isn't authorized to do anything
+        with pytest.raises(Unauthorized, match="pending approval"):
+            bearer_auth.role_auth(profile, [], "users", "POST")
+
+        # Give the user a role but don't approve them
+        db.query(Users).filter_by(email=EMAIL).update(dict(role="cimac-user"))
+        db.commit()
+
+        # Unapproved user *with an authorized role* still shouldn't be authorized
+        with pytest.raises(Unauthorized, match="pending approval"):
+            bearer_auth.role_auth(profile, ["cimac-user"], "users", "POST")
+
+    # Approve the user
+    db.query(Users).filter_by(email=EMAIL).update(dict(approval_date=datetime.now()))
+    db.commit()
+
+    with app.test_request_context():
+        # If user doesn't have required role, they should not be authorized.
+        with pytest.raises(Unauthorized, match="not authorized to access"):
+            bearer_auth.role_auth(
+                profile, ["cidc-admin"], "some-resource", "some-http-method"
+            )
+
+        # If user has an allowed role, they should be authorized
+        assert bearer_auth.role_auth(
+            profile, ["cimac-user"], "some-resource", "some-http-method"
+        )
+
+        # If the resource has no role restrictions, they should be authorized
+        assert bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
+

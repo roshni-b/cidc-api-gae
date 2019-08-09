@@ -4,7 +4,7 @@ from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 from dotenv import load_dotenv
 
 from . import db
-from models import Users, TrialMetadata, UploadJobs
+from models import Users, TrialMetadata, UploadJobs, Permissions
 
 load_dotenv()
 
@@ -36,10 +36,9 @@ SQLALCHEMY_TRACK_MODIFICATIONS = False
 
 ## Configure application constants
 SUPPORTED_ASSAYS = ["wes"]
-SUPPORTED_MANIFESTS = []
 HINT_TO_SCHEMA = {
     "wes": "templates/metadata/wes_template.json",
-    "pbmc": "templates/pbmc_template.json",
+    "pbmc": "templates/manifests/pbmc_template.json",
 }
 SCHEMA_TO_HINT = dict((schema, hint) for hint, schema in HINT_TO_SCHEMA.items())
 ## End configure constants
@@ -48,10 +47,21 @@ SCHEMA_TO_HINT = dict((schema, hint) for hint, schema in HINT_TO_SCHEMA.items())
 RESOURCE_METHODS = ["GET", "POST"]
 ITEM_METHODS = ["GET", "PUT", "PATCH"]
 
+# TODO: split domain config out into its own module,
+# since it will grow in complexity as the application grows.
 _domain_config = {
     "users": ResourceConfig(Users),
+    "permissions": ResourceConfig(Permissions),
     "trial_metadata": ResourceConfig(TrialMetadata),
     "upload_jobs": ResourceConfig(UploadJobs),
 }
-DOMAIN = DomainConfig(_domain_config).render()
+
+_domain = DomainConfig(_domain_config).render()
+
+admins_only = {"allowed_roles": ["cidc-admin"], "allowed_item_roles": ["cidc-admin"]}
+
+_domain["users"].update(admins_only)
+_domain["permissions"].update(admins_only)
+
+DOMAIN = _domain
 ## End Eve REST API config

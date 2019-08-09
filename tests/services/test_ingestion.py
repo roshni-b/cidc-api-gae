@@ -56,7 +56,7 @@ UPLOAD = "/ingestion/upload"
 def test_validate_valid_template(app_no_auth, valid_xlsx):
     """Ensure that the validation endpoint returns no errors for a known-valid .xlsx file"""
     client = app_no_auth.test_client()
-    data = form_data("pbmc.xlsx", valid_xlsx, "templates/pbmc_template.json")
+    data = form_data("pbmc.xlsx", valid_xlsx, "templates/manifests/pbmc_template.json")
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 200
     assert res.json["errors"] == []
@@ -65,7 +65,9 @@ def test_validate_valid_template(app_no_auth, valid_xlsx):
 def test_validate_invalid_template(app_no_auth, invalid_xlsx):
     """Ensure that the validation endpoint returns errors for a known-invalid .xlsx file"""
     client = app_no_auth.test_client()
-    data = form_data("pbmc.xlsx", invalid_xlsx, "templates/pbmc_template.json")
+    data = form_data(
+        "pbmc.xlsx", invalid_xlsx, "templates/manifests/pbmc_template.json"
+    )
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 200
     assert len(res.json["errors"]) > 0

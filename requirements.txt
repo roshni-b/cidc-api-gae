@@ -12,4 +12,4 @@ werkzeug==0.15.4
 gunicorn
 
 # CIMAC-CIDC modules
-cidc-schemas==0.1.1
+cidc-schemas==0.1.4

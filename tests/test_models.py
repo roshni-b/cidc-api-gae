@@ -3,21 +3,9 @@ from functools import wraps
 import pytest
 
 from app import app
-from models import Users, TrialMetadata, UploadJobs, with_default_session
+from models import Users, TrialMetadata, UploadJobs, Permissions, with_default_session
 
 from .util import assert_same_elements
-
-
-@pytest.fixture
-def db():
-    """Provide a clean test database session"""
-    session = app.data.driver.session
-    session.query(UploadJobs).delete()
-    session.query(Users).delete()
-    session.query(TrialMetadata).delete()
-    session.commit()
-
-    return session
 
 
 def db_test(test):
@@ -34,13 +22,14 @@ def db_test(test):
 
 
 EMAIL = "test@email.com"
+PROFILE = {"email": EMAIL}
 
 
 @db_test
 def test_create_user(db):
     """Try to create a user that doesn't exist"""
-    Users.create(EMAIL)
-    user = db.query(Users).filter_by(email=EMAIL).first()
+    Users.create(PROFILE)
+    user = Users.find_by_email(EMAIL)
     assert user
     assert user.email == EMAIL
 
@@ -48,8 +37,8 @@ def test_create_user(db):
 @db_test
 def test_duplicate_user(db):
     """Ensure that a user won't be created twice"""
-    Users.create(EMAIL)
-    Users.create(EMAIL)
+    Users.create(PROFILE)
+    Users.create(PROFILE)
     assert db.query(Users).count() == 1
 
 
@@ -80,7 +69,7 @@ def test_update_trial_metadata(db):
 @db_test
 def test_create_upload_job(db):
     """Try to create an upload job"""
-    new_user = Users.create(EMAIL)
+    new_user = Users.create(PROFILE)
 
     gcs_file_uris = ["my/first/wes/blob1", "my/first/wes/blob2"]
     metadata_json_patch = {"foo": "bar"}
