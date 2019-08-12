@@ -1,4 +1,4 @@
-USERS = "users"
+NEW_USERS = "new_users"
 
 EMAIL = "test@email.com"
 AUTH_HEADER = {"Authorization": "Bearer foo"}
@@ -18,10 +18,10 @@ def test_enforce_self_creation(app, db, monkeypatch):
     # If there's a mismatch between the requesting user's email
     # and the email of the user to create, the user should not be created
     other_profile = {"email": "foo@bar.org"}
-    response = client.post(USERS, json=other_profile, headers=AUTH_HEADER)
+    response = client.post(NEW_USERS, json=other_profile, headers=AUTH_HEADER)
     assert response.status_code == 401
     assert "not authorized to create use" in response.json["_error"]["message"]
 
     # Self-creation should work just fine
-    response = client.post(USERS, json=profile, headers=AUTH_HEADER)
+    response = client.post(NEW_USERS, json=profile, headers=AUTH_HEADER)
     assert response.status_code == 201  # Created

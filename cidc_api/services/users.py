@@ -6,7 +6,7 @@ from werkzeug.exceptions import Unauthorized, BadRequest
 
 
 def register_users_hooks(app: Eve):
-    app.on_pre_POST_users += enforce_self_creation
+    app.on_pre_POST_new_users += enforce_self_creation
 
 
 def enforce_self_creation(request: Request):

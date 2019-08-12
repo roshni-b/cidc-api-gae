@@ -1,4 +1,5 @@
 from os import environ
+from copy import deepcopy
 
 from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 from dotenv import load_dotenv
@@ -57,6 +58,12 @@ _domain_config = {
 }
 
 _domain = DomainConfig(_domain_config).render()
+
+# New users should not be created with roles or approval
+_new_users = deepcopy(_domain["users"])
+del _new_users["schema"]["role"]
+del _new_users["schema"]["approval_date"]
+_domain["new_users"] = _new_users
 
 admins_only = {"allowed_roles": ["cidc-admin"], "allowed_item_roles": ["cidc-admin"]}
 

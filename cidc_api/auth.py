@@ -56,7 +56,7 @@ class BearerAuth(TokenAuth):
             _request_ctx_stack.top.current_user = Users(email=profile["email"])
 
             # User is only authorized to create themself.
-            if resource == "users" and method == "POST":
+            if resource == "new_users" and method == "POST":
                 return True
 
             raise Unauthorized(f'{profile["email"]} is not registered.')

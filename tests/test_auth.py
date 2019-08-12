@@ -175,7 +175,7 @@ def test_role_auth(bearer_auth, app, db):
             bearer_auth.role_auth(profile, [], "users", "GET")
 
         # Unregistered user should be able to POST users
-        assert bearer_auth.role_auth(profile, [], "users", "POST")
+        assert bearer_auth.role_auth(profile, [], "new_users", "POST")
 
     # Add the user to the db but don't approve yet
     Users.create(profile)
@@ -183,7 +183,7 @@ def test_role_auth(bearer_auth, app, db):
     with app.test_request_context():
         # Unapproved user isn't authorized to do anything
         with pytest.raises(Unauthorized, match="pending approval"):
-            bearer_auth.role_auth(profile, [], "users", "POST")
+            bearer_auth.role_auth(profile, [], "new_users", "POST")
 
         # Give the user a role but don't approve them
         db.query(Users).filter_by(email=EMAIL).update(dict(role="cimac-user"))
@@ -191,7 +191,7 @@ def test_role_auth(bearer_auth, app, db):
 
         # Unapproved user *with an authorized role* still shouldn't be authorized
         with pytest.raises(Unauthorized, match="pending approval"):
-            bearer_auth.role_auth(profile, ["cimac-user"], "users", "POST")
+            bearer_auth.role_auth(profile, ["cimac-user"], "new_users", "POST")
 
     # Approve the user
     db.query(Users).filter_by(email=EMAIL).update(dict(approval_date=datetime.now()))
