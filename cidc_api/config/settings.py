@@ -59,15 +59,15 @@ _domain_config = {
 
 _domain = DomainConfig(_domain_config).render()
 
-# New users should not be created with roles or approval
+# New users have different restrictions than created users
 _new_users = deepcopy(_domain["users"])
 del _new_users["schema"]["role"]
 del _new_users["schema"]["approval_date"]
+_new_users["item_methods"] = []
+_new_users["resource methods"] = ["POST"]
 _domain["new_users"] = _new_users
 
 admins_only = {"allowed_roles": ["cidc-admin"], "allowed_item_roles": ["cidc-admin"]}
-
-_domain["users"].update(admins_only)
 _domain["permissions"].update(admins_only)
 
 DOMAIN = _domain

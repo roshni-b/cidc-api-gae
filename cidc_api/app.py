@@ -7,6 +7,7 @@ from eve_sqlalchemy.validation import ValidatorSQL
 from eve_swagger import swagger
 from flask import jsonify
 from flask_migrate import Migrate, upgrade
+from flask_cors import CORS
 
 from models import BaseModel
 from auth import BearerAuth
@@ -18,6 +19,10 @@ MIGRATIONS = join(ABSPATH, "..", "migrations")
 
 # Instantiate the Eve app
 app = Eve(auth=BearerAuth, data=SQL, validator=ValidatorSQL, settings=SETTINGS)
+
+# Enable CORS
+# TODO: be more selective about which domains can make requests
+CORS(app, resources={r"*": {"origins": "*"}})
 
 # Register custom services
 register_services(app)

@@ -57,6 +57,15 @@ class CommonColumns(BaseModel):
     _created = Column(DateTime, default=func.now())
     _updated = Column(DateTime, default=func.now(), onupdate=func.now())
     _etag = Column(String(40))
+    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    @classmethod
+    @with_default_session
+    def find_by_id(cls, id: int, session: Session = None):
+        """Find the record with this id"""
+        assert session
+
+        return session.query(cls).get(id)
 
 
 ORGS = ["CIDC", "DFCI", "ICAHN", "STANFORD", "ANDERSON"]
@@ -75,7 +84,6 @@ ASSAYS = ["cytof", "mif", "micsss", "olink", "rna expression", "wes"]
 class Users(CommonColumns):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     first_n = Column(String)
     last_n = Column(String)
@@ -122,8 +130,6 @@ class Users(CommonColumns):
 class Permissions(CommonColumns):
     __tablename__ = "permissions"
 
-    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
-
     # If user who granted this permission is deleted, this permission will be deleted.
     # TODO: is this what we want?
     granted_by_user = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
@@ -143,7 +149,6 @@ class Permissions(CommonColumns):
 
 class TrialMetadata(CommonColumns):
     __tablename__ = "trial_metadata"
-    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     # The CIMAC-determined trial id
     trial_id = Column(String, unique=True, nullable=False, index=True)
     metadata_json = Column(JSONB, nullable=False)
@@ -185,8 +190,6 @@ STATUSES = ["started", "completed", "errored"]
 
 class UploadJobs(CommonColumns):
     __tablename__ = "upload_jobs"
-
-    id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
     # The current status of the upload job
     status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
     # The object names for the files to be uploaded
@@ -223,11 +226,3 @@ class UploadJobs(CommonColumns):
         session.commit()
 
         return job
-
-    @staticmethod
-    @with_default_session
-    def find_by_id(id: int, session: Session = None):
-        """Find the record with this id"""
-        assert session
-
-        return session.query(UploadJobs).get(id)

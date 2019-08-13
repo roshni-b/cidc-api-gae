@@ -63,7 +63,11 @@ class BearerAuth(TokenAuth):
 
         # User is registered but not yet approved.
         if not user.approval_date:
-            # Unapproved users are not authorized to do anything.
+            # Unapproved users are not authorized to do anything but access their
+            # account info.
+            if resource == "users" and method == "GET":
+                return True
+
             raise Unauthorized(
                 f'{profile["email"]}\'s registration is pending approval'
             )
