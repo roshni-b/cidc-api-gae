@@ -13,3 +13,4 @@ env_variables:
   GOOGLE_SECRETS_BUCKET: 'cidc-secrets-prod'
   GOOGLE_UPLOAD_BUCKET: 'cidc-uploads-prod'
   GOOGLE_UPLOAD_TOPIC: 'uploads'
+  GOOGLE_EMAILS_TOPIC: 'emails'

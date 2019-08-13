@@ -1,6 +1,8 @@
 """Utilities for interacting with the Google Cloud Platform APIs."""
-
+import json
 import datetime
+from concurrent.futures import Future
+from typing import List
 
 from google.cloud import storage
 from google.cloud import pubsub
@@ -10,6 +12,8 @@ from config.settings import (
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_UPLOAD_TOPIC,
     GOOGLE_CLOUD_PROJECT,
+    GOOGLE_EMAILS_TOPIC,
+    TESTING,
 )
 
 
@@ -68,17 +72,40 @@ def get_signed_url(object_name: str, method: str = "PUT", expiry_mins: int = 5) 
     return url
 
 
-def publish_upload_success(job_id: int):
-    """Publish to the uploads topic that the upload job with the provided `job_id` succeeded."""
-    publisher = pubsub.PublisherClient()
-    topic = publisher.topic_path(GOOGLE_CLOUD_PROJECT, GOOGLE_UPLOAD_TOPIC)
+def _encode_and_publish(content: str, topic: str) -> Future:
+    """Convert `content` to bytes and publish it to `topic`."""
+    pubsub_publisher = pubsub.PublisherClient()
+    topic = pubsub_publisher.topic_path(GOOGLE_CLOUD_PROJECT, topic)
+    data = bytes(content, "utf-8")
 
     # The Pub/Sub publisher client returns a concurrent.futures.Future
     # containing info about whether the publishing was successful.
-    data = bytes(str(job_id), "utf-8")
-    report = publisher.publish(topic, data=data)
+    report = pubsub_publisher.publish(topic, data=data)
 
-    # For now, just wait till we get a response back from Pub/Sub.
-    # If there was an error, the below call will throw an exception.
-    # TODO: evaluate if it's worth trying to leverage asynchrony here.
+    return report
+
+
+def publish_upload_success(job_id: int):
+    """Publish to the uploads topic that the upload job with the provided `job_id` succeeded."""
+    report = _encode_and_publish(str(job_id), GOOGLE_UPLOAD_TOPIC)
+
+    # For now, we wait await this Future. Going forward, maybe
+    # we should look for a way to leverage asynchrony here.
+    report.result()
+
+
+def send_email(to_emails: List[str], subject: str, html_content: str):
+    """Publish an email-to-send to the emails topic."""
+    # Don't actually send an email if this is a test
+    if TESTING:
+        print(f"Would send email with subject '{subject}' to {to_emails}")
+        return
+
+    email_json = json.dumps(
+        {"to_emails": to_emails, "subject": subject, "html_content": html_content}
+    )
+
+    report = _encode_and_publish(email_json, GOOGLE_EMAILS_TOPIC)
+
+    # Await confirmation that the published message was received.
     report.result()
