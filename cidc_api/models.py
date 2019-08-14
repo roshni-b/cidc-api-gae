@@ -21,6 +21,8 @@ from sqlalchemy.orm.session import Session
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
 from sqlalchemy.ext.declarative import declarative_base
 
+from cidc_schemas import prism
+
 BaseModel = declarative_base()
 
 
@@ -158,6 +160,16 @@ class TrialMetadata(CommonColumns):
 
     @staticmethod
     @with_default_session
+    def find_by_trial_id(trial_id: str, session: Session = None):
+        """
+            Find a trial by its CIMAC id.
+        """
+        assert session
+
+        return session.query(TrialMetadata).filter_by(trial_id=trial_id).first()
+
+    @staticmethod
+    @with_default_session
     def patch_trial_metadata(trial_id: str, metadata: dict, session: Session = None):
         """
             Applies updates to an existing trial metadata record,
@@ -172,11 +184,18 @@ class TrialMetadata(CommonColumns):
         assert session
 
         # Look for an existing trial
-        trial = session.query(TrialMetadata).filter_by(trial_id=trial_id).first()
+        trial = TrialMetadata.find_by_trial_id(trial_id)
 
         if trial:
             # Merge-update metadata into existing trial's metadata_json
-            raise NotImplementedError("metadata updates not yet supported")
+            updated_metadata = prism.merge_clinical_trial_metadata(
+                metadata, trial.metadata_json
+            )
+            # Save updates to trial record
+            session.query(TrialMetadata).filter_by(trial_id=trial.trial_id).update(
+                {"metadata_json": updated_metadata}
+            )
+            session.commit()
         else:
             # Create a new trial metadata record, since none exists
             app.logger.info(f"Creating new trial_metadata for trial {trial_id}")

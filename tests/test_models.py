@@ -2,8 +2,14 @@ from functools import wraps
 
 import pytest
 
-from app import app
-from models import Users, TrialMetadata, UploadJobs, Permissions, with_default_session
+from cidc_api.app import app
+from cidc_api.models import (
+    Users,
+    TrialMetadata,
+    UploadJobs,
+    Permissions,
+    with_default_session,
+)
 
 from .util import assert_same_elements
 
@@ -43,14 +49,17 @@ def test_duplicate_user(db):
 
 
 TRIAL_ID = "cimac-12345"
-METADATA = {"foo": {"bar": "baz"}}
+METADATA = {
+    "lead_organization_study_id": "1234",
+    "participants": [{"samples": [], "cimac_participant_id": "a"}],
+}
 
 
 @db_test
 def test_create_trial_metadata(db):
     """Insert a trial metadata record if one doesn't exist"""
     TrialMetadata.patch_trial_metadata(TRIAL_ID, METADATA)
-    trial = db.query(TrialMetadata).filter_by(trial_id=TRIAL_ID).first()
+    trial = TrialMetadata.find_by_trial_id(TRIAL_ID)
     assert trial
     assert trial.metadata_json == METADATA
 
@@ -58,12 +67,22 @@ def test_create_trial_metadata(db):
 @db_test
 def test_update_trial_metadata(db):
     """Update an existing trial_metadata_record"""
+    # Create the initial trial
     TrialMetadata.patch_trial_metadata(TRIAL_ID, METADATA)
 
-    updated_metadata = METADATA.update({"fiz": "buzz"})
+    # Add metadata to the trial
+    metadata_patch = METADATA.copy()
+    metadata_patch["participants"] = [{"samples": [], "cimac_participant_id": "b"}]
+    TrialMetadata.patch_trial_metadata(TRIAL_ID, metadata_patch)
 
-    with pytest.raises(NotImplementedError, match="updates not yet supported"):
-        TrialMetadata.patch_trial_metadata(TRIAL_ID, updated_metadata)
+    # Look the trial up and check that it was merged as expected
+    trial = TrialMetadata.find_by_trial_id(TRIAL_ID)
+    sort = lambda participant_list: sorted(
+        participant_list, key=lambda d: d["cimac_participant_id"]
+    )
+    expected_participants = METADATA["participants"] + metadata_patch["participants"]
+    actual_participants = trial.metadata_json["participants"]
+    assert sort(actual_participants) == sort(expected_participants)
 
 
 @db_test
@@ -76,7 +95,7 @@ def test_create_upload_job(db):
 
     # Create a fresh upload job
     new_job = UploadJobs.create(EMAIL, gcs_file_uris, metadata_json_patch)
-    job = db.query(UploadJobs).filter_by(id=new_job.id).first()
+    job = UploadJobs.find_by_id(new_job.id)
     assert_same_elements(new_job.gcs_file_uris, job.gcs_file_uris)
     assert job.status == "started"
 
