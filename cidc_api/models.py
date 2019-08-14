@@ -63,10 +63,8 @@ class CommonColumns(BaseModel):
 
     @classmethod
     @with_default_session
-    def find_by_id(cls, id: int, session: Session = None):
+    def find_by_id(cls, id: int, session: Session):
         """Find the record with this id"""
-        assert session
-
         return session.query(cls).get(id)
 
 
@@ -96,26 +94,22 @@ class Users(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def find_by_email(email: str, session: Session = None) -> Optional:
+    def find_by_email(email: str, session: Session) -> Optional:
         """
             Search for a record in the Users table with the given email.
             If found, return the record. If not found, return None.
         """
-        assert session
-
         user = session.query(Users).filter_by(email=email).first()
         return user
 
     @staticmethod
     @with_default_session
-    def create(profile: dict, session: Session = None):
+    def create(profile: dict, session: Session):
         """
             Create a new record for a user if one doesn't exist
             for the given email. Return the user record associated
             with that email.
         """
-        assert session
-
         email = profile.get("email")
         first_n = profile.get("given_name")
         last_n = profile.get("family_name")
@@ -160,17 +154,15 @@ class TrialMetadata(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def find_by_trial_id(trial_id: str, session: Session = None):
+    def find_by_trial_id(trial_id: str, session: Session):
         """
             Find a trial by its CIMAC id.
         """
-        assert session
-
         return session.query(TrialMetadata).filter_by(trial_id=trial_id).first()
 
     @staticmethod
     @with_default_session
-    def patch_trial_metadata(trial_id: str, metadata: dict, session: Session = None):
+    def patch_trial_metadata(trial_id: str, metadata: dict, session: Session):
         """
             Applies updates to an existing trial metadata record,
             or create a new one if it does not exist.
@@ -181,10 +173,8 @@ class TrialMetadata(CommonColumns):
 
             TODO: implement metadata merging, either here or in cidc_schemas
         """
-        assert session
-
         # Look for an existing trial
-        trial = TrialMetadata.find_by_trial_id(trial_id)
+        trial = TrialMetadata.find_by_trial_id(trial_id, session=session)
 
         if trial:
             # Merge-update metadata into existing trial's metadata_json
@@ -193,7 +183,10 @@ class TrialMetadata(CommonColumns):
             )
             # Save updates to trial record
             session.query(TrialMetadata).filter_by(trial_id=trial.trial_id).update(
-                {"metadata_json": updated_metadata}
+                {
+                    "metadata_json": updated_metadata,
+                    "_etag": make_etag(trial.trial_id, updated_metadata),
+                }
             )
             session.commit()
         else:
@@ -226,14 +219,9 @@ class UploadJobs(CommonColumns):
     @staticmethod
     @with_default_session
     def create(
-        uploader_email: str,
-        gcs_file_uris: list,
-        metadata: dict,
-        session: Session = None,
+        uploader_email: str, gcs_file_uris: list, metadata: dict, session: Session
     ):
         """Create a new upload job for the given trial metadata patch."""
-        assert session
-
         job = UploadJobs(
             gcs_file_uris=gcs_file_uris,
             metadata_json_patch=metadata,
