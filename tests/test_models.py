@@ -1,4 +1,6 @@
 from functools import wraps
+from datetime import datetime
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -8,6 +10,7 @@ from cidc_api.models import (
     TrialMetadata,
     UploadJobs,
     Permissions,
+    DownloadableFiles,
     with_default_session,
 )
 
@@ -98,6 +101,39 @@ def test_create_upload_job(db):
     job = UploadJobs.find_by_id(new_job.id)
     assert_same_elements(new_job.gcs_file_uris, job.gcs_file_uris)
     assert job.status == "started"
+
+
+@db_test
+def test_create_downloadable_file_from_metadata(db, monkeypatch):
+    """Try to create a downloadable file from artifact_core metadata"""
+    # fake file metadata
+    file_metadata = {
+        "artifact_category": "Assay Artifact from CIMAC",
+        "assay_category": "Whole Exome Sequencing (WES)",
+        "object_url": "10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
+        "file_name": "wes_forward.fastq",
+        "file_size_bytes": 1,
+        "md5_hash": "hash1234",
+        "uploaded_timestamp": datetime.now(),
+        "file_type": "FASTQ",
+        "foo": "bar",  # unsupported column - should be filtered
+    }
+
+    # Create the trial (to avoid violating foreign-key constraint)
+    TrialMetadata.patch_trial_metadata(TRIAL_ID, METADATA)
+    # Create the file
+    DownloadableFiles.create_from_metadata(TRIAL_ID, file_metadata)
+
+    # Check that we created the file
+    new_file = (
+        db.query(DownloadableFiles)
+        .filter_by(file_name=file_metadata["file_name"])
+        .first()
+    )
+    assert new_file
+    del file_metadata["foo"]
+    for k in file_metadata.keys():
+        assert getattr(new_file, k) == file_metadata[k]
 
 
 def test_with_default_session(app_no_auth):

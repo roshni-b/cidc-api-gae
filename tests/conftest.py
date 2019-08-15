@@ -9,7 +9,7 @@ test_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(test_dir, "..", "cidc_api"))
 
 # Can only import cidc_api modules after the above paths are set
-from models import Users, TrialMetadata, UploadJobs, Permissions
+from models import Users, TrialMetadata, UploadJobs, Permissions, DownloadableFiles
 
 os.environ["TESTING"] = "True"
 
@@ -43,6 +43,10 @@ def app_no_auth(app, test_user, monkeypatch):
 
     monkeypatch.setattr(app.auth, "authorized", fake_auth)
 
+    # Create test user
+    client = app.test_client()
+    client.post("new_users", json={"email": TEST_EMAIL})
+
     return app
 
 
@@ -52,6 +56,7 @@ def db(app):
     session = app.data.driver.session
     session.query(UploadJobs).delete()
     session.query(Users).delete()
+    session.query(DownloadableFiles).delete()
     session.query(TrialMetadata).delete()
     session.query(Permissions).delete
     session.commit()

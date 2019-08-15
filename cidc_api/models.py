@@ -1,8 +1,10 @@
+import os
 import hashlib
 from functools import wraps
 from typing import BinaryIO, Optional
 
 from flask import current_app as app
+from google.cloud.storage import Blob
 from sqlalchemy import (
     Column,
     Boolean,
@@ -20,10 +22,70 @@ from sqlalchemy import (
 from sqlalchemy.orm.session import Session
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
 from sqlalchemy.ext.declarative import declarative_base
+from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 
 from cidc_schemas import prism
 
-BaseModel = declarative_base()
+## Constants
+ORGS = ["CIDC", "DFCI", "ICAHN", "STANFORD", "ANDERSON"]
+ROLES = [
+    "cidc-admin",
+    "cidc-biofx-user",
+    "cimac-biofx-user",
+    "cimac-user",
+    "developer",
+    "devops",
+    "nci-biobank-user",
+]
+
+# See: https://github.com/CIMAC-CIDC/cidc-schemas/blob/master/cidc_schemas/schemas/artifacts/artifact_core.json
+ARTIFACT_CATEGORIES = [
+    "Assay Artifact from CIMAC",
+    "Pipeline Artifact",
+    "Manifest File",
+    "Other",
+]
+ASSAY_CATEGORIES = [
+    "Whole Exome Sequencing (WES)",
+    "RNASeq",
+    "Conventional Immunohistochemistry",
+    "Multiplex Immunohistochemistry",
+    "Multiplex Immunofluorescence",
+    "CyTOF",
+    "OLink",
+    "NanoString",
+    "ELISpot",
+    "Multiplexed Ion-Beam Imaging (MIBI)",
+    "Other",
+    "None",
+]
+FILE_TYPES = [
+    "FASTA",
+    "FASTQ",
+    "TIFF",
+    "VCF",
+    "TSV",
+    "Excel",
+    "NPX",
+    "BAM",
+    "MAF",
+    "PNG",
+    "JPG",
+    "XML",
+    "Other",
+]
+## End constants
+
+
+def get_DOMAIN():
+    """
+    Render all cerberus domains for data model resources 
+    (i.e., any model extending `CommonColumns`).
+    """
+    domain = {}
+    for model in [Users, Permissions, TrialMetadata, UploadJobs, DownloadableFiles]:
+        domain.update(model.get_resource_domain())
+    return domain
 
 
 def make_etag(*args):
@@ -51,6 +113,9 @@ def with_default_session(f):
     return wrapped
 
 
+BaseModel = declarative_base()
+
+
 class CommonColumns(BaseModel):
     """Metadata attributes that Eve uses on all resources"""
 
@@ -67,18 +132,17 @@ class CommonColumns(BaseModel):
         """Find the record with this id"""
         return session.query(cls).get(id)
 
-
-ORGS = ["CIDC", "DFCI", "ICAHN", "STANFORD", "ANDERSON"]
-ROLES = [
-    "cidc-admin",
-    "cidc-biofx-user",
-    "cimac-biofx-user",
-    "cimac-user",
-    "developer",
-    "devops",
-    "nci-biobank-user",
-]
-ASSAYS = ["cytof", "mif", "micsss", "olink", "rna expression", "wes"]
+    @classmethod
+    def get_resource_domain(cls) -> dict:
+        """
+        Generate the Eve cerberus schema for this resource. To implement
+        custom granular permissions on this resource, a model should override
+        the implementation of this function.
+        """
+        config = ResourceConfig(cls)
+        resource = cls.__tablename__
+        domain = DomainConfig({resource: config}).render()
+        return domain
 
 
 class Users(CommonColumns):
@@ -122,6 +186,24 @@ class Users(CommonColumns):
             session.commit()
         return user
 
+    @classmethod
+    def get_resource_domain(cls):
+        """
+        Generate domains for the 'users' and 'new_users' resources.
+        'new_users' can only be created, and cannot have values for the 'role'
+        or 'approval_date' fields.
+        """
+        config = ResourceConfig(cls)
+        domain = DomainConfig({"users": config, "new_users": config}).render()
+
+        # Restrict operations on the 'new_users' resource
+        del domain["new_users"]["schema"]["role"]
+        del domain["new_users"]["schema"]["approval_date"]
+        domain["new_users"]["item_methods"] = []
+        domain["new_users"]["resource_methods"] = ["POST"]
+
+        return domain
+
 
 class Permissions(CommonColumns):
     __tablename__ = "permissions"
@@ -139,7 +221,7 @@ class Permissions(CommonColumns):
         nullable=False,
         index=True,
     )
-    assay_type = Column(Enum(*ASSAYS, name="assays"), nullable=False)
+    assay_type = Column(Enum(*ASSAY_CATEGORIES, name="assays"), nullable=False)
     mode = Column(Enum("read", "write", name="mode"))
 
 
@@ -233,3 +315,46 @@ class UploadJobs(CommonColumns):
         session.commit()
 
         return job
+
+
+class DownloadableFiles(CommonColumns):
+    """
+    Store required fields from: 
+    https://github.com/CIMAC-CIDC/cidc-schemas/blob/master/cidc_schemas/schemas/artifacts/artifact_core.json
+    """
+
+    __tablename__ = "downloadable_files"
+
+    file_name = Column(String, nullable=False)
+    file_size_bytes = Column(Integer, nullable=False)
+    file_type = Column(Enum(*FILE_TYPES, name="file_type"), nullable=False)
+    uploaded_timestamp = Column(DateTime, nullable=False)
+    artifact_category = Column(
+        Enum(*ARTIFACT_CATEGORIES, name="artifact_category"), nullable=False
+    )
+    assay_category = Column(
+        Enum(*ASSAY_CATEGORIES, name="assay_category"), nullable=False
+    )
+    md5_hash = Column(String, nullable=False)
+    trial_id = Column(String, ForeignKey("trial_metadata.trial_id"), nullable=False)
+    object_url = Column(String, nullable=False)
+    visible = Column(Boolean, default=True)
+
+    @staticmethod
+    @with_default_session
+    def create_from_metadata(trial_id: str, file_metadata: dict, session: Session):
+        """
+        Create a new DownloadableFiles record from a GCS blob.
+        """
+        etag = make_etag(*(file_metadata.values()))
+
+        # Filter out keys that aren't columns
+        supported_columns = DownloadableFiles.__table__.columns.keys()
+        filtered_metadata = {"trial_id": trial_id}
+        for key, value in file_metadata.items():
+            if key in supported_columns:
+                filtered_metadata[key] = value
+
+        new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
+        session.add(new_file)
+        session.commit()

@@ -1,11 +1,10 @@
 from os import environ
 from copy import deepcopy
 
-from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 from dotenv import load_dotenv
 
 from . import db
-from models import Users, TrialMetadata, UploadJobs, Permissions
+from models import get_DOMAIN
 
 load_dotenv()
 
@@ -48,28 +47,5 @@ SCHEMA_TO_HINT = dict((schema, hint) for hint, schema in HINT_TO_SCHEMA.items())
 ## Configure Eve REST API
 RESOURCE_METHODS = ["GET", "POST"]
 ITEM_METHODS = ["GET", "PUT", "PATCH"]
-
-# TODO: split domain config out into its own module,
-# since it will grow in complexity as the application grows.
-_domain_config = {
-    "users": ResourceConfig(Users),
-    "permissions": ResourceConfig(Permissions),
-    "trial_metadata": ResourceConfig(TrialMetadata),
-    "upload_jobs": ResourceConfig(UploadJobs),
-}
-
-_domain = DomainConfig(_domain_config).render()
-
-# New users have different restrictions than created users
-_new_users = deepcopy(_domain["users"])
-del _new_users["schema"]["role"]
-del _new_users["schema"]["approval_date"]
-_new_users["item_methods"] = []
-_new_users["resource methods"] = ["POST"]
-_domain["new_users"] = _new_users
-
-admins_only = {"allowed_roles": ["cidc-admin"], "allowed_item_roles": ["cidc-admin"]}
-_domain["permissions"].update(admins_only)
-
-DOMAIN = _domain
+DOMAIN = get_DOMAIN()
 ## End Eve REST API config
