@@ -358,3 +358,11 @@ class DownloadableFiles(CommonColumns):
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
         session.commit()
+
+    @classmethod
+    def get_resource_domain(cls):
+        domain = super().get_resource_domain()
+        # Make downloadable_files read-only
+        domain["downloadable_files"]["allowed_methods"] = ["GET"]
+        domain["downloadable_files"]["allowed_item_methods"] = ["GET"]
+        return domain
