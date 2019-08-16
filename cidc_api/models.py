@@ -16,9 +16,8 @@ from sqlalchemy import (
     Enum,
     Index,
     func,
-    and_,
-    cast,
 )
+from sqlalchemy.orm import relationship
 from sqlalchemy.orm.session import Session
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
 from sqlalchemy.ext.declarative import declarative_base
@@ -77,14 +76,38 @@ FILE_TYPES = [
 ## End constants
 
 
-def get_DOMAIN():
+def get_DOMAIN() -> dict:
     """
     Render all cerberus domains for data model resources 
     (i.e., any model extending `CommonColumns`).
     """
-    domain = {}
-    for model in [Users, Permissions, TrialMetadata, UploadJobs, DownloadableFiles]:
-        domain.update(model.get_resource_domain())
+    domain_config = {}
+    domain_config["new_users"] = ResourceConfig(Users)
+    domain_config["trial_metadata"] = ResourceConfig(TrialMetadata, id_field="trial_id")
+    for model in [Users, UploadJobs, Permissions, DownloadableFiles]:
+        domain_config[model.__tablename__] = ResourceConfig(model)
+
+    # Eve-sqlalchemy needs this to be specified explicitly for foreign key relations
+    related_resources = {
+        (Permissions, "to_user"): "users",
+        (Permissions, "by_user"): "users",
+        (Permissions, "trial"): "trial_metadata",
+        (UploadJobs, "uploader"): "users",
+        (DownloadableFiles, "trial"): "trial_metadata",
+    }
+
+    domain = DomainConfig(domain_config, related_resources).render()
+
+    # Restrict operations on the 'new_users' resource
+    del domain["new_users"]["schema"]["role"]
+    del domain["new_users"]["schema"]["approval_date"]
+    domain["new_users"]["item_methods"] = []
+    domain["new_users"]["resource_methods"] = ["POST"]
+
+    # Make downloadable_files read-only
+    domain["downloadable_files"]["allowed_methods"] = ["GET"]
+    domain["downloadable_files"]["allowed_item_methods"] = ["GET"]
+
     return domain
 
 
@@ -132,18 +155,6 @@ class CommonColumns(BaseModel):
         """Find the record with this id"""
         return session.query(cls).get(id)
 
-    @classmethod
-    def get_resource_domain(cls) -> dict:
-        """
-        Generate the Eve cerberus schema for this resource. To implement
-        custom granular permissions on this resource, a model should override
-        the implementation of this function.
-        """
-        config = ResourceConfig(cls)
-        resource = cls.__tablename__
-        domain = DomainConfig({resource: config}).render()
-        return domain
-
 
 class Users(CommonColumns):
     __tablename__ = "users"
@@ -186,24 +197,6 @@ class Users(CommonColumns):
             session.commit()
         return user
 
-    @classmethod
-    def get_resource_domain(cls):
-        """
-        Generate domains for the 'users' and 'new_users' resources.
-        'new_users' can only be created, and cannot have values for the 'role'
-        or 'approval_date' fields.
-        """
-        config = ResourceConfig(cls)
-        domain = DomainConfig({"users": config, "new_users": config}).render()
-
-        # Restrict operations on the 'new_users' resource
-        del domain["new_users"]["schema"]["role"]
-        del domain["new_users"]["schema"]["approval_date"]
-        domain["new_users"]["item_methods"] = []
-        domain["new_users"]["resource_methods"] = ["POST"]
-
-        return domain
-
 
 class Permissions(CommonColumns):
     __tablename__ = "permissions"
@@ -211,16 +204,20 @@ class Permissions(CommonColumns):
     # If user who granted this permission is deleted, this permission will be deleted.
     # TODO: is this what we want?
     granted_by_user = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
-
+    by_user = relationship("Users", foreign_keys=[granted_by_user])
     granted_to_user = Column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
+    to_user = relationship("Users", foreign_keys=[granted_to_user])
+
     trial_id = Column(
         String,
         ForeignKey("trial_metadata.trial_id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
+    trial = relationship("TrialMetadata", foreign_keys=[trial_id])
+
     assay_type = Column(Enum(*ASSAY_CATEGORIES, name="assays"), nullable=False)
     mode = Column(Enum("read", "write", name="mode"))
 
@@ -294,6 +291,7 @@ class UploadJobs(CommonColumns):
     metadata_json_patch = Column(JSONB, nullable=False)
     # Link to the user who created this upload job
     uploader_email = Column(String, ForeignKey("users.email", onupdate="CASCADE"))
+    uploader = relationship("Users", foreign_keys=[uploader_email])
 
     # Create a GIN index on the GCS object names
     _gcs_objects_idx = Index("gcs_objects_idx", gcs_file_uris, postgresql_using="gin")
@@ -337,6 +335,7 @@ class DownloadableFiles(CommonColumns):
     )
     md5_hash = Column(String, nullable=False)
     trial_id = Column(String, ForeignKey("trial_metadata.trial_id"), nullable=False)
+    trial = relationship(TrialMetadata, foreign_keys=[trial_id])
     object_url = Column(String, nullable=False)
     visible = Column(Boolean, default=True)
 
@@ -358,11 +357,3 @@ class DownloadableFiles(CommonColumns):
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
         session.commit()
-
-    @classmethod
-    def get_resource_domain(cls):
-        domain = super().get_resource_domain()
-        # Make downloadable_files read-only
-        domain["downloadable_files"]["allowed_methods"] = ["GET"]
-        domain["downloadable_files"]["allowed_item_methods"] = ["GET"]
-        return domain
