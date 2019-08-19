@@ -21,7 +21,7 @@ The next generation of the CIDC API, reworked to use Google Cloud-managed servic
 - [Deployment](#deployment)
   - [CI/CD](#cicd)
   - [Deploying by hand](#deploying-by-hand)
-- [Connecting](#connecting)
+- [Connecting to the API](#connecting-to-the-api)
 - [Provisioning the system from scratch](#provisioning-the-system-from-scratch)
 
 ## Install Python dependencies
@@ -69,11 +69,12 @@ Install the [Cloud SQL Proxy](https://cloud.google.com/sql/docs/mysql/quickstart
 ```bash
 curl -o /usr/local/bin/cloud_sql_proxy https://dl.google.com/cloudsql/cloud_sql_proxy.darwin.amd64
 chmod +x /usr/local/bin/cloud_sql_proxy
+mkdir ~/.cloudsql
 ```
 
 Proxy to the staging Cloud SQL instance:
 ```bash
-cloud_sql_proxy --instance=cidc-dfci-staging:us-central1:cidc-postgres=tcp:5432
+cloud_sql_proxy -instances cidc-dfci-staging:us-central1:cidc-postgresql -dir ~/.cloudsql
 ```
 
 In your `.env` file, comment out `POSTGRES_URI` and uncomment all environment variables prefixed with `CLOUD_SQL_`. Restart your local API instance, and it will connect to the staging Cloud SQL instance via the local proxy.
@@ -144,8 +145,8 @@ gcloud app deploy <app.staging.yaml or app.prod.yaml> --project <gcloud project 
 ```
 That being said, avoid doing this! Deploying this way circumvents the safety checks built into the CI/CD pipeline and can lead to inconsistencies between the code running on GAE and the code present in this repository. Luckily, though, GAE's built-in versioning system makes it hard to do anything catastrophic :-)
 
-## Connecting
-Currently, the staging API is hosted at staging-api.cimac-network.org and the production instance is hosted at api.cimac-network.org.
+## Connecting to the API
+Currently, the staging API is hosted at https://staging-api.cimac-network.org and the production instance is hosted at https://api.cimac-network.org.
 
 To connect to the staging API with `curl` or a REST API client like Insomnia, get an id token from stagingportal.cimac-network.org, and include the header  `Authorization: Bearer YOUR_ID_TOKEN` in requests you make to the staging API. If your token expires, generate a new one following this same procedure.
 
