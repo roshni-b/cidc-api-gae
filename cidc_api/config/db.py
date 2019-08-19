@@ -25,22 +25,16 @@ def get_sqlachemy_database_uri(testing: bool = False) -> str:
         }
 
         if environ.get("CLOUD_SQL_INSTANCE_NAME"):
+            socket_dir = environ.get("CLOUD_SQL_SOCKET_DIR", "/cloudsql/")
+
             # If CLOUD_SQL_INSTANCE_NAME is defined, we're connecting
             # via a unix socket from inside App Engine.
             config["query"] = {
-                "host": "/cloudsql/%s" % environ.get("CLOUD_SQL_INSTANCE_NAME")
+                "host": f'{socket_dir}{environ.get("CLOUD_SQL_INSTANCE_NAME")}'
             }
-        elif environ.get("CLOUD_SQL_PROXY_HOST") and environ.get(
-            "CLOUD_SQL_PROXY_PORT"
-        ):
-            # If CLOUD_SQL_PROXY_HOST/PORT are defined, we're connecting
-            # to Cloud SQL via a local cloud_sql_proxy.
-            config["host"] = environ.get("CLOUD_SQL_PROXY_HOST")
-            config["port"] = environ.get("CLOUD_SQL_PROXY_PORT")
         else:
             raise Exception(
-                "Either POSTGRES_URI, CLOUD_SQL_INSTANCE_NAME, or "
-                + "CLOUD_SQL_PROXY_HOST/PORT must be defined to connect "
+                "Either POSTGRES_URI or CLOUD_SQL_INSTANCE_NAME must be defined to connect "
                 + "to a database."
             )
 

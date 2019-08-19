@@ -11,6 +11,7 @@ from config.settings import (
     GOOGLE_UPLOAD_ROLE,
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_UPLOAD_TOPIC,
+    GOOGLE_DATA_BUCKET,
     GOOGLE_CLOUD_PROJECT,
     GOOGLE_EMAILS_TOPIC,
     TESTING,
@@ -55,14 +56,19 @@ def revoke_upload_access(bucket_name: str, user_email: str):
     bucket.set_iam_policy(policy)
 
 
-def get_signed_url(object_name: str, method: str = "PUT", expiry_mins: int = 5) -> str:
+def get_signed_url(
+    object_name: str,
+    bucket_name: str = GOOGLE_DATA_BUCKET,
+    method: str = "GET",
+    expiry_mins: int = 30,
+) -> str:
     """
     Generate a signed URL for `object_name` to give a client temporary access.
 
     See: https://cloud.google.com/storage/docs/access-control/signing-urls-with-helpers
     """
     storage_client = storage.Client()
-    bucket = storage_client.get_bucket(GOOGLE_UPLOAD_BUCKET)
+    bucket = storage_client.get_bucket(bucket_name)
     blob = bucket.blob(object_name)
 
     # Generate the signed URL, allowing a client to use `method` for `expiry_mins` minutes

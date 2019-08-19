@@ -10,6 +10,7 @@ env_variables:
   CLOUD_SQL_INSTANCE_NAME: 'cidc-dfci-staging:us-central1:cidc-postgresql'
   CLOUD_SQL_DB_USER: 'cidcuser'
   CLOUD_SQL_DB_NAME: 'cidc'
+  GOOGLE_DATA_BUCKET: 'cidc-data-staging'
   GOOGLE_SECRETS_BUCKET: 'cidc-secrets-staging'
   GOOGLE_UPLOAD_BUCKET: 'cidc-uploads-staging'
   GOOGLE_UPLOAD_TOPIC: 'uploads'
