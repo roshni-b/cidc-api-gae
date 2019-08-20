@@ -67,5 +67,6 @@ SCHEMA_TO_HINT = dict((schema, hint) for hint, schema in HINT_TO_SCHEMA.items())
 ## Configure Eve REST API
 RESOURCE_METHODS = ["GET", "POST"]
 ITEM_METHODS = ["GET", "PUT", "PATCH"]
+CACHE_CONTROL = "no-cache"
 DOMAIN = get_DOMAIN()
 ## End Eve REST API config
