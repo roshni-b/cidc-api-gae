@@ -8,7 +8,7 @@ import gcloud_client
 
 
 def register_files_hooks(app: Eve):
-    app.on_fetched_resource_downloadable_files += insert_download_urls
+    #     app.on_fetched_resource_downloadable_files += insert_download_urls
     app.on_fetched_item_downloadable_files += insert_download_url
 
 
@@ -27,6 +27,8 @@ def insert_download_url(payload: dict):
 def insert_download_urls(payload: dict):
     """
     Get a signed GCS download URL for each of the requested files.
+
+    NOTE: this hook is currently disabled.
     """
     # Each call to insert_download_url generates a request
     # to the GCS API, so we get a speed-up from multithreading:
