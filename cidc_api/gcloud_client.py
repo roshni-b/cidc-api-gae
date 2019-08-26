@@ -15,6 +15,7 @@ from config.settings import (
     GOOGLE_CLOUD_PROJECT,
     GOOGLE_EMAILS_TOPIC,
     TESTING,
+    ENV,
 )
 
 
@@ -103,7 +104,7 @@ def publish_upload_success(job_id: int):
 def send_email(to_emails: List[str], subject: str, html_content: str):
     """Publish an email-to-send to the emails topic."""
     # Don't actually send an email if this is a test
-    if TESTING:
+    if TESTING or ENV == "dev":
         print(f"Would send email with subject '{subject}' to {to_emails}")
         return
 

@@ -11,11 +11,11 @@ from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
 from eve import Eve
 from eve.auth import requires_auth
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
-from cidc_schemas import constants, validate_xlsx, prism
+from cidc_schemas import constants, validate_xlsx, prism, template
 
 import gcloud_client
 from models import UploadJobs, STATUSES
-from config.settings import GOOGLE_UPLOAD_BUCKET, HINT_TO_SCHEMA, SCHEMA_TO_HINT
+from config.settings import GOOGLE_UPLOAD_BUCKET
 
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 
@@ -41,7 +41,7 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
         BadRequest: if the above requirements aren't satisfied
 
     Returns:
-        Tuple[str, str, dict]: the schema hint, the schema path, and the open xlsx file
+        Tuple[str, str, dict]: the schema identifier (aka template type), the schema path, and the open xlsx file
     """
     # If there is no form attribute on the request object,
     # then either one wasn't supplied, or it was malformed
@@ -63,16 +63,13 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
     schema_id = request.form.get("schema")
     if not schema_id:
         raise BadRequest("Expected a form entry for 'schema'")
-    if schema_id in HINT_TO_SCHEMA:
-        schema_hint = schema_id
-        schema_path = HINT_TO_SCHEMA[schema_hint]
-    elif schema_id in SCHEMA_TO_HINT:
-        schema_hint = SCHEMA_TO_HINT[schema_id]
-        schema_path = schema_id
-    else:
-        raise BadRequest(f"No known schema with id {schema_id}")
+    schema_id = schema_id.lower()
 
-    return schema_hint, schema_path, xlsx_file
+    if not schema_id in template._TEMPLATE_PATH_MAP:
+        raise BadRequest(f"Unknown template type {schema_id}")
+    schema_path = template._TEMPLATE_PATH_MAP[schema_id]
+
+    return schema_id, schema_path, xlsx_file
 
 
 @ingestion_api.route("/validate", methods=["POST"])
@@ -84,13 +81,16 @@ def validate():
     TODO: add this endpoint to the OpenAPI docs
     """
     # Extract info from the request context
-    _, schema_path, template_file = extract_schema_and_xlsx()
+    template_type, _, template_file = extract_schema_and_xlsx()
 
     # Validate the .xlsx file with respect to the schema
     try:
-        error_list = validate_xlsx(template_file, schema_path, False)
+        error_list = validate_xlsx(
+            template_file, template_type, raise_validation_errors=False
+        )
     except Exception as e:
-        # TODO: log the traceback for this error
+        if "unknown template type" in str(e):
+            raise BadRequest(str(e))
         raise InternalServerError(str(e))
 
     json = {"errors": []}
