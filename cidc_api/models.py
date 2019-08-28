@@ -350,7 +350,9 @@ class DownloadableFiles(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def create_from_metadata(trial_id: str, assay_type: str, file_metadata: dict, session: Session):
+    def create_from_metadata(
+        trial_id: str, assay_type: str, file_metadata: dict, session: Session
+    ):
         """
         Create a new DownloadableFiles record from a GCS blob.
         """
@@ -362,7 +364,7 @@ class DownloadableFiles(CommonColumns):
         for key, value in file_metadata.items():
             if key in supported_columns:
                 filtered_metadata[key] = value
-        #TODO maybe put non supported stuff from file_metadata to some misc jsonb column? 
+        # TODO maybe put non supported stuff from file_metadata to some misc jsonb column?
 
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
