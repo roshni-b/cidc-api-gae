@@ -17,7 +17,7 @@ before_script:
   - psql -c "grant all privileges on database cidctest to cidcdev"
 script:
   - pytest
-  - black --check cidc_api --target-version=py36
+  - black --check cidc_api tests --target-version=py36
 
 before_deploy:
   - if [ "$TRAVIS_BRANCH" = production ]; then

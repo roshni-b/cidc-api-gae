@@ -21,4 +21,3 @@ def test_new_users_POST(app_no_auth, db):
     # Someone malicious tries to create a new user for themselves with approval
     user_with_approval = {"email": EMAIL, "approval_date": datetime.now()}
     assert response.status_code == 422
-

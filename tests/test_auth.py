@@ -211,4 +211,3 @@ def test_role_auth(bearer_auth, app, db):
 
         # If the resource has no role restrictions, they should be authorized
         assert bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
-
