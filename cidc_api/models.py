@@ -337,14 +337,11 @@ class DownloadableFiles(CommonColumns):
 
     file_name = Column(String, nullable=False)
     file_size_bytes = Column(Integer, nullable=False)
-    file_type = Column(Enum(*FILE_TYPES, name="file_type"), nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
     artifact_category = Column(
         Enum(*ARTIFACT_CATEGORIES, name="artifact_category"), nullable=False
     )
-    assay_category = Column(
-        Enum(*ASSAY_CATEGORIES, name="assay_category"), nullable=False
-    )
+    assay_type = Column(String, nullable=False)
     md5_hash = Column(String, nullable=False)
     trial_id = Column(String, ForeignKey("trial_metadata.trial_id"), nullable=False)
     trial = relationship(TrialMetadata, foreign_keys=[trial_id])
@@ -353,7 +350,9 @@ class DownloadableFiles(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def create_from_metadata(trial_id: str, file_metadata: dict, session: Session):
+    def create_from_metadata(
+        trial_id: str, assay_type: str, file_metadata: dict, session: Session
+    ):
         """
         Create a new DownloadableFiles record from a GCS blob.
         """
@@ -361,10 +360,11 @@ class DownloadableFiles(CommonColumns):
 
         # Filter out keys that aren't columns
         supported_columns = DownloadableFiles.__table__.columns.keys()
-        filtered_metadata = {"trial_id": trial_id}
+        filtered_metadata = {"trial_id": trial_id, "assay_type": assay_type}
         for key, value in file_metadata.items():
             if key in supported_columns:
                 filtered_metadata[key] = value
+        # TODO maybe put non supported stuff from file_metadata to some misc jsonb column?
 
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
