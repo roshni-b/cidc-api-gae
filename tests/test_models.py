@@ -54,7 +54,13 @@ def test_duplicate_user(db):
 TRIAL_ID = "cimac-12345"
 METADATA = {
     "lead_organization_study_id": "1234",
-    "participants": [{"samples": [], "cimac_participant_id": "a"}],
+    "participants": [{
+        "samples": [], 
+        "cimac_participant_id": "a",
+        "trial_participant_id": "trial a",
+        "cohort_id": "cohort_id",
+        "arm_id": "arm_id"
+        }],
 }
 
 
@@ -75,7 +81,13 @@ def test_update_trial_metadata(db):
 
     # Add metadata to the trial
     metadata_patch = METADATA.copy()
-    metadata_patch["participants"] = [{"samples": [], "cimac_participant_id": "b"}]
+    metadata_patch["participants"] = [{
+        "samples": [], 
+        "cimac_participant_id": "b",
+        "trial_participant_id": "trial a",
+        "cohort_id": "cohort_id",
+        "arm_id": "arm_id"
+    }]
     TrialMetadata.patch_trial_metadata(TRIAL_ID, metadata_patch)
 
     # Look the trial up and check that it was merged as expected

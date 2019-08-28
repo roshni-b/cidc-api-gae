@@ -116,8 +116,8 @@ def test_upload(app_no_auth, wes_xlsx, test_user, monkeypatch):
 
     # We expect local_path to map to a gcs object name with gcs_prefix
     # based on the contents of wes_xlsx.
-    local_path = "read_group_map.txt"
-    gcs_prefix = "10021/Patient 1/sample 1/aliquot 2/wes_read_group.txt/"
+    local_path = "/local/path/to/rgm.1.1.1.txt"
+    gcs_prefix = "wes example PA 1/wes example SA 1.1/wes example aliquot 1.1.1/wes/read_group_mapping_file/"
     gcs_object_name = url_mapping[local_path]
     assert local_path in url_mapping
     assert gcs_object_name.startswith(gcs_prefix)
