@@ -22,4 +22,3 @@ def test_confirm_account_approval():
     assert email["to_emails"] == [user.email]
     assert "Approval" in email["subject"]
     assert "has now been approved" in email["html_content"]
-

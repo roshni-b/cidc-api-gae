@@ -38,4 +38,3 @@ def test_insert_download_urls(monkeypatch):
     insert_download_urls(payload)
     for f in payload["_items"]:
         assert f["download_link"] == URL
-
