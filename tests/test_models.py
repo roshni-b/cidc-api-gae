@@ -127,20 +127,18 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
     # fake file metadata
     file_metadata = {
         "artifact_category": "Assay Artifact from CIMAC",
-        "assay_category": "Whole Exome Sequencing (WES)",
         "object_url": "10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
         "file_name": "wes_forward.fastq",
         "file_size_bytes": 1,
         "md5_hash": "hash1234",
         "uploaded_timestamp": datetime.now(),
-        "file_type": "FASTQ",
         "foo": "bar",  # unsupported column - should be filtered
     }
 
     # Create the trial (to avoid violating foreign-key constraint)
     TrialMetadata.patch_trial_metadata(TRIAL_ID, METADATA)
     # Create the file
-    DownloadableFiles.create_from_metadata(TRIAL_ID, file_metadata)
+    DownloadableFiles.create_from_metadata(TRIAL_ID, "wes", file_metadata)
 
     # Check that we created the file
     new_file = (
