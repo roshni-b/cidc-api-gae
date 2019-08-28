@@ -295,6 +295,8 @@ class UploadJobs(CommonColumns):
     # Link to the user who created this upload job
     uploader_email = Column(String, ForeignKey("users.email", onupdate="CASCADE"))
     uploader = relationship("Users", foreign_keys=[uploader_email])
+    # A type of assay (wes, olink, ...) this upload is related to
+    assay_type = Column(String, nullable=False)
 
     # Create a GIN index on the GCS object names
     _gcs_objects_idx = Index("gcs_objects_idx", gcs_file_uris, postgresql_using="gin")
@@ -302,15 +304,22 @@ class UploadJobs(CommonColumns):
     @staticmethod
     @with_default_session
     def create(
-        uploader_email: str, gcs_file_uris: list, metadata: dict, session: Session
+        assay_type: str,
+        uploader_email: str,
+        gcs_file_uris: list,
+        metadata: dict,
+        session: Session,
     ):
         """Create a new upload job for the given trial metadata patch."""
         job = UploadJobs(
+            assay_type=assay_type,
             gcs_file_uris=gcs_file_uris,
             metadata_json_patch=metadata,
             uploader_email=uploader_email,
             status="started",
-            _etag=make_etag(gcs_file_uris, metadata),
+            _etag=make_etag(
+                assay_type, gcs_file_uris, metadata, uploader_email, "started"
+            ),
         )
         session.add(job)
         session.commit()

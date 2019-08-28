@@ -113,7 +113,9 @@ def test_create_upload_job(db):
     metadata_json_patch = {"foo": "bar"}
 
     # Create a fresh upload job
-    new_job = UploadJobs.create(EMAIL, gcs_file_uris, metadata_json_patch)
+    new_job = UploadJobs.create(
+        "dummy_assay", EMAIL, gcs_file_uris, metadata_json_patch
+    )
     job = UploadJobs.find_by_id(new_job.id)
     assert_same_elements(new_job.gcs_file_uris, job.gcs_file_uris)
     assert job.status == "started"

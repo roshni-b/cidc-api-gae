@@ -154,7 +154,7 @@ def upload():
     xlsx_bytes = xlsx_file.read()
     gcs_uris = url_mapping.values()
     user_email = _request_ctx_stack.top.current_user.email
-    job = UploadJobs.create(user_email, gcs_uris, metadata_json)
+    job = UploadJobs.create(schema_hint, user_email, gcs_uris, metadata_json)
 
     # Grant the user upload access to the upload bucket
     gcloud_client.grant_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
