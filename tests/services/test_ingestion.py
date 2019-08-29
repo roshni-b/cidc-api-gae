@@ -168,6 +168,7 @@ OLINK_TESTDATA = [
     ("ct2.xlsx", "olink/assay_raw_ct/"),
 ]
 
+
 def test_upload_olink(app_no_auth, olink_xlsx, test_user, monkeypatch):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
