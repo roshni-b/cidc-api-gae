@@ -32,6 +32,11 @@ def wes_xlsx():
     yield open_data_file("wes_data.xlsx")
 
 
+@pytest.fixture
+def olink_xlsx():
+    yield open_data_file("olink_data.xlsx")
+
+
 def form_data(filename=None, fp=None, schema=None):
     """
     If no filename is provided, return some text form data.
@@ -101,7 +106,7 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
             extract_schema_and_xlsx()
 
 
-def test_upload(app_no_auth, wes_xlsx, test_user, monkeypatch):
+def test_upload_wes(app_no_auth, wes_xlsx, test_user, monkeypatch):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 
@@ -122,6 +127,68 @@ def test_upload(app_no_auth, wes_xlsx, test_user, monkeypatch):
     assert local_path in url_mapping
     assert gcs_object_name.startswith(gcs_prefix)
     assert gcs_object_name.endswith(local_path)
+
+    # Check that we tried to grant IAM upload access to gcs_object_name
+    grant_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
+
+    # Track whether we revoke IAM upload access after updating the job status
+    revoke_write = MagicMock()
+    monkeypatch.setattr("gcloud_client.revoke_upload_access", revoke_write)
+
+    # Track whether we publish an upload success to pub/sub after updating the job status
+    publish_success = MagicMock()
+    monkeypatch.setattr("gcloud_client.publish_upload_success", publish_success)
+
+    job_id = res.json["job_id"]
+    update_url = f"/upload_jobs/{job_id}"
+
+    # Report an upload failure
+    res = client.patch(
+        update_url,
+        json={"status": "errored"},
+        headers={"If-Match": res.json["job_etag"]},
+    )
+    assert res.status_code == 200
+    revoke_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
+    # This was an upload failure, so success shouldn't have been published
+    publish_success.assert_not_called()
+
+    # Report an upload success
+    res = client.patch(
+        update_url,
+        json={"status": "completed"},
+        headers={"If-Match": res.json["_etag"]},
+    )
+    publish_success.assert_called_with(job_id)
+
+
+OLINK_TESTDATA = [
+    ("/local/path/combined.xlsx", "olink/study_npx/"),
+    ("assay1_npx.xlsx", "olink/assay_npx/"),
+    ("ct2.xlsx", "olink/assay_raw_ct/"),
+]
+
+
+def test_upload_olink(app_no_auth, olink_xlsx, test_user, monkeypatch):
+    """Ensure the upload endpoint follows the expected execution flow"""
+    client = app_no_auth.test_client()
+
+    grant_write = MagicMock()
+    monkeypatch.setattr("gcloud_client.grant_upload_access", grant_write)
+
+    res = client.post(UPLOAD, data=form_data("olink.xlsx", olink_xlsx, "olink"))
+    assert res.json
+    assert "url_mapping" in res.json
+
+    url_mapping = res.json["url_mapping"]
+
+    # We expect local_path to map to a gcs object name with gcs_prefix
+    # based on the contents of olink_xlsx.
+    for local_path, gcs_prefix in OLINK_TESTDATA:
+        gcs_object_name = url_mapping[local_path]
+        assert local_path in url_mapping
+        assert gcs_object_name.startswith(gcs_prefix)
+        assert gcs_object_name.endswith(local_path)
 
     # Check that we tried to grant IAM upload access to gcs_object_name
     grant_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
