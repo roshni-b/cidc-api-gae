@@ -3,6 +3,7 @@ import json
 import datetime
 from concurrent.futures import Future
 from typing import List
+from typing.io import BinaryIO
 
 from google.cloud import storage
 from google.cloud import pubsub
@@ -29,6 +30,24 @@ def _get_bucket(bucket_name: str) -> storage.Bucket:
 def _iam_id(user_email: str) -> str:
     """Append the appropriate IAM account type to a user's email"""
     return f"user:{user_email}"
+
+
+def upload_xlsx_to_gcs(
+    trial_id: str, template_category: str, template_type: str, filebytes: BinaryIO
+) -> str:
+    """
+    Upload an xlsx template file to GCS, returning the object URI.
+    
+    `template_category` is either "manifests" or "assays".
+    `template_type` is an assay or manifest type, like "wes" or "pbmc" respectively.
+    """
+    upload_moment = datetime.datetime.now()
+    blob_name = f"xlsx/{trial_id}/{template_category}/{template_type}/{upload_moment}"
+
+    bucket: storage.Bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
+    blob = bucket.blob(blob_name)
+    blob.upload_from_file(filebytes)
+    return blob_name
 
 
 def grant_upload_access(bucket_name: str, user_email: str):

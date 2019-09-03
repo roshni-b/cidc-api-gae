@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.session import Session
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 
 from cidc_schemas import prism
@@ -73,6 +73,9 @@ FILE_TYPES = [
     "XML",
     "Other",
 ]
+
+# TODO: prism should own this functionality...
+TRIAL_ID_FIELD = "lead_organization_study_id"
 ## End constants
 
 
@@ -84,7 +87,7 @@ def get_DOMAIN() -> dict:
     domain_config = {}
     domain_config["new_users"] = ResourceConfig(Users)
     domain_config["trial_metadata"] = ResourceConfig(TrialMetadata, id_field="trial_id")
-    for model in [Users, UploadJobs, Permissions, DownloadableFiles]:
+    for model in [Users, ManifestUploads, AssayUploads, Permissions, DownloadableFiles]:
         domain_config[model.__tablename__] = ResourceConfig(model)
 
     # Eve-sqlalchemy needs this to be specified explicitly for foreign key relations
@@ -92,7 +95,10 @@ def get_DOMAIN() -> dict:
         (Permissions, "to_user"): "users",
         (Permissions, "by_user"): "users",
         (Permissions, "trial"): "trial_metadata",
-        (UploadJobs, "uploader"): "users",
+        (AssayUploads, "uploader"): "users",
+        (AssayUploads, "trial"): "trial_metadata",
+        (ManifestUploads, "uploader"): "users",
+        (ManifestUploads, "trial"): "trial_metadata",
         (DownloadableFiles, "trial"): "trial_metadata",
     }
 
@@ -226,6 +232,8 @@ class Permissions(CommonColumns):
 
 
 class TrialMetadata(CommonColumns):
+    # TODO: split up metadata_json into separate `manifest`, `assays`, and `trial_info` fields on this table.
+
     __tablename__ = "trial_metadata"
     # The CIMAC-determined trial id
     trial_id = Column(String, unique=True, nullable=False, index=True)
@@ -244,46 +252,98 @@ class TrialMetadata(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def patch_trial_metadata(trial_id: str, metadata: dict, session: Session):
+    def patch_assays(trial_id: str, assay_patch: dict, session: Session):
         """
-            Applies updates to an existing trial metadata record,
-            or create a new one if it does not exist.
+            Applies assay updates to the metadata object from the trial with id `trial_id`.
 
-            Args:
-                trial_id: the lead organization study id for this trial
-                metadata: a partial metadata object for trial_id
+            TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
+        """
+        TrialMetadata.patch_trial_metadata(trial_id, assay_patch, session=session)
 
-            TODO: implement metadata merging, either here or in cidc_schemas
+    @staticmethod
+    @with_default_session
+    def patch_manifest(trial_id: str, manifest_patch: dict, session: Session):
+        """
+            Applies manifest updates to the metadata object from the trial with id `trial_id`.
+
+            TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
+        """
+        TrialMetadata.patch_trial_metadata(trial_id, manifest_patch, session=session)
+
+    @staticmethod
+    @with_default_session
+    def patch_trial_metadata(trial_id: str, json_patch: dict, session: Session):
+        """
+            Applies updates to the metadata object from the trial with id `trial_id`.
+
+            TODO: remove this function and dependency on it, in favor of separate assay
+            and manifest patch strategies.
         """
         # Look for an existing trial
         trial = TrialMetadata.find_by_trial_id(trial_id, session=session)
+        assert trial is not None, f"No trial found with id {trial_id}"
 
-        if trial:
-            # Merge-update metadata into existing trial's metadata_json
-            updated_metadata = prism.merge_clinical_trial_metadata(
-                metadata, trial.metadata_json
-            )
-            # Save updates to trial record
-            session.query(TrialMetadata).filter_by(trial_id=trial.trial_id).update(
-                {
-                    "metadata_json": updated_metadata,
-                    "_etag": make_etag(trial.trial_id, updated_metadata),
-                }
-            )
-            session.commit()
-        else:
-            # Create a new trial metadata record, since none exists
-            app.logger.info(f"Creating new trial_metadata for trial {trial_id}")
-            new_trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata)
-            session.add(new_trial)
-            session.commit()
+        # Merge assay metadata into the existing clinical trial metadata
+        updated_metadata = prism.merge_clinical_trial_metadata(
+            json_patch, trial.metadata_json
+        )
+        # Save updates to trial record
+        session.query(TrialMetadata).filter_by(trial_id=trial.trial_id).update(
+            {
+                "metadata_json": updated_metadata,
+                "_etag": make_etag(trial.trial_id, updated_metadata),
+            }
+        )
+        session.commit()
+
+    @staticmethod
+    @with_default_session
+    def create(trial_id: str, metadata_json: dict, session: Session):
+        """
+            Create a new clinical trial metadata record.
+        """
+        session.add(TrialMetadata(trial_id=trial_id, metadata_json=metadata_json))
+        session.commit()
 
 
 STATUSES = ["started", "completed", "errored"]
 
 
-class UploadJobs(CommonColumns):
-    __tablename__ = "upload_jobs"
+class UploadForeignKeys:
+    # Link to the user who created this upload.
+    @declared_attr
+    def uploader_email(cls):
+        return Column(String, ForeignKey("users.email", onupdate="CASCADE"))
+
+    @declared_attr
+    def uploader(cls):
+        return relationship("Users", foreign_keys=[cls.uploader_email])
+
+    # The trial that this is an upload for.
+    # This foreign key constraint means that it won't be possible
+    # to create an upload for a trial that doesn't exist.
+    @declared_attr
+    def trial_id(cls):
+        return Column(
+            String, ForeignKey("trial_metadata.trial_id"), nullable=False, index=True
+        )
+
+    @declared_attr
+    def trial(cls):
+        return relationship("TrialMetadata", foreign_keys=[cls.trial_id])
+
+    # The object URI for the raw excel form associated with this upload
+    gcs_xlsx_uri = Column(String, nullable=False)
+
+
+class ManifestUploads(CommonColumns, UploadForeignKeys):
+    __tablename__ = "manifest_uploads"
+    # The parsed JSON manifest blob for this upload
+    manifest_patch = Column(JSONB, nullable=False)
+
+
+class AssayUploads(CommonColumns, UploadForeignKeys):
+    __tablename__ = "assay_uploads"
     # The current status of the upload job
     status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
     # The object names for the files to be uploaded
@@ -291,15 +351,14 @@ class UploadJobs(CommonColumns):
     # TODO: track the GCS URI of the .xlsx file used for this upload
     # gcs_xlsx_uri = Column(String, nullable=False)
     # The parsed JSON metadata blob associated with this upload
-    metadata_json_patch = Column(JSONB, nullable=False)
-    # Link to the user who created this upload job
-    uploader_email = Column(String, ForeignKey("users.email", onupdate="CASCADE"))
-    uploader = relationship("Users", foreign_keys=[uploader_email])
+    assay_patch = Column(JSONB, nullable=False)
     # A type of assay (wes, olink, ...) this upload is related to
     assay_type = Column(String, nullable=False)
 
     # Create a GIN index on the GCS object names
-    _gcs_objects_idx = Index("gcs_objects_idx", gcs_file_uris, postgresql_using="gin")
+    _gcs_objects_idx = Index(
+        "assay_uploads_gcs_file_uris_ix", gcs_file_uris, postgresql_using="gin"
+    )
 
     @staticmethod
     @with_default_session
@@ -308,14 +367,20 @@ class UploadJobs(CommonColumns):
         uploader_email: str,
         gcs_file_uris: list,
         metadata: dict,
+        gcs_xlsx_uri: str,
         session: Session,
     ):
         """Create a new upload job for the given trial metadata patch."""
-        job = UploadJobs(
+        assert TRIAL_ID_FIELD in metadata, "metadata must have a trial ID"
+        trial_id = metadata[TRIAL_ID_FIELD]
+
+        job = AssayUploads(
+            trial_id=trial_id,
             assay_type=assay_type,
             gcs_file_uris=gcs_file_uris,
-            metadata_json_patch=metadata,
+            assay_patch=metadata,
             uploader_email=uploader_email,
+            gcs_xlsx_uri=gcs_xlsx_uri,
             status="started",
             _etag=make_etag(
                 assay_type, gcs_file_uris, metadata, uploader_email, "started"

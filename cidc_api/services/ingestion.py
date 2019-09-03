@@ -14,7 +14,7 @@ from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_s
 from cidc_schemas import constants, validate_xlsx, prism, template
 
 import gcloud_client
-from models import UploadJobs, STATUSES
+from models import AssayUploads, STATUSES, TRIAL_ID_FIELD
 from config.settings import GOOGLE_UPLOAD_BUCKET
 
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
@@ -22,7 +22,7 @@ ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 
 def register_ingestion_hooks(app: Eve):
     """Set up ingestion-related hooks on an Eve app instance"""
-    app.on_post_PATCH_upload_jobs = on_post_PATCH_upload_jobs
+    app.on_post_PATCH_assay_uploads = on_post_PATCH_assay_uploads
 
 
 def is_xlsx(filename: str) -> bool:
@@ -103,11 +103,48 @@ def validate():
         return jsonify(json)
 
 
-@ingestion_api.route("/upload", methods=["POST"])
-@requires_auth("ingestion.upload")
-def upload():
+def validate_excel_payload(f):
+    def wrapped(*args, **kwargs):
+        # Run basic validations on the provided Excel file
+        validations = validate()
+        if len(validations.json["errors"]) > 0:
+            return BadRequest(validations)
+        return f(*args, **kwargs)
+
+    wrapped.__name__ = f.__name__
+    return wrapped
+
+
+@ingestion_api.route("/upload_manifest", methods=["POST"])
+@requires_auth("ingestion.upload_manifest")
+@validate_excel_payload
+def upload_manifest():
     """
-    Initiate a metadata/data ingestion job.
+    Ingest manifest data from an excel spreadsheet.
+
+    3. API tries to load existing trial metadata blob (if fails, merge request fails; nothing saved).
+    4. API merges the merge request JSON into the trial metadata (if fails, merge request fails; nothing saved).
+    5. The manifest xlsx file is upload to the GCS uploads bucket.
+    6. The merge request parsed JSON is saved to `ManifestUploads`.
+    7. The updated trial metadata object is updated in the `TrialMetadata` table.
+
+    Request: multipart/form
+        schema: the schema identifier for this template
+        template: the .xlsx file to process'
+    Response:
+        201 if the upload succeeds. Otherwise, some error status code and message.
+    """
+    schema_hint, schema_path, xlsx_file = extract_schema_and_xlsx()
+
+    return NotImplemented("Manifest ingestion is not yet supported.")
+
+
+@ingestion_api.route("/upload_assay", methods=["POST"])
+@requires_auth("ingestion.upload_assay")
+@validate_excel_payload
+def upload_assay():
+    """
+    Initiate an assay metadata/data ingestion job.
 
     Request: multipart/form
         schema: the schema identifier for this template
@@ -121,19 +158,11 @@ def upload():
     
     # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
     """
-    # Run basic validations on the provided Excel file
-    validations = validate()
-    if len(validations.json["errors"]) > 0:
-        return validations
-
     schema_hint, schema_path, xlsx_file = extract_schema_and_xlsx()
-
-    # TODO: this path-resolution should happen internally in prism
-    full_schema_path = os.path.join(constants.SCHEMA_DIR, schema_path)
 
     # Extract the clinical trial metadata blob contained in the .xlsx file,
     # along with information about the files the template references.
-    metadata_json, file_infos = prism.prismify(xlsx_file, full_schema_path, schema_hint)
+    metadata_json, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
 
     upload_moment = str(datetime.datetime.now()).replace(" ", "_")
     url_mapping = {}
@@ -150,11 +179,18 @@ def upload():
         gcs_uri = f"{gcs_uri_prefix}/{local_path}"
         url_mapping[local_path] = gcs_uri
 
+    # Upload the xlsx template file to GCS
+    xlsx_file.seek(0)
+    gcs_xlsx_uri = gcloud_client.upload_xlsx_to_gcs(
+        metadata_json[TRIAL_ID_FIELD], "assays", schema_hint, xlsx_file
+    )
+
     # Save the upload job to the database
-    xlsx_bytes = xlsx_file.read()
     gcs_uris = url_mapping.values()
     user_email = _request_ctx_stack.top.current_user.email
-    job = UploadJobs.create(schema_hint, user_email, gcs_uris, metadata_json)
+    job = AssayUploads.create(
+        schema_hint, user_email, gcs_uris, metadata_json, gcs_xlsx_uri
+    )
 
     # Grant the user upload access to the upload bucket
     gcloud_client.grant_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
@@ -168,10 +204,10 @@ def upload():
     return jsonify(response)
 
 
-def on_post_PATCH_upload_jobs(request: Request, payload: Response):
+def on_post_PATCH_assay_uploads(request: Request, payload: Response):
     """Revoke the user's write access to the objects they've uploaded to."""
     if not payload.json or not "id" in payload.json:
-        raise BadRequest("Unexpected payload while updating upload_jobs")
+        raise BadRequest("Unexpected payload while updating assay_uploads")
 
     # TODO: handle the case where the user has more than one upload running,
     # in which case we shouldn't revoke the user's write access until they
