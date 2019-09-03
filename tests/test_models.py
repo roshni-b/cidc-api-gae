@@ -116,6 +116,7 @@ def test_trial_metadata_patch_assay(db):
     trial = TrialMetadata.find_by_trial_id(TRIAL_ID)
     assert trial.metadata_json["assays"] == metadata_with_assay["assays"]
 
+
 @db_test
 def test_partial_patch_trial_metadata(db):
     """Update an existing trial_metadata_record"""
@@ -125,11 +126,8 @@ def test_partial_patch_trial_metadata(db):
     db.commit()
 
     # Create patch without all required fields (no "participants")
-    metadata_patch = {
-        "lead_organization_study_id": TRIAL_ID,
-        "assays": {}
-    }
-    
+    metadata_patch = {"lead_organization_study_id": TRIAL_ID, "assays": {}}
+
     # patch it - should be no error/exception
     TrialMetadata.patch_trial_metadata(TRIAL_ID, metadata_patch)
 
