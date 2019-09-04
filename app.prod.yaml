@@ -1,6 +1,6 @@
 runtime: python37
 env: standard
-entrypoint: gunicorn -b :$PORT --chdir cidc_api app:app
+entrypoint: gunicorn -b :$PORT --chdir cidc_api --log-level DEBUG app:app
 
 env_variables:
   ENV: 'prod'

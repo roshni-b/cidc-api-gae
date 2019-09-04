@@ -200,7 +200,7 @@ class Users(CommonColumns):
 
         user = Users.find_by_email(email)
         if not user:
-            app.logger.info(f"Creating new user with email {email}")
+            print(f"Creating new user with email {email}")
             user = Users(email=email)
             session.add(user)
             session.commit()

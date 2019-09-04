@@ -1,3 +1,5 @@
+import logging
+import traceback
 from os.path import dirname, abspath, join
 
 from eve import Eve
@@ -20,6 +22,21 @@ MIGRATIONS = join(ABSPATH, "..", "migrations")
 # Instantiate the Eve app
 app = Eve(auth=BearerAuth, data=SQL, validator=ValidatorSQL, settings=SETTINGS)
 
+# Inherit logging config from gunicorn if running behind gunicorn
+app.logger.setLevel(logging.DEBUG)
+if __name__ != "__main__":
+    gunicorn_logger = logging.getLogger("gunicorn.error")
+    app.logger.handlers = gunicorn_logger.handlers
+    app.logger.setLevel(gunicorn_logger.level)
+
+# Log tracebacks on server errors
+@app.errorhandler(500)
+def print_server_error(exception):
+    """Print out the traceback and error message for all server errors."""
+    orig_exc = exception.original_exception
+    traceback.print_exception(type(orig_exc), orig_exc, orig_exc.__traceback__)
+
+
 # Enable CORS
 # TODO: be more selective about which domains can make requests
 CORS(app, resources={r"*": {"origins": "*"}})
@@ -39,9 +56,7 @@ db.Model = BaseModel
 # should be checked into source control.
 Migrate(app, db, MIGRATIONS)
 with app.app_context():
-    app.logger.info("Upgrading the database...")
     upgrade(MIGRATIONS)
-    app.logger.info("Done upgrading the database.")
 
 # Configure the swagger site
 # TODO: flesh this out
