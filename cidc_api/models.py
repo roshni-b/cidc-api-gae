@@ -306,7 +306,7 @@ class TrialMetadata(CommonColumns):
         session.commit()
 
     @staticmethod
-    def merge_gcs_artifact(self, metadata, assay_type, uuid, gcs_object):
+    def merge_gcs_artifact(metadata, assay_type, uuid, gcs_object):
         return prism.merge_artifact(
             metadata,
             assay_type,
