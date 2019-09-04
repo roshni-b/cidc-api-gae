@@ -123,8 +123,8 @@ def test_create_assay_upload(db):
     new_user = Users.create(PROFILE)
 
     gcs_file_map = {
-        "my/first/wes/blob1": "test-uuid-1",
-        "my/first/wes/blob2": "test-uuid-2",
+        "my/first/wes/blob1/2019-08-30T15:51:38.450978": "test-uuid-1",
+        "my/first/wes/blob2/2019-08-30T15:51:38.450978": "test-uuid-2",
     }
     metadata_patch = {"lead_organization_study_id": TRIAL_ID}
     gcs_xlsx_uri = "xlsx/assays/wes/12:0:1.5123095"
@@ -142,6 +142,11 @@ def test_create_assay_upload(db):
     job = AssayUploads.find_by_id(new_job.id)
     assert_same_elements(new_job.gcs_file_map, job.gcs_file_map)
     assert job.status == "started"
+
+    assert list(job.upload_uris_with_data_uris_with_uuids()) == [
+        ("my/first/wes/blob1/2019-08-30T15:51:38.450978", "my/first/wes/blob1", "test-uuid-1"),
+        ("my/first/wes/blob2/2019-08-30T15:51:38.450978", "my/first/wes/blob2", "test-uuid-2"),
+    ]
 
 
 @db_test
