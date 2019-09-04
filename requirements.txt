@@ -13,4 +13,4 @@ werkzeug==0.15.4
 gunicorn
 
 # CIMAC-CIDC modules dep is also in setup.py
-cidc-schemas==0.3.0
+cidc-schemas==0.4.1
