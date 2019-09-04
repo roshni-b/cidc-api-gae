@@ -165,8 +165,7 @@ def upload_assay():
     metadata_json, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
 
     upload_moment = datetime.datetime.now().isoformat()
-    gcs_uris = []
-    uuids = []
+    uri2uuid = {}
     url_mapping = {}
     for file_info in file_infos:
         gcs_uri_dir, local_path, uuid = (
@@ -180,8 +179,7 @@ def upload_assay():
         # to prevent collisions with previous uploads of this file.
         gcs_uri = f"{gcs_uri_dir}/{upload_moment}"
 
-        gcs_uris.append(gcs_uri)
-        uuids.append(uuid)
+        uri2uuid[gcs_uri] = uuid
 
         if local_path in url_mapping:
             raise RuntimeError(
@@ -198,7 +196,7 @@ def upload_assay():
     # Save the upload job to the database
     user_email = _request_ctx_stack.top.current_user.email
     job = AssayUploads.create(
-        schema_hint, user_email, gcs_uris, uuids, metadata_json, gcs_xlsx_uri
+        schema_hint, user_email, uri2uuid, metadata_json, gcs_xlsx_uri
     )
 
     # Grant the user upload access to the upload bucket

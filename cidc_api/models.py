@@ -358,20 +358,18 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
     __tablename__ = "assay_uploads"
     # The current status of the upload job
     status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
-    # The object names for the files to be uploaded
-    gcs_file_uris = Column(ARRAY(String, dimensions=1), nullable=False)
+    # The object names for the files to be uploaded mapped to upload_placeholder uuids
+    gcs_file_map = Column(JSONB, nullable=False)
     # TODO: track the GCS URI of the .xlsx file used for this upload
     # gcs_xlsx_uri = Column(String, nullable=False)
     # The parsed JSON metadata blob associated with this upload
     assay_patch = Column(JSONB, nullable=False)
     # A type of assay (wes, olink, ...) this upload is related to
     assay_type = Column(String, nullable=False)
-    # The uuids from upload_placeholder for the files to be uploaded
-    gcs_file_uuids = Column(ARRAY(String, dimensions=1), nullable=False)
 
     # Create a GIN index on the GCS object names
     _gcs_objects_idx = Index(
-        "assay_uploads_gcs_file_uris_ix", gcs_file_uris, postgresql_using="gin"
+        "assay_uploads_gcs_gcs_file_map_idx", gcs_file_map, postgresql_using="gin"
     )
 
     def upload_uris_with_data_uris_with_uuids(self):
@@ -389,8 +387,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
     def create(
         assay_type: str,
         uploader_email: str,
-        gcs_file_uris: list,
-        gcs_file_uuids: list,
+        gcs_file_map: dict,
         metadata: dict,
         gcs_xlsx_uri: str,
         session: Session,
@@ -402,14 +399,13 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
         job = AssayUploads(
             trial_id=trial_id,
             assay_type=assay_type,
-            gcs_file_uris=gcs_file_uris,
-            gcs_file_uuids=gcs_file_uuids,
+            gcs_file_map=gcs_file_map,
             assay_patch=metadata,
             uploader_email=uploader_email,
             gcs_xlsx_uri=gcs_xlsx_uri,
             status="started",
             _etag=make_etag(
-                assay_type, gcs_file_uris, metadata, uploader_email, "started"
+                assay_type, gcs_file_map, metadata, uploader_email, "started"
             ),
         )
         session.add(job)
