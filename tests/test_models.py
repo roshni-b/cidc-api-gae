@@ -124,16 +124,14 @@ def test_create_assay_upload(db):
 
     gcs_file_map = {
         "my/first/wes/blob1": "test-uuid-1",
-        "my/first/wes/blob2": "test-uuid-2"
+        "my/first/wes/blob2": "test-uuid-2",
     }
     metadata_patch = {"lead_organization_study_id": TRIAL_ID}
     gcs_xlsx_uri = "xlsx/assays/wes/12:0:1.5123095"
 
     # Should fail, since trial doesn't exist yet
     with pytest.raises(IntegrityError):
-        AssayUploads.create(
-            "wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri
-        )
+        AssayUploads.create("wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri)
     db.rollback()
 
     TrialMetadata.create(TRIAL_ID, METADATA)
