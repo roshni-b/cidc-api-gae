@@ -373,12 +373,12 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
     )
 
     def upload_uris_with_data_uris_with_uuids(self):
-        for upload_uri, uuid in zip(self.gcs_file_uris, self.gcs_file_uuids):
+        for upload_uri, uuid in self.gcs_file_map.items():
             # URIs in the upload bucket have a structure like (see ingestion.upload_assay)
             # [trial id]/{prismify_generated_path}/[timestamp].
             # We strip off the /[timestamp] suffix from the upload url,
             # since we don't care when this was uploaded.
-            target_url = "/".join(upload_url.split("/")[:-1])
+            target_url = "/".join(upload_uri.split("/")[:-1])
 
             yield upload_uri, target_url, uuid
 
