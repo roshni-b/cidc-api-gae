@@ -202,8 +202,8 @@ def test_upload_wes(
 
 OLINK_TESTDATA = [
     ("/local/path/combined.xlsx", "olink/study_npx/"),
-    ("assay1_npx.xlsx", "olink/assay_npx/"),
-    ("ct2.xlsx", "olink/assay_raw_ct/"),
+    ("assay1_npx.xlsx", "111.0/olink/assay_npx/"),  # 111.0 is a chip barcode in .xlsx
+    ("ct2.xlsx", "112.0/olink/assay_raw_ct/"),  # 112.0 is a chip barcode in .xlsx
 ]
 
 
@@ -227,8 +227,8 @@ def test_upload_olink(
         gcs_object_name = url_mapping[local_path]
         assert local_path in url_mapping
         assert gcs_object_name.startswith(gcs_prefix)
-        assert not gcs_object_name.endswith(
-            local_path
+        assert (
+            local_path not in gcs_object_name
         ), "PHI from local_path shouldn't end up in gcs urls"
 
     # Check that we tried to grant IAM upload access to gcs_object_name
