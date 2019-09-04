@@ -168,24 +168,20 @@ def upload_assay():
     uri2uuid = {}
     url_mapping = {}
     for file_info in file_infos:
-        gcs_uri_dir, local_path, uuid = (
-            file_info["gs_key"],
-            file_info["local_path"],
-            file_info["upload_placeholder"],
-        )
+        uuid = file_info.upload_placeholder
 
         # Build the path to the "directory" in GCS where the
         # local file should be uploaded. Attach a timestamp (upload_moment)
         # to prevent collisions with previous uploads of this file.
-        gcs_uri = f"{gcs_uri_dir}/{upload_moment}"
+        gcs_uri = f"{file_info.gs_key}/{upload_moment}"
 
         uri2uuid[gcs_uri] = uuid
 
-        if local_path in url_mapping:
+        if file_info.local_path in url_mapping:
             raise RuntimeError(
-                f"File {local_path} came twice.\nEach local file should be used only once."
+                f"File {file_info.local_path} came twice.\nEach local file should be used only once."
             )
-        url_mapping[local_path] = gcs_uri
+        url_mapping[file_info.local_path] = gcs_uri
 
     # Upload the xlsx template file to GCS
     xlsx_file.seek(0)
