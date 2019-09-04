@@ -167,7 +167,9 @@ def test_upload_wes(
     gcs_object_name = url_mapping[local_path]
     assert local_path in url_mapping
     assert gcs_object_name.startswith(gcs_prefix)
-    assert gcs_object_name.endswith(local_path)
+    assert not gcs_object_name.endswith(
+        local_path
+    ), "PHI from local_path shouldn't end up in gcs urls"
 
     # Check that we tried to grant IAM upload access to gcs_object_name
     mocks.grant_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
@@ -225,7 +227,9 @@ def test_upload_olink(
         gcs_object_name = url_mapping[local_path]
         assert local_path in url_mapping
         assert gcs_object_name.startswith(gcs_prefix)
-        assert gcs_object_name.endswith(local_path)
+        assert not gcs_object_name.endswith(
+            local_path
+        ), "PHI from local_path shouldn't end up in gcs urls"
 
     # Check that we tried to grant IAM upload access to gcs_object_name
     mocks.grant_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)

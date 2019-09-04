@@ -164,19 +164,29 @@ def upload_assay():
     # along with information about the files the template references.
     metadata_json, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
 
-    upload_moment = str(datetime.datetime.now()).replace(" ", "_")
+    upload_moment = datetime.datetime.now().isoformat()
+    gcs_uris = []
+    uuids = []
     url_mapping = {}
     for file_info in file_infos:
-        gcs_uri_dir, local_path = file_info["gs_key"], file_info["local_path"]
+        gcs_uri_dir, local_path, uuid = (
+            file_info["gs_key"],
+            file_info["local_path"],
+            file_info["upload_placeholder"],
+        )
 
         # Build the path to the "directory" in GCS where the
         # local file should be uploaded. Attach a timestamp (upload_moment)
         # to prevent collisions with previous uploads of this file.
-        gcs_uri_prefix = f"{gcs_uri_dir}/{upload_moment}"
+        gcs_uri = f"{gcs_uri_dir}/{upload_moment}"
 
-        # Store the full path to GCS object for this file
-        # in the url mapping to be sent back to the user.
-        gcs_uri = f"{gcs_uri_prefix}/{local_path}"
+        gcs_uris.append(gcs_uri)
+        uuids.append(uuid)
+
+        if local_path in url_mapping:
+            raise RuntimeError(
+                f"File {local_path} came twice.\nEach local file should be used only once."
+            )
         url_mapping[local_path] = gcs_uri
 
     # Upload the xlsx template file to GCS
@@ -186,10 +196,9 @@ def upload_assay():
     )
 
     # Save the upload job to the database
-    gcs_uris = url_mapping.values()
     user_email = _request_ctx_stack.top.current_user.email
     job = AssayUploads.create(
-        schema_hint, user_email, gcs_uris, metadata_json, gcs_xlsx_uri
+        schema_hint, user_email, gcs_uris, uuids, metadata_json, gcs_xlsx_uri
     )
 
     # Grant the user upload access to the upload bucket

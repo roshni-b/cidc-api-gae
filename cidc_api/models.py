@@ -305,6 +305,18 @@ class TrialMetadata(CommonColumns):
         session.add(TrialMetadata(trial_id=trial_id, metadata_json=metadata_json))
         session.commit()
 
+    @staticmethod
+    def merge_gcs_artifact(self, metadata, assay_type, uuid, gcs_object):
+        return prism.merge_artifact(
+            metadata,
+            assay_type,
+            uuid,
+            gcs_object.name,
+            gcs_object.size,
+            gcs_object.time_created.isoformat(),
+            gcs_object.md5_hash,
+        )
+
 
 STATUSES = ["started", "completed", "errored"]
 
@@ -354,11 +366,23 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
     assay_patch = Column(JSONB, nullable=False)
     # A type of assay (wes, olink, ...) this upload is related to
     assay_type = Column(String, nullable=False)
+    # The uuids from upload_placeholder for the files to be uploaded
+    gcs_file_uuids = Column(ARRAY(String, dimensions=1), nullable=False)
 
     # Create a GIN index on the GCS object names
     _gcs_objects_idx = Index(
         "assay_uploads_gcs_file_uris_ix", gcs_file_uris, postgresql_using="gin"
     )
+
+    def upload_uris_with_data_uris_with_uuids(self):
+        for upload_uri, uuid in zip(self.gcs_file_uris, self.gcs_file_uuids):
+            # URIs in the upload bucket have a structure like (see ingestion.upload_assay)
+            # [trial id]/{prismify_generated_path}/[timestamp].
+            # We strip off the /[timestamp] suffix from the upload url,
+            # since we don't care when this was uploaded.
+            target_url = "/".join(upload_url.split("/")[:-1])
+
+            yield upload_uri, target_url, uuid
 
     @staticmethod
     @with_default_session
@@ -366,6 +390,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
         assay_type: str,
         uploader_email: str,
         gcs_file_uris: list,
+        gcs_file_uuids: list,
         metadata: dict,
         gcs_xlsx_uri: str,
         session: Session,
@@ -378,6 +403,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
             trial_id=trial_id,
             assay_type=assay_type,
             gcs_file_uris=gcs_file_uris,
+            gcs_file_uuids=gcs_file_uuids,
             assay_patch=metadata,
             uploader_email=uploader_email,
             gcs_xlsx_uri=gcs_xlsx_uri,
