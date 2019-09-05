@@ -93,7 +93,12 @@ def get_signed_url(
 
     # Generate the signed URL, allowing a client to use `method` for `expiry_mins` minutes
     expiration = datetime.timedelta(minutes=expiry_mins)
-    url = blob.generate_signed_url(version="v4", expiration=expiration, method=method)
+    url = blob.generate_signed_url(
+        version="v4",
+        expiration=expiration,
+        method=method,
+        response_disposition=object_name.replace("/", "_"),
+    )
 
     return url
 
