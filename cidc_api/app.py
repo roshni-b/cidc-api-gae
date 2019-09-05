@@ -33,7 +33,10 @@ if __name__ != "__main__":
 @app.errorhandler(500)
 def print_server_error(exception):
     """Print out the traceback and error message for all server errors."""
-    orig_exc = exception.original_exception
+    try:
+        orig_exc = exception.original_exception
+    except AttributeError:
+        orig_exc = exception
     traceback.print_exception(type(orig_exc), orig_exc, orig_exc.__traceback__)
 
 

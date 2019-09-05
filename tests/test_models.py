@@ -184,6 +184,7 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
         "md5_hash": "hash1234",
         "uploaded_timestamp": datetime.now(),
         "foo": "bar",  # unsupported column - should be filtered
+        "data_format": "FASTQ",
     }
 
     # Create the trial (to avoid violating foreign-key constraint)

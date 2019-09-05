@@ -428,6 +428,7 @@ class DownloadableFiles(CommonColumns):
     artifact_category = Column(
         Enum(*ARTIFACT_CATEGORIES, name="artifact_category"), nullable=False
     )
+    data_format = Column(String, nullable=False)
     assay_type = Column(String, nullable=False)
     md5_hash = Column(String, nullable=False)
     trial_id = Column(String, ForeignKey("trial_metadata.trial_id"), nullable=False)
