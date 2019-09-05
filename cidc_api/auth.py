@@ -4,14 +4,11 @@ from typing import List
 import requests
 from eve.auth import TokenAuth, requires_auth
 from jose import jwt
-from flask import _request_ctx_stack
+from flask import _request_ctx_stack, current_app as app
 from werkzeug.exceptions import Unauthorized
 
 from models import Users
-from config.settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID
-
-
-logger = logging.getLogger("cidc_api.auth")
+from config.settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID, TESTING
 
 
 class BearerAuth(TokenAuth):
@@ -39,6 +36,10 @@ class BearerAuth(TokenAuth):
         """
         profile = self.token_auth(id_token)
         is_authorized = self.role_auth(profile, allowed_roles, resource, method)
+
+        print(
+            f"{'' if is_authorized else 'UN'}AUTHORIZED: {profile['email']} {method} /{resource}"
+        )
 
         return is_authorized
 
@@ -96,8 +97,6 @@ class BearerAuth(TokenAuth):
         public_key = self.get_issuer_public_key(id_token)
 
         payload = self.decode_id_token(id_token, public_key)
-
-        logger.info("Authenticated user: " + payload["email"])
 
         return payload
 

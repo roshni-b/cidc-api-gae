@@ -42,7 +42,7 @@ GOOGLE_EMAILS_TOPIC = environ.get("GOOGLE_EMAILS_TOPIC")
 # but for some reason, google.cloud.storage.Blob.generate_signed_url
 # fails with a credentials-related error unless this is explicitly
 # set.
-if not environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+if not environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not TESTING:
     creds_file_name = tempfile.mktemp(".json")
     with open(creds_file_name, "w") as creds_file:
         creds_file.write(secrets.get("APP_ENGINE_CREDENTIALS"))
@@ -60,4 +60,6 @@ RESOURCE_METHODS = ["GET", "POST"]
 ITEM_METHODS = ["GET", "PUT", "PATCH"]
 CACHE_CONTROL = "no-cache"
 DOMAIN = get_DOMAIN()
+PAGINATION_DEFAULT = 100
+PAGINATION_LIMIT = 200
 ## End Eve REST API config

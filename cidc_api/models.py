@@ -200,7 +200,7 @@ class Users(CommonColumns):
 
         user = Users.find_by_email(email)
         if not user:
-            app.logger.info(f"Creating new user with email {email}")
+            print(f"Creating new user with email {email}")
             user = Users(email=email)
             session.add(user)
             session.commit()
@@ -305,6 +305,18 @@ class TrialMetadata(CommonColumns):
         session.add(TrialMetadata(trial_id=trial_id, metadata_json=metadata_json))
         session.commit()
 
+    @staticmethod
+    def merge_gcs_artifact(metadata, assay_type, uuid, gcs_object):
+        return prism.merge_artifact(
+            metadata,
+            assay_type,
+            uuid,
+            gcs_object.name,
+            gcs_object.size,
+            gcs_object.time_created.isoformat(),
+            gcs_object.md5_hash,
+        )
+
 
 STATUSES = ["started", "completed", "errored"]
 
@@ -346,8 +358,8 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
     __tablename__ = "assay_uploads"
     # The current status of the upload job
     status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
-    # The object names for the files to be uploaded
-    gcs_file_uris = Column(ARRAY(String, dimensions=1), nullable=False)
+    # The object names for the files to be uploaded mapped to upload_placeholder uuids
+    gcs_file_map = Column(JSONB, nullable=False)
     # TODO: track the GCS URI of the .xlsx file used for this upload
     # gcs_xlsx_uri = Column(String, nullable=False)
     # The parsed JSON metadata blob associated with this upload
@@ -357,15 +369,25 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
 
     # Create a GIN index on the GCS object names
     _gcs_objects_idx = Index(
-        "assay_uploads_gcs_file_uris_ix", gcs_file_uris, postgresql_using="gin"
+        "assay_uploads_gcs_gcs_file_map_idx", gcs_file_map, postgresql_using="gin"
     )
+
+    def upload_uris_with_data_uris_with_uuids(self):
+        for upload_uri, uuid in self.gcs_file_map.items():
+            # URIs in the upload bucket have a structure like (see ingestion.upload_assay)
+            # [trial id]/{prismify_generated_path}/[timestamp].
+            # We strip off the /[timestamp] suffix from the upload url,
+            # since we don't care when this was uploaded.
+            target_url = "/".join(upload_uri.split("/")[:-1])
+
+            yield upload_uri, target_url, uuid
 
     @staticmethod
     @with_default_session
     def create(
         assay_type: str,
         uploader_email: str,
-        gcs_file_uris: list,
+        gcs_file_map: dict,
         metadata: dict,
         gcs_xlsx_uri: str,
         session: Session,
@@ -377,13 +399,13 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
         job = AssayUploads(
             trial_id=trial_id,
             assay_type=assay_type,
-            gcs_file_uris=gcs_file_uris,
+            gcs_file_map=gcs_file_map,
             assay_patch=metadata,
             uploader_email=uploader_email,
             gcs_xlsx_uri=gcs_xlsx_uri,
             status="started",
             _etag=make_etag(
-                assay_type, gcs_file_uris, metadata, uploader_email, "started"
+                assay_type, gcs_file_map, metadata, uploader_email, "started"
             ),
         )
         session.add(job)
