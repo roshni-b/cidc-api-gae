@@ -118,6 +118,21 @@ def test_trial_metadata_patch_assay(db):
 
 
 @db_test
+def test_partial_patch_trial_metadata(db):
+    """Update an existing trial_metadata_record"""
+    # Create the initial trial
+
+    db.add(TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA))
+    db.commit()
+
+    # Create patch without all required fields (no "participants")
+    metadata_patch = {"lead_organization_study_id": TRIAL_ID, "assays": {}}
+
+    # patch it - should be no error/exception
+    TrialMetadata.patch_trial_metadata(TRIAL_ID, metadata_patch)
+
+
+@db_test
 def test_create_assay_upload(db):
     """Try to create an assay upload"""
     new_user = Users.create(PROFILE)
