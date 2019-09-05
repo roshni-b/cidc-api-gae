@@ -94,12 +94,12 @@ def get_signed_url(
 
     # Generate the signed URL, allowing a client to use `method` for `expiry_mins` minutes
     expiration = datetime.timedelta(minutes=expiry_mins)
-    full_filename=object_name.replace("/", "_").replace('"',"_").replace(' ',"_")
+    full_filename = object_name.replace("/", "_").replace('"', "_").replace(" ", "_")
     url = blob.generate_signed_url(
         version="v2",
         expiration=expiration,
         method=method,
-        response_disposition=f'attachment; filename="{full_filename}"'
+        response_disposition=f'attachment; filename="{full_filename}"',
     )
 
     return url
