@@ -85,7 +85,8 @@ def get_signed_url(
     """
     Generate a signed URL for `object_name` to give a client temporary access.
 
-    See: https://cloud.google.com/storage/docs/access-control/signing-urls-with-helpers
+    Using v2 signed urls because v4 is in Beta and response_disposition doesn't work.
+    https://cloud.google.com/storage/docs/access-control/signing-urls-with-helpers
     """
     storage_client = storage.Client()
     bucket = storage_client.get_bucket(bucket_name)
@@ -93,7 +94,13 @@ def get_signed_url(
 
     # Generate the signed URL, allowing a client to use `method` for `expiry_mins` minutes
     expiration = datetime.timedelta(minutes=expiry_mins)
-    url = blob.generate_signed_url(version="v4", expiration=expiration, method=method)
+    full_filename = object_name.replace("/", "_").replace('"', "_").replace(" ", "_")
+    url = blob.generate_signed_url(
+        version="v2",
+        expiration=expiration,
+        method=method,
+        response_disposition=f'attachment; filename="{full_filename}"',
+    )
 
     return url
 
