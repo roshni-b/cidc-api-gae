@@ -26,16 +26,13 @@ before_deploy:
       echo "$GCLOUD_SERVICE_ACCOUNT_JSON_STAGING" | base64 --decode > $GOOGLE_APPLICATION_CREDENTIALS;
     fi
 deploy:
-  - provider: gae
-    keyfile: $GOOGLE_APPLICATION_CREDENTIALS
-    project: cidc-dfci-staging
-    config: app.staging.yaml
+  - provider: script
+    # we need `beta` for the `--no-cache` flag, which disables dependency caching
+    script: gcloud beta app deploy app.staging.yaml --project cidc-dfci-staging --no-cache
     on:
       branch: master
-  - provider: gae
-    keyfile: $GOOGLE_APPLICATION_CREDENTIALS
-    project: cidc-dfci
-    config: app.prod.yaml
+  - provider: script
+    script: gcloud beta app deploy app.prod.yaml --project cidc-dfci --no-cache
     on:
       branch: production
   # We deploy data model code to PyPI for use in, e.g., cidc-cloud-functions
