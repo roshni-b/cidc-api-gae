@@ -202,8 +202,8 @@ def test_upload_wes(
 
 OLINK_TESTDATA = [
     ("/local/path/combined.xlsx", "olink/study_npx/"),
-    ("assay1_npx.xlsx", "111.0/olink/assay_npx/"),  # 111.0 is a chip barcode in .xlsx
-    ("ct2.xlsx", "112.0/olink/assay_raw_ct/"),  # 112.0 is a chip barcode in .xlsx
+    ("assay1_npx.xlsx", "111/olink/assay_npx/"),  # 111 is a chip barcode in .xlsx
+    ("ct2.xlsx", "112/olink/assay_raw_ct/"),  # 112 is a chip barcode in .xlsx
 ]
 
 
