@@ -94,7 +94,7 @@ def validate():
         raise InternalServerError(str(e))
 
     json = {"errors": []}
-    if type(error_list) == bool:
+    if type(error_list) == bool and error_list is True:
         # The spreadsheet is valid
         return jsonify(json)
     else:

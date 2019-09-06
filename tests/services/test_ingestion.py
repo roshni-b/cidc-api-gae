@@ -163,7 +163,7 @@ def test_upload_wes(
     # We expect local_path to map to a gcs object name with gcs_prefix
     # based on the contents of wes_xlsx.
     local_path = "/local/path/to/rgm.1.1.1.txt"
-    gcs_prefix = "wes example PA 1/wes example SA 1.1/wes example aliquot 1.1.1/wes/read_group_mapping_file/"
+    gcs_prefix = "10021/wes example PA 1/wes example SA 1.1/wes example aliquot 1.1.1/wes/rgm.txt"
     gcs_object_name = url_mapping[local_path]
     assert local_path in url_mapping
     assert gcs_object_name.startswith(gcs_prefix)
@@ -201,9 +201,15 @@ def test_upload_wes(
 
 
 OLINK_TESTDATA = [
-    ("/local/path/combined.xlsx", "olink/study_npx/"),
-    ("assay1_npx.xlsx", "111/olink/assay_npx/"),  # 111 is a chip barcode in .xlsx
-    ("ct2.xlsx", "112/olink/assay_raw_ct/"),  # 112 is a chip barcode in .xlsx
+    ("/local/path/combined.xlsx", "10021/olink/study_npx.xlsx"),
+    (
+        "assay1_npx.xlsx",
+        "10021/olink/chip_111/assay_npx.xlsx",
+    ),  # 111 is a chip barcode in .xlsx
+    (
+        "ct2.xlsx",
+        "10021/olink/chip_112/assay_raw_ct.xlsx",
+    ),  # 112 is a chip barcode in .xlsx
 ]
 
 
