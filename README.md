@@ -82,7 +82,7 @@ In your `.env` file, comment out `POSTGRES_URI` and uncomment all environment va
 If you wish to connect to the staging Cloud SQL instance via the postgres REPL, download and run the CIDC sql proxy tool (a wrapper for `cloud_sql_proxy`):
 ```bash
 # Download the proxy
-curl https://raw.githubusercontent.com/CIMAC-CIDC/cidc-devops/v2/scripts/cidc_sql_proxy.sh -o /usr/local/bin/cidc_sql_proxy
+curl https://raw.githubusercontent.com/CIMAC-CIDC/cidc-devops/master/scripts/cidc_sql_proxy.sh -o /usr/local/bin/cidc_sql_proxy
 chmod +x /usr/local/bin/cidc_sql_proxy
 
 # Run the proxy
