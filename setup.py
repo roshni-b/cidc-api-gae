@@ -17,6 +17,6 @@ setup(
     packages=["cidc_api.config"],
     py_modules=["cidc_api.models"],
     url="https://github.com/CIMAC-CIDC/cidc_api-gae",
-    version="0.4.6",
+    version="0.4.7",
     zip_safe=False,
 )
