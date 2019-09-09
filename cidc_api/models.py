@@ -276,8 +276,7 @@ class TrialMetadata(CommonColumns):
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
         """
-        trial = TrialMetadata.select_for_update_by_trial_id(trial_id)
-        trial._patch_trial_metadata(assay_patch, session=session)
+        TrialMetadata._patch_trial_metadata(trial_id, assay_patch, session=session)
 
     @staticmethod
     @with_default_session
@@ -287,30 +286,30 @@ class TrialMetadata(CommonColumns):
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
         """
-        trial = TrialMetadata.select_for_update_by_trial_id(trial_id)
-        trial._patch_trial_metadata(manifest_patch, session=session)
+        TrialMetadata._patch_trial_metadata(trial_id, manifest_patch, session=session)
 
+    @staticmethod
     @with_default_session
-    def _patch_trial_metadata(self, json_patch: dict, session: Session):
+    def _patch_trial_metadata(trial_id: str, json_patch: dict, session: Session):
         """
             Applies updates to the metadata object from the trial with id `trial_id`
             and commits current session.
-
-            NB: Trial should be locked by `select_for_update_by_trial_id`.
 
             TODO: remove this function and dependency on it, in favor of separate assay
             and manifest patch strategies.
         """
 
+        trial = TrialMetadata.select_for_update_by_trial_id(trial_id)
+
         # Merge assay metadata into the existing clinical trial metadata
         updated_metadata = prism.merge_clinical_trial_metadata(
-            json_patch, self.metadata_json
+            json_patch, trial.metadata_json
         )
         # Save updates to trial record
-        self.metadata_json = updated_metadata
-        self._etag = make_etag(self.trial_id, updated_metadata)
+        trial.metadata_json = updated_metadata
+        trial._etag = make_etag(trial.trial_id, updated_metadata)
 
-        session.add(self)
+        session.add(trial)
         session.commit()
 
     @staticmethod
@@ -327,13 +326,13 @@ class TrialMetadata(CommonColumns):
     @staticmethod
     def merge_gcs_artifact(metadata, assay_type, uuid, gcs_object):
         return prism.merge_artifact(
-            metadata,
-            assay_type,
-            uuid,
-            gcs_object.name,
-            gcs_object.size,
-            gcs_object.time_created.isoformat(),
-            gcs_object.md5_hash,
+            ct=metadata,
+            assay_type=assay_type,
+            artifact_uuid=uuid,
+            object_url=gcs_object.name,
+            file_size_bytes=gcs_object.size,
+            uploaded_timestamp=gcs_object.time_created.isoformat(),
+            md5_hash=gcs_object.md5_hash,
         )
 
 
@@ -448,6 +447,7 @@ class DownloadableFiles(CommonColumns):
         Enum(*ARTIFACT_CATEGORIES, name="artifact_category"), nullable=False
     )
     data_format = Column(String, nullable=False)
+    # TODO rename assay_type, because we store manifests in there too.
     assay_type = Column(String, nullable=False)
     md5_hash = Column(String, nullable=False)
     trial_id = Column(String, ForeignKey("trial_metadata.trial_id"), nullable=False)

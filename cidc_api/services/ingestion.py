@@ -15,7 +15,13 @@ from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_s
 from cidc_schemas import constants, validate_xlsx, prism, template
 
 import gcloud_client
-from models import AssayUploads, STATUSES, TRIAL_ID_FIELD, TrialMetadata
+from models import (
+    AssayUploads,
+    STATUSES,
+    TRIAL_ID_FIELD,
+    TrialMetadata,
+    DownloadableFiles,
+)
 from config.settings import GOOGLE_UPLOAD_BUCKET
 
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
@@ -125,7 +131,7 @@ def upload_manifest():
 
     * API tries to load existing trial metadata blob (if fails, merge request fails; nothing saved).
     * API merges the merge request JSON into the trial metadata (if fails, merge request fails; nothing saved).
-    - The manifest xlsx file is upload to the GCS uploads bucket and goes to Downloadable files.
+    * The manifest xlsx file is upload to the GCS uploads bucket and goes to Downloadable files.
     - The merge request parsed JSON is saved to `ManifestUploads`.
     * The updated trial metadata object is updated in the `TrialMetadata` table.
 
@@ -141,16 +147,10 @@ def upload_manifest():
 
     md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
 
-    if len(file_infos) > 0:
-        raise BadRequest(f"Shipping manifests shouldn't reference any local files.")
-
-    try:
-        trial_id = md_patch[TRIAL_ID_FIELD]
-    except KeyError:
-        raise BadRequest(f"No {TRIAL_ID_FIELD} parsed from template.")
+    trial_id = md_patch[TRIAL_ID_FIELD]
 
     xlsx_file.seek(0)
-    gcs_xlsx_uri = gcloud_client.upload_xlsx_to_gcs(
+    gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         trial_id, "manifest", schema_hint, xlsx_file, upload_moment
     )
 
@@ -158,6 +158,22 @@ def upload_manifest():
         TrialMetadata.patch_manifest(trial_id, md_patch)
     except NoResultFound as e:
         raise BadRequest(f"Trial with {TRIAL_ID_FIELD} {trial_id} not found.")
+
+    # TODO move to prism
+    DownloadableFiles.create_from_metadata(
+        trial_id,
+        assay_type=schema_hint,
+        file_metadata = {
+            "artifact_category": "Manifest File",
+            "object_url": gcs_blob.name,
+            "file_name": gcs_blob.name,
+            "file_size_bytes": gcs_blob.size,
+            "md5_hash": gcs_blob.md5_hash,
+            "uploaded_timestamp": upload_moment,
+            "data_format": "XLSX"
+        },
+    )
+
 
     return jsonify({"metadata_json_patch": md_patch})
 
@@ -208,14 +224,14 @@ def upload_assay():
 
     # Upload the xlsx template file to GCS
     xlsx_file.seek(0)
-    gcs_xlsx_uri = gcloud_client.upload_xlsx_to_gcs(
+    gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         metadata_json[TRIAL_ID_FIELD], "assays", schema_hint, xlsx_file, upload_moment
     )
 
     # Save the upload job to the database
     user_email = _request_ctx_stack.top.current_user.email
     job = AssayUploads.create(
-        schema_hint, user_email, uri2uuid, metadata_json, gcs_xlsx_uri
+        schema_hint, user_email, uri2uuid, metadata_json, gcs_blob.name
     )
 
     # Grant the user upload access to the upload bucket

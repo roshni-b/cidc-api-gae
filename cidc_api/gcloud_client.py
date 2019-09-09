@@ -38,19 +38,28 @@ def upload_xlsx_to_gcs(
     template_type: str,
     filebytes: BinaryIO,
     upload_moment: str,
-) -> str:
+):
     """
     Upload an xlsx template file to GCS, returning the object URI.
     
     `template_category` is either "manifests" or "assays".
     `template_type` is an assay or manifest type, like "wes" or "pbmc" respectively.
-    """
-    blob_name = f"{trial_id}/xlsx/{template_category}/{template_type}/{upload_moment}"
 
-    bucket: storage.Bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
-    blob = bucket.blob(blob_name)
+    Returns:
+        arg1: GCS blob object
+    """
+    blob_name = (
+        f"{trial_id}/xlsx/{template_category}/{template_type}/{upload_moment}.xlsx"
+    )
+
+    upload_bucket: storage.Bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
+    blob = upload_bucket.blob(blob_name)
     blob.upload_from_file(filebytes)
-    return blob_name
+
+    data_bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+    final_object = upload_bucket.copy_blob(blob, data_bucket)
+
+    return blob
 
 
 def grant_upload_access(bucket_name: str, user_email: str):

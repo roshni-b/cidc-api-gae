@@ -129,9 +129,8 @@ def test_partial_patch_trial_metadata(db):
     # Create patch without all required fields (no "participants")
     metadata_patch = {"lead_organization_study_id": TRIAL_ID, "assays": {}}
 
-    trial = TrialMetadata.select_for_update_by_trial_id(TRIAL_ID)
     # patch it - should be no error/exception
-    trial._patch_trial_metadata(metadata_patch)
+    TrialMetadata._patch_trial_metadata(TRIAL_ID, metadata_patch)
 
 
 @db_test
