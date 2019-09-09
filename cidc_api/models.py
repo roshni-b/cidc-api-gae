@@ -252,13 +252,24 @@ class TrialMetadata(CommonColumns):
 
     @staticmethod
     @with_default_session
+    def select_for_update_by_trial_id(trial_id: str, session: Session):
+        """
+            Find a trial by its CIMAC id.
+        """
+        trial = session.query(TrialMetadata).filter_by(trial_id=trial_id).with_for_update().first()
+        assert trial is not None, f"No trial found with id {trial_id}"
+        return trial
+
+    @staticmethod
+    @with_default_session
     def patch_assays(trial_id: str, assay_patch: dict, session: Session):
         """
             Applies assay updates to the metadata object from the trial with id `trial_id`.
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
         """
-        TrialMetadata.patch_trial_metadata(trial_id, assay_patch, session=session)
+        trial  = TrialMetadata.select_for_update_by_trial_id(trial_id)
+        trial._patch_trial_metadata(assay_patch, session=session)
 
     @staticmethod
     @with_default_session
@@ -268,32 +279,30 @@ class TrialMetadata(CommonColumns):
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
         """
-        TrialMetadata.patch_trial_metadata(trial_id, manifest_patch, session=session)
+        trial  = TrialMetadata.select_for_update_by_trial_id(trial_id)
+        trial._patch_trial_metadata(manifest_patch, session=session)
 
-    @staticmethod
     @with_default_session
-    def patch_trial_metadata(trial_id: str, json_patch: dict, session: Session):
+    def _patch_trial_metadata(self, json_patch: dict, session: Session):
         """
-            Applies updates to the metadata object from the trial with id `trial_id`.
+            Applies updates to the metadata object from the trial with id `trial_id`
+            and commits current session.
+
+            NB: Trial should be locked by `select_for_update_by_trial_id`.
 
             TODO: remove this function and dependency on it, in favor of separate assay
             and manifest patch strategies.
         """
-        # Look for an existing trial
-        trial = TrialMetadata.find_by_trial_id(trial_id, session=session)
-        assert trial is not None, f"No trial found with id {trial_id}"
-
+        
         # Merge assay metadata into the existing clinical trial metadata
         updated_metadata = prism.merge_clinical_trial_metadata(
-            json_patch, trial.metadata_json
+            json_patch, self.metadata_json
         )
         # Save updates to trial record
-        session.query(TrialMetadata).filter_by(trial_id=trial.trial_id).update(
-            {
-                "metadata_json": updated_metadata,
-                "_etag": make_etag(trial.trial_id, updated_metadata),
-            }
-        )
+        self.metadata_json = updated_metadata
+        self._etag = make_etag(self.trial_id, updated_metadata)
+
+        session.add(self)
         session.commit()
 
     @staticmethod
@@ -302,6 +311,8 @@ class TrialMetadata(CommonColumns):
         """
             Create a new clinical trial metadata record.
         """
+        
+        print(f"Creating new trial metadata with id {trial_id}")
         session.add(TrialMetadata(trial_id=trial_id, metadata_json=metadata_json))
         session.commit()
 

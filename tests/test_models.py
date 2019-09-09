@@ -85,14 +85,15 @@ def test_trial_metadata_patch_manifest(db):
 
     # Create trial
     TrialMetadata.create(TRIAL_ID, METADATA)
-
+    
     # Try again
     TrialMetadata.patch_manifest(TRIAL_ID, metadata_with_participant)
 
     # Look the trial up and check that it has the participant in it
     trial = TrialMetadata.find_by_trial_id(TRIAL_ID)
+    trial_metadata_json_recheck = trial.metadata_json
     assert (
-        trial.metadata_json["participants"] == metadata_with_participant["participants"]
+        trial_metadata_json_recheck["participants"] == metadata_with_participant["participants"]
     )
 
 
@@ -128,8 +129,9 @@ def test_partial_patch_trial_metadata(db):
     # Create patch without all required fields (no "participants")
     metadata_patch = {"lead_organization_study_id": TRIAL_ID, "assays": {}}
 
+    trial = TrialMetadata.select_for_update_by_trial_id(TRIAL_ID)
     # patch it - should be no error/exception
-    TrialMetadata.patch_trial_metadata(TRIAL_ID, metadata_patch)
+    trial._patch_trial_metadata(metadata_patch)
 
 
 @db_test

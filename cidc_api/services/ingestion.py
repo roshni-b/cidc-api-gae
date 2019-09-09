@@ -14,7 +14,7 @@ from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_s
 from cidc_schemas import constants, validate_xlsx, prism, template
 
 import gcloud_client
-from models import AssayUploads, STATUSES, TRIAL_ID_FIELD
+from models import AssayUploads, STATUSES, TRIAL_ID_FIELD, TrialMetadata
 from config.settings import GOOGLE_UPLOAD_BUCKET
 
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
@@ -136,7 +136,22 @@ def upload_manifest():
     """
     schema_hint, schema_path, xlsx_file = extract_schema_and_xlsx()
 
-    return NotImplemented("Manifest ingestion is not yet supported.")
+    md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
+
+    if len(file_infos) > 0:
+        raise BadRequest(f"Unexpected local files in template for {schema_hint}")
+
+    try:
+        trial_id = md_patch[TRIAL_ID_FIELD]
+    except KeyError:
+        raise BadRequest(f"No {TRIAL_ID_FIELD} found/parsed from template.")
+
+    try:
+        TrialMetadata.patch_manifest(trial_id, md_patch)
+    except AssertionError as e:
+        raise BadRequest(f"Trial with {TRIAL_ID_FIELD} {trial_id} not found.")
+
+    return jsonify({})
 
 
 @ingestion_api.route("/upload_assay", methods=["POST"])
