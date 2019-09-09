@@ -12,6 +12,7 @@ env:
   global:
     - PYTHONPATH=$PYTHONPATH:$(pwd)/cidc_api
     - GOOGLE_APPLICATION_CREDENTIALS=$HOME/credentials.json
+    - CLOUDSDK_CORE_DISABLE_PROMPTS=1
 install:
   - pip install -r requirements.txt -r requirements.dev.txt
 before_script:
