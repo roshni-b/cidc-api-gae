@@ -85,7 +85,7 @@ def test_trial_metadata_patch_manifest(db):
 
     # Create trial
     TrialMetadata.create(TRIAL_ID, METADATA)
-    
+
     # Try again
     TrialMetadata.patch_manifest(TRIAL_ID, metadata_with_participant)
 
@@ -93,7 +93,8 @@ def test_trial_metadata_patch_manifest(db):
     trial = TrialMetadata.find_by_trial_id(TRIAL_ID)
     trial_metadata_json_recheck = trial.metadata_json
     assert (
-        trial_metadata_json_recheck["participants"] == metadata_with_participant["participants"]
+        trial_metadata_json_recheck["participants"]
+        == metadata_with_participant["participants"]
     )
 
 

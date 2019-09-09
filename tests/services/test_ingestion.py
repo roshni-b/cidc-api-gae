@@ -50,7 +50,9 @@ def olink_xlsx():
 @db_test
 def db_with_trial_and_user(db, test_user):
     # Create the target trial and the uploader
-    TrialMetadata.create("test_trial", {TRIAL_ID_FIELD: "test_trial", 'participants': []})
+    TrialMetadata.create(
+        "test_trial", {TRIAL_ID_FIELD: "test_trial", "participants": []}
+    )
     Users.create(profile={"email": test_user.email})
 
 
@@ -124,7 +126,9 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
             extract_schema_and_xlsx()
 
 
-def test_upload_manifest_non_existing_trial_id(app_no_auth, pbmc_non_existing_trial, test_user, db_with_trial_and_user):
+def test_upload_manifest_non_existing_trial_id(
+    app_no_auth, pbmc_non_existing_trial, test_user, db_with_trial_and_user
+):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 
@@ -132,10 +136,12 @@ def test_upload_manifest_non_existing_trial_id(app_no_auth, pbmc_non_existing_tr
         MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_non_existing_trial, "pbmc")
     )
     assert res.status_code == 400
-    assert "test-non-existing-trial-id" in res.json['_error']['message'] 
+    assert "test-non-existing-trial-id" in res.json["_error"]["message"]
 
 
-def test_upload_manifest(app_no_auth, pbmc_valid_xlsx, test_user, db_with_trial_and_user):
+def test_upload_manifest(
+    app_no_auth, pbmc_valid_xlsx, test_user, db_with_trial_and_user
+):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 

@@ -256,7 +256,12 @@ class TrialMetadata(CommonColumns):
         """
             Find a trial by its CIMAC id.
         """
-        trial = session.query(TrialMetadata).filter_by(trial_id=trial_id).with_for_update().first()
+        trial = (
+            session.query(TrialMetadata)
+            .filter_by(trial_id=trial_id)
+            .with_for_update()
+            .first()
+        )
         assert trial is not None, f"No trial found with id {trial_id}"
         return trial
 
@@ -268,7 +273,7 @@ class TrialMetadata(CommonColumns):
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
         """
-        trial  = TrialMetadata.select_for_update_by_trial_id(trial_id)
+        trial = TrialMetadata.select_for_update_by_trial_id(trial_id)
         trial._patch_trial_metadata(assay_patch, session=session)
 
     @staticmethod
@@ -279,7 +284,7 @@ class TrialMetadata(CommonColumns):
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
         """
-        trial  = TrialMetadata.select_for_update_by_trial_id(trial_id)
+        trial = TrialMetadata.select_for_update_by_trial_id(trial_id)
         trial._patch_trial_metadata(manifest_patch, session=session)
 
     @with_default_session
@@ -293,7 +298,7 @@ class TrialMetadata(CommonColumns):
             TODO: remove this function and dependency on it, in favor of separate assay
             and manifest patch strategies.
         """
-        
+
         # Merge assay metadata into the existing clinical trial metadata
         updated_metadata = prism.merge_clinical_trial_metadata(
             json_patch, self.metadata_json
@@ -311,7 +316,7 @@ class TrialMetadata(CommonColumns):
         """
             Create a new clinical trial metadata record.
         """
-        
+
         print(f"Creating new trial metadata with id {trial_id}")
         session.add(TrialMetadata(trial_id=trial_id, metadata_json=metadata_json))
         session.commit()
