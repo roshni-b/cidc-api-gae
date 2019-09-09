@@ -18,6 +18,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
@@ -256,13 +257,15 @@ class TrialMetadata(CommonColumns):
         """
             Find a trial by its CIMAC id.
         """
-        trial = (
-            session.query(TrialMetadata)
-            .filter_by(trial_id=trial_id)
-            .with_for_update()
-            .first()
-        )
-        assert trial is not None, f"No trial found with id {trial_id}"
+        try:
+            trial = (
+                session.query(TrialMetadata)
+                .filter_by(trial_id=trial_id)
+                .with_for_update()
+                .one()
+            )
+        except NoResultFound as e:
+            raise NoResultFound(f"No trial found with id {trial_id}") from e
         return trial
 
     @staticmethod

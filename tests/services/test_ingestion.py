@@ -148,8 +148,7 @@ def test_upload_manifest(
     res = client.post(
         MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_valid_xlsx, "pbmc")
     )
-    res_body_json = res.json
-    assert res.status_code == 200  # Not yet Implemented
+    assert res.status_code == 200
 
 
 class AssayUploadMocks:

@@ -10,6 +10,7 @@ from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
 
 from eve import Eve
 from eve.auth import requires_auth
+from sqlalchemy.orm.exc import NoResultFound
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
 from cidc_schemas import constants, validate_xlsx, prism, template
 
@@ -122,11 +123,11 @@ def upload_manifest():
     """
     Ingest manifest data from an excel spreadsheet.
 
-    3. API tries to load existing trial metadata blob (if fails, merge request fails; nothing saved).
-    4. API merges the merge request JSON into the trial metadata (if fails, merge request fails; nothing saved).
-    5. The manifest xlsx file is upload to the GCS uploads bucket.
-    6. The merge request parsed JSON is saved to `ManifestUploads`.
-    7. The updated trial metadata object is updated in the `TrialMetadata` table.
+    * API tries to load existing trial metadata blob (if fails, merge request fails; nothing saved).
+    * API merges the merge request JSON into the trial metadata (if fails, merge request fails; nothing saved).
+    - The manifest xlsx file is upload to the GCS uploads bucket and goes to Downloadable files.
+    - The merge request parsed JSON is saved to `ManifestUploads`.
+    * The updated trial metadata object is updated in the `TrialMetadata` table.
 
     Request: multipart/form
         schema: the schema identifier for this template
@@ -134,24 +135,31 @@ def upload_manifest():
     Response:
         201 if the upload succeeds. Otherwise, some error status code and message.
     """
+    upload_moment = datetime.datetime.now().isoformat()
+
     schema_hint, schema_path, xlsx_file = extract_schema_and_xlsx()
 
     md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
 
     if len(file_infos) > 0:
-        raise BadRequest(f"Unexpected local files in template for {schema_hint}")
+        raise BadRequest(f"Shipping manifests shouldn't reference any local files.")
 
     try:
         trial_id = md_patch[TRIAL_ID_FIELD]
     except KeyError:
-        raise BadRequest(f"No {TRIAL_ID_FIELD} found/parsed from template.")
+        raise BadRequest(f"No {TRIAL_ID_FIELD} parsed from template.")
+
+    xlsx_file.seek(0)
+    gcs_xlsx_uri = gcloud_client.upload_xlsx_to_gcs(
+        trial_id, "manifest", schema_hint, xlsx_file, upload_moment
+    )
 
     try:
         TrialMetadata.patch_manifest(trial_id, md_patch)
-    except AssertionError as e:
+    except NoResultFound as e:
         raise BadRequest(f"Trial with {TRIAL_ID_FIELD} {trial_id} not found.")
 
-    return jsonify({})
+    return jsonify({"metadata_json_patch": md_patch})
 
 
 @ingestion_api.route("/upload_assay", methods=["POST"])
@@ -201,7 +209,7 @@ def upload_assay():
     # Upload the xlsx template file to GCS
     xlsx_file.seek(0)
     gcs_xlsx_uri = gcloud_client.upload_xlsx_to_gcs(
-        metadata_json[TRIAL_ID_FIELD], "assays", schema_hint, xlsx_file
+        metadata_json[TRIAL_ID_FIELD], "assays", schema_hint, xlsx_file, upload_moment
     )
 
     # Save the upload job to the database
