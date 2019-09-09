@@ -21,10 +21,11 @@ script:
 
 before_deploy:
   - if [ "$TRAVIS_BRANCH" = production ]; then
-      echo "$GCLOUD_SERVICE_ACCOUNT_JSON_PROD" | base64 --decode > $GOOGLE_APPLICATION_CREDENTIALS;
+    echo "$GCLOUD_SERVICE_ACCOUNT_JSON_PROD" | base64 --decode > $GOOGLE_APPLICATION_CREDENTIALS;
     else
-      echo "$GCLOUD_SERVICE_ACCOUNT_JSON_STAGING" | base64 --decode > $GOOGLE_APPLICATION_CREDENTIALS;
+    echo "$GCLOUD_SERVICE_ACCOUNT_JSON_STAGING" | base64 --decode > $GOOGLE_APPLICATION_CREDENTIALS;
     fi
+  - sh .travis/install_gcloud.sh
 deploy:
   - provider: script
     # we need `beta` for the `--no-cache` flag, which disables dependency caching
