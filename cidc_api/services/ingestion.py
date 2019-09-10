@@ -163,17 +163,16 @@ def upload_manifest():
     DownloadableFiles.create_from_metadata(
         trial_id,
         assay_type=schema_hint,
-        file_metadata = {
+        file_metadata={
             "artifact_category": "Manifest File",
             "object_url": gcs_blob.name,
             "file_name": gcs_blob.name,
             "file_size_bytes": gcs_blob.size,
             "md5_hash": gcs_blob.md5_hash,
             "uploaded_timestamp": upload_moment,
-            "data_format": "XLSX"
+            "data_format": "XLSX",
         },
     )
-
 
     return jsonify({"metadata_json_patch": md_patch})
 

@@ -8,7 +8,7 @@ from cidc_api.gcloud_client import (
     _iam_id,
     publish_upload_success,
     send_email,
-    _xlsx_gcs_uri_format
+    _xlsx_gcs_uri_format,
 )
 from cidc_api.config.settings import GOOGLE_UPLOAD_ROLE
 
@@ -45,7 +45,7 @@ def test_revoke_upload_access(monkeypatch):
 
 
 def test_xlsx_gcs_uri_format(monkeypatch):
-    
+
     trial = "whatever"
     template_type = "also_whatever"
     assay_type = "something_else"
@@ -54,7 +54,7 @@ def test_xlsx_gcs_uri_format(monkeypatch):
         trial_id=trial,
         template_category=template_type,
         template_type=assay_type,
-        upload_moment=datetime.datetime.now().isoformat()
+        upload_moment=datetime.datetime.now().isoformat(),
     )
     assert trial in uri
     assert template_type in uri
