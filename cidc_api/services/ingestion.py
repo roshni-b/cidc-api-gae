@@ -11,6 +11,7 @@ from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
 from eve import Eve
 from eve.auth import requires_auth
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.orm.session import Session
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
 from cidc_schemas import constants, validate_xlsx, prism, template
 
@@ -155,10 +156,11 @@ def upload_manifest():
     )
 
     try:
-        TrialMetadata.patch_manifest(trial_id, md_patch)
+        trial = TrialMetadata.patch_manifest(trial_id, md_patch, commit=False)
     except NoResultFound as e:
         raise BadRequest(f"Trial with {TRIAL_ID_FIELD} {trial_id} not found.")
 
+    session = Session.object_session(trial)
     # TODO move to prism
     DownloadableFiles.create_from_metadata(
         trial_id,
@@ -172,6 +174,7 @@ def upload_manifest():
             "uploaded_timestamp": upload_moment,
             "data_format": "XLSX",
         },
+        session=session,
     )
 
     return jsonify({"metadata_json_patch": md_patch})

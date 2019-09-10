@@ -270,27 +270,37 @@ class TrialMetadata(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def patch_assays(trial_id: str, assay_patch: dict, session: Session):
+    def patch_assays(
+        trial_id: str, assay_patch: dict, session: Session, commit: bool = False
+    ):
         """
             Applies assay updates to the metadata object from the trial with id `trial_id`.
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
         """
-        TrialMetadata._patch_trial_metadata(trial_id, assay_patch, session=session)
+        return TrialMetadata._patch_trial_metadata(
+            trial_id, assay_patch, session=session, commit=commit
+        )
 
     @staticmethod
     @with_default_session
-    def patch_manifest(trial_id: str, manifest_patch: dict, session: Session):
+    def patch_manifest(
+        trial_id: str, manifest_patch: dict, session: Session, commit: bool = False
+    ):
         """
             Applies manifest updates to the metadata object from the trial with id `trial_id`.
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
         """
-        TrialMetadata._patch_trial_metadata(trial_id, manifest_patch, session=session)
+        return TrialMetadata._patch_trial_metadata(
+            trial_id, manifest_patch, session=session, commit=commit
+        )
 
     @staticmethod
     @with_default_session
-    def _patch_trial_metadata(trial_id: str, json_patch: dict, session: Session):
+    def _patch_trial_metadata(
+        trial_id: str, json_patch: dict, session: Session, commit: bool = False
+    ):
         """
             Applies updates to the metadata object from the trial with id `trial_id`
             and commits current session.
@@ -310,18 +320,28 @@ class TrialMetadata(CommonColumns):
         trial._etag = make_etag(trial.trial_id, updated_metadata)
 
         session.add(trial)
-        session.commit()
+        if commit:
+            session.commit()
+
+        return trial
 
     @staticmethod
     @with_default_session
-    def create(trial_id: str, metadata_json: dict, session: Session):
+    def create(
+        trial_id: str, metadata_json: dict, session: Session, commit: bool = True
+    ):
         """
             Create a new clinical trial metadata record.
         """
 
         print(f"Creating new trial metadata with id {trial_id}")
-        session.add(TrialMetadata(trial_id=trial_id, metadata_json=metadata_json))
-        session.commit()
+        trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
+        session.add(trial)
+
+        if commit:
+            session.commit()
+
+        return trial
 
     @staticmethod
     def merge_gcs_artifact(metadata, assay_type, uuid, gcs_object):
@@ -409,6 +429,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
         metadata: dict,
         gcs_xlsx_uri: str,
         session: Session,
+        commit: bool = True,
     ):
         """Create a new upload job for the given trial metadata patch."""
         assert TRIAL_ID_FIELD in metadata, "metadata must have a trial ID"
@@ -427,7 +448,8 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
             ),
         )
         session.add(job)
-        session.commit()
+        if commit:
+            session.commit()
 
         return job
 
@@ -458,7 +480,11 @@ class DownloadableFiles(CommonColumns):
     @staticmethod
     @with_default_session
     def create_from_metadata(
-        trial_id: str, assay_type: str, file_metadata: dict, session: Session
+        trial_id: str,
+        assay_type: str,
+        file_metadata: dict,
+        session: Session,
+        commit: bool = True,
     ):
         """
         Create a new DownloadableFiles record from a GCS blob.
@@ -475,4 +501,7 @@ class DownloadableFiles(CommonColumns):
 
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
-        session.commit()
+        if commit:
+            session.commit()
+
+        return new_file
