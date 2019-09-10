@@ -1,5 +1,6 @@
 from io import BytesIO
 from unittest.mock import MagicMock
+import datetime
 
 from cidc_api.gcloud_client import (
     grant_upload_access,
@@ -7,7 +8,7 @@ from cidc_api.gcloud_client import (
     _iam_id,
     publish_upload_success,
     send_email,
-    upload_xlsx_to_gcs,
+    _xlsx_gcs_uri_format,
 )
 from cidc_api.config.settings import GOOGLE_UPLOAD_ROLE
 
@@ -43,14 +44,18 @@ def test_revoke_upload_access(monkeypatch):
     revoke_upload_access("foo", EMAIL)
 
 
-def test_upload_xlsx_to_gcs(monkeypatch):
-    monkeypatch.setattr("google.cloud.storage.Client", MagicMock)
+def test_xlsx_gcs_uri_format(monkeypatch):
 
-    trial = "10021"
-    template_type = "assay"
-    assay_type = "wes"
+    trial = "whatever"
+    template_type = "also_whatever"
+    assay_type = "something_else"
 
-    uri = upload_xlsx_to_gcs(trial, template_type, assay_type, BytesIO(b"12345"))
+    uri = _xlsx_gcs_uri_format.format(
+        trial_id=trial,
+        template_category=template_type,
+        template_type=assay_type,
+        upload_moment=datetime.datetime.now().isoformat(),
+    )
     assert trial in uri
     assert template_type in uri
     assert assay_type in uri

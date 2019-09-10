@@ -18,6 +18,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
@@ -252,69 +253,106 @@ class TrialMetadata(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def patch_assays(trial_id: str, assay_patch: dict, session: Session):
+    def select_for_update_by_trial_id(trial_id: str, session: Session):
+        """
+            Find a trial by its CIMAC id.
+        """
+        try:
+            trial = (
+                session.query(TrialMetadata)
+                .filter_by(trial_id=trial_id)
+                .with_for_update()
+                .one()
+            )
+        except NoResultFound as e:
+            raise NoResultFound(f"No trial found with id {trial_id}") from e
+        return trial
+
+    @staticmethod
+    @with_default_session
+    def patch_assays(
+        trial_id: str, assay_patch: dict, session: Session, commit: bool = False
+    ):
         """
             Applies assay updates to the metadata object from the trial with id `trial_id`.
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
         """
-        TrialMetadata.patch_trial_metadata(trial_id, assay_patch, session=session)
+        return TrialMetadata._patch_trial_metadata(
+            trial_id, assay_patch, session=session, commit=commit
+        )
 
     @staticmethod
     @with_default_session
-    def patch_manifest(trial_id: str, manifest_patch: dict, session: Session):
+    def patch_manifest(
+        trial_id: str, manifest_patch: dict, session: Session, commit: bool = False
+    ):
         """
             Applies manifest updates to the metadata object from the trial with id `trial_id`.
 
             TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
         """
-        TrialMetadata.patch_trial_metadata(trial_id, manifest_patch, session=session)
+        return TrialMetadata._patch_trial_metadata(
+            trial_id, manifest_patch, session=session, commit=commit
+        )
 
     @staticmethod
     @with_default_session
-    def patch_trial_metadata(trial_id: str, json_patch: dict, session: Session):
+    def _patch_trial_metadata(
+        trial_id: str, json_patch: dict, session: Session, commit: bool = False
+    ):
         """
-            Applies updates to the metadata object from the trial with id `trial_id`.
+            Applies updates to the metadata object from the trial with id `trial_id`
+            and commits current session.
 
             TODO: remove this function and dependency on it, in favor of separate assay
             and manifest patch strategies.
         """
-        # Look for an existing trial
-        trial = TrialMetadata.find_by_trial_id(trial_id, session=session)
-        assert trial is not None, f"No trial found with id {trial_id}"
+
+        trial = TrialMetadata.select_for_update_by_trial_id(trial_id)
 
         # Merge assay metadata into the existing clinical trial metadata
         updated_metadata = prism.merge_clinical_trial_metadata(
             json_patch, trial.metadata_json
         )
         # Save updates to trial record
-        session.query(TrialMetadata).filter_by(trial_id=trial.trial_id).update(
-            {
-                "metadata_json": updated_metadata,
-                "_etag": make_etag(trial.trial_id, updated_metadata),
-            }
-        )
-        session.commit()
+        trial.metadata_json = updated_metadata
+        trial._etag = make_etag(trial.trial_id, updated_metadata)
+
+        session.add(trial)
+        if commit:
+            session.commit()
+
+        return trial
 
     @staticmethod
     @with_default_session
-    def create(trial_id: str, metadata_json: dict, session: Session):
+    def create(
+        trial_id: str, metadata_json: dict, session: Session, commit: bool = True
+    ):
         """
             Create a new clinical trial metadata record.
         """
-        session.add(TrialMetadata(trial_id=trial_id, metadata_json=metadata_json))
-        session.commit()
+
+        print(f"Creating new trial metadata with id {trial_id}")
+        trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
+        session.add(trial)
+
+        if commit:
+            session.commit()
+
+        return trial
 
     @staticmethod
     def merge_gcs_artifact(metadata, assay_type, uuid, gcs_object):
         return prism.merge_artifact(
-            metadata,
-            assay_type,
-            uuid,
-            gcs_object.name,
-            gcs_object.size,
-            gcs_object.time_created.isoformat(),
-            gcs_object.md5_hash,
+            ct=metadata,
+            assay_type=assay_type,
+            artifact_uuid=uuid,
+            object_url=gcs_object.name,
+            file_size_bytes=gcs_object.size,
+            uploaded_timestamp=gcs_object.time_created.isoformat(),
+            md5_hash=gcs_object.md5_hash,
         )
 
 
@@ -350,8 +388,40 @@ class UploadForeignKeys:
 
 class ManifestUploads(CommonColumns, UploadForeignKeys):
     __tablename__ = "manifest_uploads"
+    # A type of manifest (pbmc, plasma, ...) this upload is related to
+    manifest_type = Column(String, nullable=False)
     # The parsed JSON manifest blob for this upload
-    manifest_patch = Column(JSONB, nullable=False)
+    metadata_patch = Column(JSONB, nullable=False)
+    # tracks the GCS URI of the .xlsx file used for this upload
+    gcs_xlsx_uri = Column(String, nullable=False)
+
+    @staticmethod
+    @with_default_session
+    def create(
+        manifest_type: str,
+        uploader_email: str,
+        metadata: dict,
+        gcs_xlsx_uri: str,
+        session: Session,
+        commit: bool = True,
+    ):
+        """Create a new ManifestUpload for the given trial manifest patch."""
+        assert TRIAL_ID_FIELD in metadata, "metadata patch must have a trial ID"
+        trial_id = metadata[TRIAL_ID_FIELD]
+
+        upload = ManifestUploads(
+            trial_id=trial_id,
+            manifest_type=manifest_type,
+            metadata_patch=metadata,
+            uploader_email=uploader_email,
+            gcs_xlsx_uri=gcs_xlsx_uri,
+            _etag=make_etag(manifest_type, metadata, uploader_email),
+        )
+        session.add(upload)
+        if commit:
+            session.commit()
+
+        return upload
 
 
 class AssayUploads(CommonColumns, UploadForeignKeys):
@@ -360,8 +430,8 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
     status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
     # The object names for the files to be uploaded mapped to upload_placeholder uuids
     gcs_file_map = Column(JSONB, nullable=False)
-    # TODO: track the GCS URI of the .xlsx file used for this upload
-    # gcs_xlsx_uri = Column(String, nullable=False)
+    # track the GCS URI of the .xlsx file used for this upload
+    gcs_xlsx_uri = Column(String, nullable=False)
     # The parsed JSON metadata blob associated with this upload
     assay_patch = Column(JSONB, nullable=False)
     # A type of assay (wes, olink, ...) this upload is related to
@@ -391,6 +461,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
         metadata: dict,
         gcs_xlsx_uri: str,
         session: Session,
+        commit: bool = True,
     ):
         """Create a new upload job for the given trial metadata patch."""
         assert TRIAL_ID_FIELD in metadata, "metadata must have a trial ID"
@@ -409,7 +480,8 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
             ),
         )
         session.add(job)
-        session.commit()
+        if commit:
+            session.commit()
 
         return job
 
@@ -429,6 +501,7 @@ class DownloadableFiles(CommonColumns):
         Enum(*ARTIFACT_CATEGORIES, name="artifact_category"), nullable=False
     )
     data_format = Column(String, nullable=False)
+    # TODO rename assay_type, because we store manifests in there too.
     assay_type = Column(String, nullable=False)
     md5_hash = Column(String, nullable=False)
     trial_id = Column(String, ForeignKey("trial_metadata.trial_id"), nullable=False)
@@ -439,7 +512,11 @@ class DownloadableFiles(CommonColumns):
     @staticmethod
     @with_default_session
     def create_from_metadata(
-        trial_id: str, assay_type: str, file_metadata: dict, session: Session
+        trial_id: str,
+        assay_type: str,
+        file_metadata: dict,
+        session: Session,
+        commit: bool = True,
     ):
         """
         Create a new DownloadableFiles record from a GCS blob.
@@ -456,4 +533,7 @@ class DownloadableFiles(CommonColumns):
 
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
-        session.commit()
+        if commit:
+            session.commit()
+
+        return new_file

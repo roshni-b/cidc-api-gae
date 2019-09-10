@@ -9,7 +9,14 @@ test_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(test_dir, "..", "cidc_api"))
 
 # Can only import cidc_api modules after the above paths are set
-from models import Users, TrialMetadata, AssayUploads, Permissions, DownloadableFiles
+from models import (
+    Users,
+    TrialMetadata,
+    AssayUploads,
+    Permissions,
+    DownloadableFiles,
+    ManifestUploads,
+)
 
 os.environ["TESTING"] = "True"
 
@@ -55,6 +62,7 @@ def db(app):
     """Provide a clean test database session"""
     session = app.data.driver.session
     session.query(AssayUploads).delete()
+    session.query(ManifestUploads).delete()
     session.query(Users).delete()
     session.query(DownloadableFiles).delete()
     session.query(TrialMetadata).delete()

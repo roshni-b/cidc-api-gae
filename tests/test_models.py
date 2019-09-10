@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import NoResultFound
 
 from cidc_api.app import app
 from cidc_api.models import (
@@ -80,7 +81,7 @@ def test_trial_metadata_patch_manifest(db):
         }
     ]
 
-    with pytest.raises(AssertionError, match=f"No trial found with id {TRIAL_ID}"):
+    with pytest.raises(NoResultFound, match=f"No trial found with id {TRIAL_ID}"):
         TrialMetadata.patch_manifest(TRIAL_ID, metadata_with_participant)
 
     # Create trial
@@ -103,7 +104,7 @@ def test_trial_metadata_patch_assay(db):
     metadata_with_assay = METADATA.copy()
     metadata_with_assay["assays"] = {"wes": []}
 
-    with pytest.raises(AssertionError, match=f"No trial found with id {TRIAL_ID}"):
+    with pytest.raises(NoResultFound, match=f"No trial found with id {TRIAL_ID}"):
         TrialMetadata.patch_manifest(TRIAL_ID, metadata_with_assay)
 
     # Create trial
@@ -129,7 +130,7 @@ def test_partial_patch_trial_metadata(db):
     metadata_patch = {"lead_organization_study_id": TRIAL_ID, "assays": {}}
 
     # patch it - should be no error/exception
-    TrialMetadata.patch_trial_metadata(TRIAL_ID, metadata_patch)
+    TrialMetadata._patch_trial_metadata(TRIAL_ID, metadata_patch)
 
 
 @db_test

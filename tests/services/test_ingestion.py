@@ -11,7 +11,7 @@ from werkzeug.exceptions import (
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.services.ingestion import extract_schema_and_xlsx
-from cidc_api.models import TrialMetadata, Users
+from cidc_api.models import TrialMetadata, Users, TRIAL_ID_FIELD
 
 from . import open_data_file
 from ..test_models import db_test
@@ -22,6 +22,12 @@ from ..conftest import TEST_EMAIL
 @pytest.fixture
 def pbmc_valid_xlsx():
     with open_data_file("pbmc_valid.xlsx") as xlsx:
+        yield xlsx
+
+
+@pytest.fixture
+def pbmc_non_existing_trial():
+    with open_data_file("pbmc_non_existing_trial.xlsx") as xlsx:
         yield xlsx
 
 
@@ -44,7 +50,9 @@ def olink_xlsx():
 @db_test
 def db_with_trial_and_user(db, test_user):
     # Create the target trial and the uploader
-    TrialMetadata.create("10021", {})
+    TrialMetadata.create(
+        "test_trial", {TRIAL_ID_FIELD: "test_trial", "participants": []}
+    )
     Users.create(profile={"email": test_user.email})
 
 
@@ -118,23 +126,54 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
             extract_schema_and_xlsx()
 
 
-def test_upload_manifest(app_no_auth, pbmc_valid_xlsx):
+def test_upload_manifest_non_existing_trial_id(
+    app_no_auth, pbmc_non_existing_trial, test_user, db_with_trial_and_user, monkeypatch
+):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
+
+    mocks = UploadMocks(monkeypatch)
+
+    client = app_no_auth.test_client()
+
+    res = client.post(
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_non_existing_trial, "pbmc")
+    )
+    assert res.status_code == 400
+    assert "test-non-existing-trial-id" in res.json["_error"]["message"]
+
+    # Check that we tried to upload the excel file
+    mocks.upload_xlsx.assert_called_once()
+
+
+def test_upload_manifest(
+    app_no_auth, pbmc_valid_xlsx, test_user, db_with_trial_and_user, monkeypatch
+):
+    """Ensure the upload_manifest endpoint follows the expected execution flow"""
+
+    mocks = UploadMocks(monkeypatch)
+
     client = app_no_auth.test_client()
 
     res = client.post(
         MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_valid_xlsx, "pbmc")
     )
-    assert res.status_code == 501  # Not Implemented
+    assert res.status_code == 200
+
+    # Check that we tried to upload the excel file
+    mocks.upload_xlsx.assert_called_once()
 
 
-class AssayUploadMocks:
+class UploadMocks:
     def __init__(self, monkeypatch):
         self.grant_write = MagicMock()
         monkeypatch.setattr("gcloud_client.grant_upload_access", self.grant_write)
 
         self.upload_xlsx = MagicMock()
-        self.upload_xlsx.return_value = "xlsx/assays/wes/12345"
+        self.upload_xlsx.return_value = MagicMock()
+        self.upload_xlsx.return_value.name = "trial_id/xlsx/assays/wes/12345"
+        self.upload_xlsx.return_value.size = 100
+        self.upload_xlsx.return_value.md5_hash = "md5_hash"
+
         monkeypatch.setattr("gcloud_client.upload_xlsx_to_gcs", self.upload_xlsx)
 
         self.revoke_write = MagicMock()
@@ -152,7 +191,7 @@ def test_upload_wes(
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 
-    mocks = AssayUploadMocks(monkeypatch)
+    mocks = UploadMocks(monkeypatch)
 
     res = client.post(ASSAY_UPLOAD, data=form_data("wes.xlsx", wes_xlsx, "wes"))
     assert res.json
@@ -163,7 +202,7 @@ def test_upload_wes(
     # We expect local_path to map to a gcs object name with gcs_prefix
     # based on the contents of wes_xlsx.
     local_path = "/local/path/to/rgm.1.1.1.txt"
-    gcs_prefix = "10021/wes example PA 1/wes example SA 1.1/wes example aliquot 1.1.1/wes/rgm.txt"
+    gcs_prefix = "test_trial/wes example PA 1/wes example SA 1.1/wes example aliquot 1.1.1/wes/rgm.txt"
     gcs_object_name = url_mapping[local_path]
     assert local_path in url_mapping
     assert gcs_object_name.startswith(gcs_prefix)
@@ -201,14 +240,14 @@ def test_upload_wes(
 
 
 OLINK_TESTDATA = [
-    ("/local/path/combined.xlsx", "10021/olink/study_npx.xlsx"),
+    ("/local/path/combined.xlsx", "test_trial/olink/study_npx.xlsx"),
     (
         "assay1_npx.xlsx",
-        "10021/olink/chip_111/assay_npx.xlsx",
+        "test_trial/olink/chip_111/assay_npx.xlsx",
     ),  # 111 is a chip barcode in .xlsx
     (
         "ct2.xlsx",
-        "10021/olink/chip_112/assay_raw_ct.xlsx",
+        "test_trial/olink/chip_112/assay_raw_ct.xlsx",
     ),  # 112 is a chip barcode in .xlsx
 ]
 
@@ -219,7 +258,7 @@ def test_upload_olink(
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 
-    mocks = AssayUploadMocks(monkeypatch)
+    mocks = UploadMocks(monkeypatch)
 
     res = client.post(ASSAY_UPLOAD, data=form_data("olink.xlsx", olink_xlsx, "olink"))
     assert res.json
