@@ -430,8 +430,8 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
     status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
     # The object names for the files to be uploaded mapped to upload_placeholder uuids
     gcs_file_map = Column(JSONB, nullable=False)
-    # TODO: track the GCS URI of the .xlsx file used for this upload
-    # gcs_xlsx_uri = Column(String, nullable=False)
+    # track the GCS URI of the .xlsx file used for this upload
+    gcs_xlsx_uri = Column(String, nullable=False)
     # The parsed JSON metadata blob associated with this upload
     assay_patch = Column(JSONB, nullable=False)
     # A type of assay (wes, olink, ...) this upload is related to
