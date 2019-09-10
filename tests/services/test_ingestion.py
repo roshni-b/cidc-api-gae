@@ -157,7 +157,9 @@ class AssayUploadMocks:
         monkeypatch.setattr("gcloud_client.grant_upload_access", self.grant_write)
 
         self.upload_xlsx = MagicMock()
-        self.upload_xlsx.return_value = "xlsx/assays/wes/12345"
+        self.upload_xlsx.return_value = MagicMock()
+        self.upload_xlsx.return_value.name = "trial_id/xlsx/assays/wes/12345"
+
         monkeypatch.setattr("gcloud_client.upload_xlsx_to_gcs", self.upload_xlsx)
 
         self.revoke_write = MagicMock()

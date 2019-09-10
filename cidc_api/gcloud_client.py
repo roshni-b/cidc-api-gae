@@ -32,6 +32,11 @@ def _iam_id(user_email: str) -> str:
     return f"user:{user_email}"
 
 
+_xlsx_gcs_uri_format = (
+    "{trial_id}/xlsx/{template_category}/{template_type}/{upload_moment}.xlsx"
+)
+
+
 def upload_xlsx_to_gcs(
     trial_id: str,
     template_category: str,
@@ -48,8 +53,11 @@ def upload_xlsx_to_gcs(
     Returns:
         arg1: GCS blob object
     """
-    blob_name = (
-        f"{trial_id}/xlsx/{template_category}/{template_type}/{upload_moment}.xlsx"
+    blob_name = _xlsx_gcs_uri_format.format(
+        trial_id=trial_id,
+        template_category=template_category,
+        template_type=template_type,
+        upload_moment=upload_moment,
     )
 
     upload_bucket: storage.Bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
@@ -59,7 +67,7 @@ def upload_xlsx_to_gcs(
     data_bucket = _get_bucket(GOOGLE_DATA_BUCKET)
     final_object = upload_bucket.copy_blob(blob, data_bucket)
 
-    return blob
+    return final_object
 
 
 def grant_upload_access(bucket_name: str, user_email: str):
