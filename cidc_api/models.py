@@ -388,8 +388,40 @@ class UploadForeignKeys:
 
 class ManifestUploads(CommonColumns, UploadForeignKeys):
     __tablename__ = "manifest_uploads"
+    # A type of manifest (pbmc, plasma, ...) this upload is related to
+    manifest_type = Column(String, nullable=False)
     # The parsed JSON manifest blob for this upload
-    manifest_patch = Column(JSONB, nullable=False)
+    metadata_patch = Column(JSONB, nullable=False)
+    # tracks the GCS URI of the .xlsx file used for this upload
+    gcs_xlsx_uri = Column(String, nullable=False)
+
+    @staticmethod
+    @with_default_session
+    def create(
+        manifest_type: str,
+        uploader_email: str,
+        metadata: dict,
+        gcs_xlsx_uri: str,
+        session: Session,
+        commit: bool = True,
+    ):
+        """Create a new ManifestUpload for the given trial manifest patch."""
+        assert TRIAL_ID_FIELD in metadata, "metadata patch must have a trial ID"
+        trial_id = metadata[TRIAL_ID_FIELD]
+
+        upload = ManifestUploads(
+            trial_id=trial_id,
+            manifest_type=manifest_type,
+            metadata_patch=metadata,
+            uploader_email=uploader_email,
+            gcs_xlsx_uri=gcs_xlsx_uri,
+            _etag=make_etag(manifest_type, metadata, uploader_email),
+        )
+        session.add(upload)
+        if commit:
+            session.commit()
+
+        return upload
 
 
 class AssayUploads(CommonColumns, UploadForeignKeys):

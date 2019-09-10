@@ -22,6 +22,7 @@ from models import (
     TRIAL_ID_FIELD,
     TrialMetadata,
     DownloadableFiles,
+    ManifestUploads,
 )
 from config.settings import GOOGLE_UPLOAD_BUCKET
 
@@ -133,7 +134,7 @@ def upload_manifest():
     * API tries to load existing trial metadata blob (if fails, merge request fails; nothing saved).
     * API merges the merge request JSON into the trial metadata (if fails, merge request fails; nothing saved).
     * The manifest xlsx file is upload to the GCS uploads bucket and goes to Downloadable files.
-    - The merge request parsed JSON is saved to `ManifestUploads`.
+    * The merge request parsed JSON is saved to `ManifestUploads`.
     * The updated trial metadata object is updated in the `TrialMetadata` table.
 
     Request: multipart/form
@@ -175,6 +176,15 @@ def upload_manifest():
             "data_format": "XLSX",
         },
         session=session,
+        commit=False,
+    )
+
+    user_email = _request_ctx_stack.top.current_user.email
+    manifest_upload = ManifestUploads.create(
+        manifest_type=schema_hint,
+        uploader_email=user_email,
+        metadata=md_patch,
+        gcs_xlsx_uri=gcs_blob.name,
     )
 
     return jsonify({"metadata_json_patch": md_patch})
