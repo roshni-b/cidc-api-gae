@@ -4,14 +4,11 @@ from typing import List
 import requests
 from eve.auth import TokenAuth, requires_auth
 from jose import jwt
-from flask import _request_ctx_stack
+from flask import _request_ctx_stack, current_app as app
 from werkzeug.exceptions import Unauthorized
 
 from models import Users
-from settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID
-
-
-logger = logging.getLogger("cidc-api.auth")
+from config.settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID, TESTING
 
 
 class BearerAuth(TokenAuth):
@@ -28,7 +25,7 @@ class BearerAuth(TokenAuth):
 
         Args:
             id_token: A JWT id_token
-            allowed_roles: Array of strings of user roles
+            allowed_roles: Array of user roles allowed to act on this resource
             resource: Endpoint being accessed
             method: HTTP method (GET, POST, PATCH, DELETE)
         
@@ -38,10 +35,49 @@ class BearerAuth(TokenAuth):
         TODO: role-based resource/method-level authorization
         """
         profile = self.token_auth(id_token)
+        is_authorized = self.role_auth(profile, allowed_roles, resource, method)
 
-        user = Users.create(profile["email"])
+        print(
+            f"{'' if is_authorized else 'UN'}AUTHORIZED: {profile['email']} {method} /{resource}"
+        )
 
+        return is_authorized
+
+    def role_auth(
+        self, profile: dict, allowed_roles: List[str], resource: str, method: str
+    ) -> bool:
+        """Check if the current user is authorized to act on the current request's resource."""
+        user = Users.find_by_email(profile["email"])
         _request_ctx_stack.top.current_user = user
+
+        # User hasn't registered yet.
+        if not user:
+            # Although the user doesn't exist in the database, we still
+            # make the user's identity data available in the request context.
+            _request_ctx_stack.top.current_user = Users(email=profile["email"])
+
+            # User is only authorized to create themself.
+            if resource == "new_users" and method == "POST":
+                return True
+
+            raise Unauthorized(f'{profile["email"]} is not registered.')
+
+        # User is registered but not yet approved.
+        if not user.approval_date:
+            # Unapproved users are not authorized to do anything but access their
+            # account info.
+            if resource == "users" and method == "GET":
+                return True
+
+            raise Unauthorized(
+                f'{profile["email"]}\'s registration is pending approval'
+            )
+
+        # User is approved and registered, so just check their role.
+        if allowed_roles and user.role not in allowed_roles:
+            raise Unauthorized(
+                f'{profile["email"]} is not authorized to access this endpoint.'
+            )
 
         return True
 
@@ -61,8 +97,6 @@ class BearerAuth(TokenAuth):
         public_key = self.get_issuer_public_key(id_token)
 
         payload = self.decode_id_token(id_token, public_key)
-
-        logger.info("Authenticated user: " + payload["email"])
 
         return payload
 

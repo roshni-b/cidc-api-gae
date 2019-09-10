@@ -2,6 +2,18 @@ from os import environ
 from google.cloud import storage
 
 
+def get_secrets_manager(is_testing):
+    """Get a secrets manager based on whether the app is running in test mode"""
+    if is_testing:
+        from unittest.mock import MagicMock
+
+        # If we're testing, we shouldn't need access to secrets in GCS
+        return MagicMock()
+    else:
+        secrets_bucket = environ.get("GOOGLE_SECRETS_BUCKET")
+        return CloudStorageSecretManager(secrets_bucket)
+
+
 class SecretNotFoundError(Exception):
     pass
 

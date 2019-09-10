@@ -10,19 +10,19 @@ The next generation of the CIDC API, reworked to use Google Cloud-managed servic
 
 # Development <!-- omit in TOC -->****
 
-- [Install Python dependencies](#Install-Python-dependencies)
-- [Database Management](#Database-Management)
-  - [Setting up a local development database](#Setting-up-a-local-development-database)
-  - [Connecting to a Cloud SQL database instance](#Connecting-to-a-Cloud-SQL-database-instance)
-  - [Running database migrations](#Running-database-migrations)
-- [Serving Locally](#Serving-Locally)
-- [Testing](#Testing)
-- [Code Formatting](#Code-Formatting)
-- [Deployment](#Deployment)
-  - [CI/CD](#CICD)
-  - [Deploying by hand](#Deploying-by-hand)
-- [Connecting](#Connecting)
-- [Provisioning the system from scratch](#Provisioning-the-system-from-scratch)
+- [Install Python dependencies](#install-python-dependencies)
+- [Database Management](#database-management)
+  - [Setting up a local development database](#setting-up-a-local-development-database)
+  - [Connecting to a Cloud SQL database instance](#connecting-to-a-cloud-sql-database-instance)
+  - [Running database migrations](#running-database-migrations)
+- [Serving Locally](#serving-locally)
+- [Testing](#testing)
+- [Code Formatting](#code-formatting)
+- [Deployment](#deployment)
+  - [CI/CD](#cicd)
+  - [Deploying by hand](#deploying-by-hand)
+- [Connecting to the API](#connecting-to-the-api)
+- [Provisioning the system from scratch](#provisioning-the-system-from-scratch)
 
 ## Install Python dependencies
 Install both the production and development dependencies.
@@ -57,7 +57,7 @@ Now, you should be able to connect to your development database with the URI `po
 psql cidc
 ```
 
-Next, you'll need to set up the appropriate tables, indexes, etc. in your local database. To do so, `cd` into the `cidc-api` directory, then run:
+Next, you'll need to set up the appropriate tables, indexes, etc. in your local database. To do so, `cd` into the `cidc_api` directory, then run:
 ```bash
 FLASK_APP=app.py flask db upgrade
 ```
@@ -69,24 +69,30 @@ Install the [Cloud SQL Proxy](https://cloud.google.com/sql/docs/mysql/quickstart
 ```bash
 curl -o /usr/local/bin/cloud_sql_proxy https://dl.google.com/cloudsql/cloud_sql_proxy.darwin.amd64
 chmod +x /usr/local/bin/cloud_sql_proxy
+mkdir ~/.cloudsql
 ```
 
 Proxy to the staging Cloud SQL instance:
 ```bash
-cloud_sql_proxy --instance=cidc-dfci-staging:us-central1:cidc-postgres=tcp:5432
+cloud_sql_proxy -instances cidc-dfci-staging:us-central1:cidc-postgresql -dir ~/.cloudsql
 ```
 
 In your `.env` file, comment out `POSTGRES_URI` and uncomment all environment variables prefixed with `CLOUD_SQL_`. Restart your local API instance, and it will connect to the staging Cloud SQL instance via the local proxy.
 
-If you wish to connect to the Cloud SQL instance via the postgres REPL, run:
+If you wish to connect to the staging Cloud SQL instance via the postgres REPL, download and run the CIDC sql proxy tool (a wrapper for `cloud_sql_proxy`):
 ```bash
-gcloud sql connect cidc-postgres
+# Download the proxy
+curl https://raw.githubusercontent.com/CIMAC-CIDC/cidc-devops/master/scripts/cidc_sql_proxy.sh -o /usr/local/bin/cidc_sql_proxy
+chmod +x /usr/local/bin/cidc_sql_proxy
+
+# Run the proxy
+cidc_sql_proxy staging # or cidc_sql_proxy prod
 ```
 
 ### Running database migrations
 This project uses [`Flask Migrate`](https://flask-migrate.readthedocs.io/en/latest/) for managing database migrations. To create a new migration and upgrade the database specified in your `.env` config:
 ```bash
-export FLASK_APP=cidc-api/app.py
+export FLASK_APP=cidc_api/app.py
 # Generate the migration script
 flask db migrate
 # Apply changes to the database
@@ -102,7 +108,7 @@ If you're updating `models.py`, you should create a migration and commit the res
 
 Once you have a development database set up and running, run the API server:
 ```bash
-python cidc-api/app.py
+python cidc_api/app.py
 ```
 
 ## Testing
@@ -139,8 +145,8 @@ gcloud app deploy <app.staging.yaml or app.prod.yaml> --project <gcloud project 
 ```
 That being said, avoid doing this! Deploying this way circumvents the safety checks built into the CI/CD pipeline and can lead to inconsistencies between the code running on GAE and the code present in this repository. Luckily, though, GAE's built-in versioning system makes it hard to do anything catastrophic :-)
 
-## Connecting
-Currently, the staging API is hosted at staging-api.cimac-network.org and the production instance is hosted at api.cimac-network.org.
+## Connecting to the API
+Currently, the staging API is hosted at https://staging-api.cimac-network.org and the production instance is hosted at https://api.cimac-network.org.
 
 To connect to the staging API with `curl` or a REST API client like Insomnia, get an id token from stagingportal.cimac-network.org, and include the header  `Authorization: Bearer YOUR_ID_TOKEN` in requests you make to the staging API. If your token expires, generate a new one following this same procedure.
 

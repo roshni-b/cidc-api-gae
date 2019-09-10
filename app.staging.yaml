@@ -1,14 +1,17 @@
 runtime: python37
 env: standard
-entrypoint: gunicorn -b :$PORT --chdir cidc-api app:app
+entrypoint: gunicorn -b :$PORT --chdir cidc_api --log-level DEBUG app:app
 
 env_variables:
   ENV: 'staging'
-  SECRETS_BUCKET_NAME: 'cidc-secrets-staging'
   AUTH0_DOMAIN: 'cidc-test.auth0.com'
   AUTH0_AUDIENCE: 'http://localhost:5000'
   AUTH0_CLIENT_ID: 'Yjlt8LT5vXFJw1Z8m8eaB5aZO26uPyeD'
-  CLOUD_SQL_INSTANCE_NAME: 'cidc-dfci-staging:us-central1:cidc-postgres'
-  CLOUD_SQL_DB_USER: 'postgres'
+  CLOUD_SQL_INSTANCE_NAME: 'cidc-dfci-staging:us-central1:cidc-postgresql'
+  CLOUD_SQL_DB_USER: 'cidcuser'
   CLOUD_SQL_DB_NAME: 'cidc'
+  GOOGLE_DATA_BUCKET: 'cidc-data-staging'
+  GOOGLE_SECRETS_BUCKET: 'cidc-secrets-staging'
   GOOGLE_UPLOAD_BUCKET: 'cidc-uploads-staging'
+  GOOGLE_UPLOAD_TOPIC: 'uploads'
+  GOOGLE_EMAILS_TOPIC: 'emails'
