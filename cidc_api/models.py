@@ -214,8 +214,7 @@ class Permissions(CommonColumns):
     )
     trial = relationship("TrialMetadata", foreign_keys=[trial_id])
 
-    assay_type = Column(Enum(*ASSAY_CATEGORIES, name="assays"), nullable=False)
-    mode = Column(Enum("read", "write", name="mode"))
+    assay_type = Column(String, nullable=False)
 
     @staticmethod
     @with_default_session
