@@ -142,7 +142,7 @@ def test_upload_manifest_non_existing_trial_id(
     assert "test-non-existing-trial-id" in res.json["_error"]["message"]
 
     # Check that we tried to upload the excel file
-    mocks.upload_xlsx.assert_called_once()
+    mocks.upload_xlsx.assert_not_called()
 
 
 def test_upload_manifest(
