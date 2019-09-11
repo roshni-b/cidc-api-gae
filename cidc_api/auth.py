@@ -38,7 +38,7 @@ class BearerAuth(TokenAuth):
         is_authorized = self.role_auth(profile, allowed_roles, resource, method)
 
         print(
-            f"{'' if is_authorized else 'UN'}AUTHORIZED: {profile['email']} {method} /{resource}"
+            f"{'' if is_authorized else 'UN'}AUTHORIZED: {profile['email']} {method} /{resource or ''}"
         )
 
         return is_authorized
