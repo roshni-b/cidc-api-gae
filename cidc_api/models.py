@@ -1,7 +1,7 @@
 import os
 import hashlib
 from functools import wraps
-from typing import BinaryIO, Optional
+from typing import BinaryIO, Optional, List
 
 from flask import current_app as app
 from google.cloud.storage import Blob
@@ -44,20 +44,6 @@ ARTIFACT_CATEGORIES = [
     "Pipeline Artifact",
     "Manifest File",
     "Other",
-]
-ASSAY_CATEGORIES = [
-    "Whole Exome Sequencing (WES)",
-    "RNASeq",
-    "Conventional Immunohistochemistry",
-    "Multiplex Immunohistochemistry",
-    "Multiplex Immunofluorescence",
-    "CyTOF",
-    "OLink",
-    "NanoString",
-    "ELISpot",
-    "Multiplexed Ion-Beam Imaging (MIBI)",
-    "Other",
-    "None",
 ]
 FILE_TYPES = [
     "FASTA",
@@ -230,6 +216,12 @@ class Permissions(CommonColumns):
 
     assay_type = Column(Enum(*ASSAY_CATEGORIES, name="assays"), nullable=False)
     mode = Column(Enum("read", "write", name="mode"))
+
+    @staticmethod
+    @with_default_session
+    def find_for_user(user: Users, session: Session) -> List:
+        """Find all Permissions granted to the given user."""
+        return session.query(Permissions).filter_by(granted_to_user=user.id).all()
 
 
 class TrialMetadata(CommonColumns):
