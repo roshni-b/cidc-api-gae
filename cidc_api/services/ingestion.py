@@ -93,7 +93,6 @@ def validate():
     # Extract info from the request context
     template_type, _, template_file = extract_schema_and_xlsx()
 
-
     # Validate the .xlsx file with respect to the schema
     try:
         error_list = validate_xlsx(
@@ -233,7 +232,6 @@ def upload_assay():
     if trial is None:
         print(f"Trial with {TRIAL_ID_FIELD}={trial_id} not found.")
         raise BadRequest(f"Trial with {TRIAL_ID_FIELD}={trial_id} not found.")
-
 
     upload_moment = datetime.datetime.now().isoformat()
     uri2uuid = {}
