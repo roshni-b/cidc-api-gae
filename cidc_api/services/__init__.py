@@ -5,7 +5,6 @@ from .files import register_files_hooks
 from .info import info_api
 from .ingestion import ingestion_api, register_ingestion_hooks
 from .users import register_users_hooks
-from .rbac import register_rbac_hooks
 
 
 def register_services(app: Eve):
@@ -18,4 +17,3 @@ def register_services(app: Eve):
     register_ingestion_hooks(app)
     register_users_hooks(app)
     register_files_hooks(app)
-    register_rbac_hooks(app)
