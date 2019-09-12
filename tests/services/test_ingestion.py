@@ -145,6 +145,47 @@ def test_upload_manifest_non_existing_trial_id(
     mocks.upload_xlsx.assert_not_called()
 
 
+def test_upload_invalid_manifest(
+    app_no_auth, pbmc_invalid_xlsx, test_user, db_with_trial_and_user, monkeypatch
+):
+    """Ensure the upload_manifest endpoint follows the expected execution flow"""
+
+    mocks = UploadMocks(monkeypatch)
+
+    client = app_no_auth.test_client()
+
+    res = client.post(
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_invalid_xlsx, "pbmc")
+    )
+    assert res.status_code == 400
+
+    assert len(res.json["_error"]["message"]["errors"]) > 0
+
+    # Check that we tried to upload the excel file
+    mocks.upload_xlsx.assert_not_called()
+
+
+def test_upload_unsupported_manifest(
+    app_no_auth, pbmc_valid_xlsx, test_user, db_with_trial_and_user, monkeypatch
+):
+    """Ensure the upload_manifest endpoint follows the expected execution flow"""
+
+    mocks = UploadMocks(monkeypatch)
+
+    client = app_no_auth.test_client()
+
+    res = client.post(
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_valid_xlsx, "UNSUPPORTED_")
+    )
+    assert res.status_code == 400
+
+    assert "Unknown template type" in res.json["_error"]["message"]
+    assert "UNSUPPORTED_".lower() in res.json["_error"]["message"]
+
+    # Check that we tried to upload the excel file
+    mocks.upload_xlsx.assert_not_called()
+
+
 def test_upload_manifest(
     app_no_auth, pbmc_valid_xlsx, test_user, db_with_trial_and_user, monkeypatch
 ):
