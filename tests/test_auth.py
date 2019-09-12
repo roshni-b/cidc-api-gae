@@ -6,7 +6,7 @@ from flask import _request_ctx_stack
 from werkzeug.exceptions import Unauthorized
 
 from auth import BearerAuth
-from models import Users
+from models import Users, CIDCRole
 
 from .test_models import db_test
 
@@ -186,12 +186,16 @@ def test_role_auth(bearer_auth, app, db):
             bearer_auth.role_auth(profile, [], "new_users", "POST")
 
         # Give the user a role but don't approve them
-        db.query(Users).filter_by(email=EMAIL).update(dict(role="cimac-user"))
+        db.query(Users).filter_by(email=EMAIL).update(
+            dict(role=CIDCRole.CIMAC_USER.value)
+        )
         db.commit()
 
         # Unapproved user *with an authorized role* still shouldn't be authorized
         with pytest.raises(Unauthorized, match="pending approval"):
-            bearer_auth.role_auth(profile, ["cimac-user"], "new_users", "POST")
+            bearer_auth.role_auth(
+                profile, [CIDCRole.CIMAC_USER.value], "new_users", "POST"
+            )
 
     # Approve the user
     db.query(Users).filter_by(email=EMAIL).update(dict(approval_date=datetime.now()))
@@ -201,12 +205,12 @@ def test_role_auth(bearer_auth, app, db):
         # If user doesn't have required role, they should not be authorized.
         with pytest.raises(Unauthorized, match="not authorized to access"):
             bearer_auth.role_auth(
-                profile, ["cidc-admin"], "some-resource", "some-http-method"
+                profile, [CIDCRole.ADMIN.value], "some-resource", "some-http-method"
             )
 
         # If user has an allowed role, they should be authorized
         assert bearer_auth.role_auth(
-            profile, ["cimac-user"], "some-resource", "some-http-method"
+            profile, [CIDCRole.CIMAC_USER.value], "some-resource", "some-http-method"
         )
 
         # If the resource has no role restrictions, they should be authorized
