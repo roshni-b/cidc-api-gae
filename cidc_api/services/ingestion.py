@@ -89,6 +89,7 @@ def validate():
 
     TODO: add this endpoint to the OpenAPI docs
     """
+    print(f"validate started")
     # Extract info from the request context
     template_type, _, template_file = extract_schema_and_xlsx()
 
@@ -104,9 +105,11 @@ def validate():
 
     json = {"errors": []}
     if type(error_list) == bool and error_list is True:
+        print(f"validate passed")
         # The spreadsheet is valid
         return jsonify(json)
     else:
+        print(f"{len(error_list)} validation errors: [{error_list[0]!r}, ...]")
         # The spreadsheet is invalid
         json["errors"] = error_list
         return jsonify(json)
@@ -114,10 +117,11 @@ def validate():
 
 def validate_excel_payload(f):
     def wrapped(*args, **kwargs):
+        print(f"validate_excel_payload started")
         # Run basic validations on the provided Excel file
         validations = validate()
         if len(validations.json["errors"]) > 0:
-            return BadRequest(validations)
+            raise BadRequest(validations.json)
         return f(*args, **kwargs)
 
     wrapped.__name__ = f.__name__
@@ -149,18 +153,20 @@ def upload_manifest():
 
     md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
 
-    trial_id = md_patch[TRIAL_ID_FIELD]
+    try:
+        trial_id = md_patch[TRIAL_ID_FIELD]
+    except KeyError:
+        raise BadRequest(f"{TRIAL_ID_FIELD} field not found.")
+
+    try:
+        trial = TrialMetadata.patch_manifest(trial_id, md_patch, commit=False)
+    except NoResultFound as e:
+        raise BadRequest(f"Trial with {TRIAL_ID_FIELD}={trial_id} not found.")
 
     xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         trial_id, "manifest", schema_hint, xlsx_file, upload_moment
     )
-
-    try:
-        trial = TrialMetadata.patch_manifest(trial_id, md_patch, commit=False)
-    except NoResultFound as e:
-        raise BadRequest(f"Trial with {TRIAL_ID_FIELD} {trial_id} not found.")
-
     session = Session.object_session(trial)
     # TODO move to prism
     DownloadableFiles.create_from_metadata(
@@ -209,11 +215,23 @@ def upload_assay():
     
     # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
     """
+    print(f"upload_assay started")
     schema_hint, schema_path, xlsx_file = extract_schema_and_xlsx()
 
     # Extract the clinical trial metadata blob contained in the .xlsx file,
     # along with information about the files the template references.
-    metadata_json, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
+    md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
+
+    try:
+        trial_id = md_patch[TRIAL_ID_FIELD]
+    except KeyError:
+        print(f"{TRIAL_ID_FIELD} field not found in patch {md_patch}.")
+        raise BadRequest(f"{TRIAL_ID_FIELD} field not found.")
+
+    trial = TrialMetadata.find_by_trial_id(trial_id)
+    if trial is None:
+        print(f"Trial with {TRIAL_ID_FIELD}={trial_id} not found.")
+        raise BadRequest(f"Trial with {TRIAL_ID_FIELD}={trial_id} not found.")
 
     upload_moment = datetime.datetime.now().isoformat()
     uri2uuid = {}
@@ -237,13 +255,13 @@ def upload_assay():
     # Upload the xlsx template file to GCS
     xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
-        metadata_json[TRIAL_ID_FIELD], "assays", schema_hint, xlsx_file, upload_moment
+        trial_id, "assays", schema_hint, xlsx_file, upload_moment
     )
 
     # Save the upload job to the database
     user_email = _request_ctx_stack.top.current_user.email
     job = AssayUploads.create(
-        schema_hint, user_email, uri2uuid, metadata_json, gcs_blob.name
+        schema_hint, user_email, uri2uuid, md_patch, gcs_blob.name
     )
 
     # Grant the user upload access to the upload bucket
