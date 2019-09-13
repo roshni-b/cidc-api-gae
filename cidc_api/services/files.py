@@ -40,7 +40,7 @@ def update_file_filters(request: Request, _):
     # this query will look like:
     #   (trial==1 and assay_type==wes)or(trial==2 and assay_type==olink)
     where_query = "or".join(
-        f'(trial=="{p.trial_id}" and assay_type=="{p.assay_type}")' for p in permissions
+        f'(trial=={p.trial_id!r} and assay_type=={p.assay_type!r})' for p in permissions
     )
 
     user_where_query = request.args.get("where")
