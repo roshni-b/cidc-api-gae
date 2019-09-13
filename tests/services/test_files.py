@@ -26,29 +26,32 @@ def test_update_file_filters(db, app_no_auth, test_user):
     # Set up necessary data in the database
     t1 = "test_trial_1"
     t2 = "test_trial_2"
-    trial = TrialMetadata.create(trial_id=t1, metadata_json={}, session=db)
-    TrialMetadata.create(trial_id=t2, metadata_json={}, session=db)
+    trial = TrialMetadata.create(trial_id=t1, metadata_json={})
+    TrialMetadata.create(trial_id=t2, metadata_json={})
     fake_metadata = {
         "artifact_category": "Assay Artifact from CIMAC",
         "object_url": "",
         "file_name": "",
         "file_size_bytes": 0,
         "md5_hash": "",
-        "data_format": "TEXT",  # not actually true
+        "data_format": "TEXT",
         "uploaded_timestamp": datetime.now(),
     }
     for t in [t1, t2]:
         for a in ["wes", "olink"]:
             d = DownloadableFiles.create_from_metadata(
-                trial_id=t, assay_type=a, file_metadata=fake_metadata, session=db
+                trial_id=t, assay_type=a, file_metadata=fake_metadata
             )
+
+    # Make sure we actually inserted files before running tests
+    assert len(db.query(DownloadableFiles).all()) == 4
 
     client = app_no_auth.test_client()
 
     # Empty filter, no permissions
     res = client.get("/downloadable_files")
-    assert res.status_code == 400
-    assert "does not have permission" in res.json["_error"]["message"]
+    assert res.status_code == 200
+    assert len(res.json["_items"]) == 0
 
     def add_permission(trial_id, assay_type):
         db.add(

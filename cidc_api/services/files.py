@@ -26,11 +26,13 @@ def update_file_filters(request: Request, _):
 
     permissions = Permissions.find_for_user(user)
 
-    # User cannot access any trials
+    # User cannot access any trials, so make filter guaranteed-empty
     if len(permissions) == 0:
-        raise BadRequest(
-            f"{user.email} does not have permission to view any trial data."
-        )
+        guaranteed_empty = "(trial==a and trial==b)"
+        lookup = request.args.copy()
+        lookup["where"] = guaranteed_empty
+        request.args = ImmutableMultiDict(lookup)
+        return
 
     # Build a where-query that looks up only the downloadable_files with
     # trial ID and assay type that the current user is allowed to view.
