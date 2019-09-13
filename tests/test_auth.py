@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 from flask import _request_ctx_stack
 from werkzeug.exceptions import Unauthorized
 
-from auth import BearerAuth
-from models import Users
+from cidc_api.auth import BearerAuth
+from cidc_api.models import Users, CIDCRole
 
 from .test_models import db_test
 
@@ -186,12 +186,16 @@ def test_role_auth(bearer_auth, app, db):
             bearer_auth.role_auth(profile, [], "new_users", "POST")
 
         # Give the user a role but don't approve them
-        db.query(Users).filter_by(email=EMAIL).update(dict(role="cimac-user"))
+        db.query(Users).filter_by(email=EMAIL).update(
+            dict(role=CIDCRole.CIMAC_USER.value)
+        )
         db.commit()
 
         # Unapproved user *with an authorized role* still shouldn't be authorized
         with pytest.raises(Unauthorized, match="pending approval"):
-            bearer_auth.role_auth(profile, ["cimac-user"], "new_users", "POST")
+            bearer_auth.role_auth(
+                profile, [CIDCRole.CIMAC_USER.value], "new_users", "POST"
+            )
 
     # Approve the user
     db.query(Users).filter_by(email=EMAIL).update(dict(approval_date=datetime.now()))
@@ -201,13 +205,148 @@ def test_role_auth(bearer_auth, app, db):
         # If user doesn't have required role, they should not be authorized.
         with pytest.raises(Unauthorized, match="not authorized to access"):
             bearer_auth.role_auth(
-                profile, ["cidc-admin"], "some-resource", "some-http-method"
+                profile, [CIDCRole.ADMIN.value], "some-resource", "some-http-method"
             )
 
         # If user has an allowed role, they should be authorized
         assert bearer_auth.role_auth(
-            profile, ["cimac-user"], "some-resource", "some-http-method"
+            profile, [CIDCRole.CIMAC_USER.value], "some-resource", "some-http-method"
         )
 
         # If the resource has no role restrictions, they should be authorized
         assert bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
+
+
+@db_test
+def test_rbac(monkeypatch, app, db):
+    """
+    Check that the role-based access control constraints appear to be enforced.
+    
+    NOTE: If this test is failing, you may need to update `models.get_DOMAIN`,
+    *not* `BearerAuth.role_auth`.
+    """
+    # No authentication errors
+    monkeypatch.setattr(app.auth, "token_auth", lambda _: PAYLOAD)
+
+    HEADER = {"Authorization": f"Bearer {TOKEN}"}
+
+    # Initialize user
+    user = Users.create(PAYLOAD)
+    db.commit()
+
+    def update_user_role(role: str):
+        """Make current user assume a given role"""
+        user = Users.find_by_email(EMAIL)
+        user.role = role
+        user.approval_date = datetime.now()
+        db.commit()
+
+    client = app.test_client()
+
+    all_resources = app.config["DOMAIN"].keys()
+
+    # Check access for each role
+    for role in CIDCRole:
+        update_user_role(role.value)
+
+        print("Checking RBAC for:", role.value)
+
+        # Test that PUT is globally disabled
+        for resource in all_resources:
+            for method in ["put", "delete"]:
+                res = getattr(client, method)(resource + "/1", headers=HEADER)
+                # One exception: deletion is enabled on permissions for admins
+                if resource == "permissions" and method == "delete":
+                    if role == CIDCRole.ADMIN:
+                        assert res.status_code == 404
+                    else:
+                        assert res.status_code == 401
+                else:
+                    assert res.status_code == 405  # Method Not Allowed
+
+        # No one can GET new_users
+        res = client.get("new_users")
+        assert res.status_code == 405
+
+        # Everyone can POST new_users
+        res = client.post("new_users", headers=HEADER, json=PAYLOAD)
+        # User already exists, so getting through auth throws a 422
+        assert res.status_code == 422
+
+        # No one can post to downloadable_files
+        res = client.post("downloadable_files", headers=HEADER, json={})
+        assert res.status_code == 405  # Method Not Allowed
+
+        # No one can patch downloadable_files items
+        res = client.patch("downloadable_files/1", headers=HEADER)
+        assert res.status_code == 405
+
+        # Everyone can read downloadable files
+        res = client.get("downloadable_files", headers=HEADER)
+        assert res.status_code == 200
+
+        # Test admin-restricted GETs
+        admin_only_GETable = [
+            "users",
+            "trial_metadata",
+            "permissions",
+            "assay_uploads",
+            "manifest_uploads",
+        ]
+        for resource in admin_only_GETable:
+            res = client.get(resource, headers=HEADER)
+            if CIDCRole(role) == CIDCRole.ADMIN:
+                assert res.status_code == 200
+            else:
+                assert res.status_code == 401
+
+        # Test admin-restricted POSTs, GETs, and PATCHs
+        admin_only_POSTGETPATCHable = ["users", "trial_metadata", "permissions"]
+        for resource in admin_only_POSTGETPATCHable:
+            # Test POSTs
+            res = client.post(resource, headers=HEADER, json={})
+            if CIDCRole(role) == CIDCRole.ADMIN:
+                # JSON body is invalid, so getting through auth
+                # throws a 422 error
+                assert res.status_code == 422
+            else:
+                assert res.status_code == 401
+
+            # Test GETs / PATCHs
+            for method in ["get", "patch"]:
+                res = getattr(client, method)(resource + "/1", headers=HEADER, json={})
+                if role == CIDCRole.ADMIN:
+                    # JSON body is invalid or item doesn't exist, so we don't expect 200,
+                    # so we just check that the request wasn't blocked by auth
+                    assert res.status_code != 401
+                else:
+                    assert res.status_code == 401
+
+        # Test assay_uploads and manifest_uploads permissions
+        for resource, privileged_nonadmin in [
+            ("assay_uploads", CIDCRole.CIMAC_BIOFX_USER),
+            ("manifest_uploads", CIDCRole.NCI_BIOBANK_USER),
+        ]:
+            # No one is allowed to PUT or POST to these endpoints
+            res_post = client.post(resource, headers=HEADER, json={})
+            assert res_post.status_code == 405
+            res_put = client.put(resource, headers=HEADER, json={})
+            assert res_put.status_code == 405
+
+            # Both admins and one other privileged role can read items and update
+            item = resource + "/1"
+            res_patch = client.patch(item, headers=HEADER, json={})
+            res_get_item = client.get(item, headers=HEADER)
+            if role in [CIDCRole.ADMIN, privileged_nonadmin]:
+                assert res_patch.status_code == 404
+                assert res_get_item.status_code == 404
+            else:
+                assert res_patch.status_code == 401
+                assert res_get_item.status_code == 401
+
+            # Only admins can list these endpoints
+            res_get = client.get(resource, headers=HEADER)
+            if role == CIDCRole.ADMIN:
+                assert res_get.status_code == 200
+            else:
+                assert res_get.status_code == 401

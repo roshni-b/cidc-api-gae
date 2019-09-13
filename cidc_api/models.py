@@ -1,7 +1,8 @@
 import os
 import hashlib
+from enum import Enum as EnumBaseClass
 from functools import wraps
-from typing import BinaryIO, Optional
+from typing import BinaryIO, Optional, List
 
 from flask import current_app as app
 from google.cloud.storage import Blob
@@ -28,15 +29,19 @@ from cidc_schemas import prism
 
 ## Constants
 ORGS = ["CIDC", "DFCI", "ICAHN", "STANFORD", "ANDERSON"]
-ROLES = [
-    "cidc-admin",
-    "cidc-biofx-user",
-    "cimac-biofx-user",
-    "cimac-user",
-    "developer",
-    "devops",
-    "nci-biobank-user",
-]
+
+
+class CIDCRole(EnumBaseClass):
+    ADMIN = "cidc-admin"
+    CIDC_BIOFX_USER = "cidc-biofx-user"
+    CIMAC_BIOFX_USER = "cimac-biofx-user"
+    CIMAC_USER = "cimac-user"
+    DEVELOPER = "developer"
+    DEVOPS = "devops"
+    NCI_BIOBANK_USER = "nci-biobank-user"
+
+
+ROLES = [role.value for role in CIDCRole]
 
 # See: https://github.com/CIMAC-CIDC/cidc-schemas/blob/master/cidc_schemas/schemas/artifacts/artifact_core.json
 ARTIFACT_CATEGORIES = [
@@ -44,20 +49,6 @@ ARTIFACT_CATEGORIES = [
     "Pipeline Artifact",
     "Manifest File",
     "Other",
-]
-ASSAY_CATEGORIES = [
-    "Whole Exome Sequencing (WES)",
-    "RNASeq",
-    "Conventional Immunohistochemistry",
-    "Multiplex Immunohistochemistry",
-    "Multiplex Immunofluorescence",
-    "CyTOF",
-    "OLink",
-    "NanoString",
-    "ELISpot",
-    "Multiplexed Ion-Beam Imaging (MIBI)",
-    "Other",
-    "None",
 ]
 FILE_TYPES = [
     "FASTA",
@@ -82,8 +73,8 @@ TRIAL_ID_FIELD = "lead_organization_study_id"
 
 def get_DOMAIN() -> dict:
     """
-    Render all cerberus domains for data model resources 
-    (i.e., any model extending `CommonColumns`).
+    Render all cerberus domains for API resources and set up method restrictions
+    and role-based access controls.
     """
     domain_config = {}
     domain_config["new_users"] = ResourceConfig(Users)
@@ -105,17 +96,50 @@ def get_DOMAIN() -> dict:
 
     domain = DomainConfig(domain_config, related_resources).render()
 
-    # Restrict operations on the 'new_users' resource
+    # Restrict operations on the 'new_users' resource:
+    # * A new_user cannot be created with a role or an approval date
+    # * A new_user can _only_ be created (not updated)
     del domain["new_users"]["schema"]["role"]
     del domain["new_users"]["schema"]["approval_date"]
     domain["new_users"]["item_methods"] = []
     domain["new_users"]["resource_methods"] = ["POST"]
 
-    # Make downloadable_files read-only
-    domain["downloadable_files"]["allowed_methods"] = ["GET"]
-    domain["downloadable_files"]["allowed_item_methods"] = ["GET"]
+    # Restrict operations on resources that only admins should be able to access
+    for resource in ["users", "permissions", "trial_metadata"]:
+        domain[resource]["allowed_roles"] = [CIDCRole.ADMIN.value]
+        domain[resource]["allowed_item_roles"] = [CIDCRole.ADMIN.value]
 
-    # Add the download_link field to the downloadable_files schema
+    # Make permissions deletable by admins
+    domain["permissions"]["item_methods"] = ["GET", "DELETE", "PATCH"]
+
+    # Restrict operations on the 'assay_uploads' resource:
+    # * only admins can list 'assay_uploads' (TODO: we may want people to be able to view their own uploads)
+    # * only admins and cimac users can GET items or PATCH 'assay_uploads'
+    admin_and_cimac = [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
+    domain["assay_uploads"]["allowed_read_roles"] = [CIDCRole.ADMIN.value]
+    domain["assay_uploads"]["allowed_item_read_roles"] = admin_and_cimac
+    domain["assay_uploads"]["allowed_write_roles"] = admin_and_cimac
+    domain["assay_uploads"]["allowed_item_write_roles"] = admin_and_cimac
+    domain["assay_uploads"]["resource_methods"] = ["GET"]
+    domain["assay_uploads"]["item_methods"] = ["GET", "PATCH"]
+
+    # Restrict operations on the 'manifest_uploads' resource:
+    # * only admins can GET 'manifest_uploads'
+    # * only admins and NCI users can GET items or PATCH 'manifest_uploads'
+    admin_and_nci = [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
+    domain["manifest_uploads"]["allowed_read_roles"] = [CIDCRole.ADMIN.value]
+    domain["manifest_uploads"]["allowed_item_read_roles"] = admin_and_nci
+    domain["manifest_uploads"]["allowed_write_roles"] = admin_and_nci
+    domain["manifest_uploads"]["allowed_item_write_roles"] = admin_and_nci
+    domain["manifest_uploads"]["resource_methods"] = ["GET"]
+    domain["manifest_uploads"]["item_methods"] = ["GET", "PATCH"]
+
+    # Restrict operations on the 'downloadable_files' resource:
+    # * downloadable_files are read-only through the API
+    domain["downloadable_files"]["resource_methods"] = ["GET"]
+    domain["downloadable_files"]["item_methods"] = ["GET"]
+
+    # Add the download_link field to the 'downloadable_files' resource schema
     domain["downloadable_files"]["schema"]["download_link"] = {"type": "string"}
 
     return domain
@@ -228,8 +252,13 @@ class Permissions(CommonColumns):
     )
     trial = relationship("TrialMetadata", foreign_keys=[trial_id])
 
-    assay_type = Column(Enum(*ASSAY_CATEGORIES, name="assays"), nullable=False)
-    mode = Column(Enum("read", "write", name="mode"))
+    assay_type = Column(String, nullable=False)
+
+    @staticmethod
+    @with_default_session
+    def find_for_user(user: Users, session: Session) -> List:
+        """Find all Permissions granted to the given user."""
+        return session.query(Permissions).filter_by(granted_to_user=user.id).all()
 
 
 class TrialMetadata(CommonColumns):

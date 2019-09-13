@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from cidc_api.models import Users
+from cidc_api.models import Users, CIDCRole
 
 NEW_USERS = "new_users"
 USERS = "users"
@@ -66,7 +66,7 @@ def test_filter_user_lookups(app, db, monkeypatch):
 
     # Make a user an admin
     with app.app_context():
-        db.query(Users).filter_by(email=EMAIL).update({"role": "cidc-admin"})
+        db.query(Users).filter_by(email=EMAIL).update({"role": CIDCRole.ADMIN.value})
         db.commit()
 
     # Admins should be able to list all users
@@ -81,7 +81,9 @@ def test_add_approval_date(app, db, monkeypatch):
 
     # Create one registered admin and one new user
     with app.app_context():
-        db.add(Users(role="cidc-admin", approval_date=datetime.now(), **profile))
+        db.add(
+            Users(role=CIDCRole.ADMIN.value, approval_date=datetime.now(), **profile)
+        )
         db.commit()
         Users.create(other_profile)
 
@@ -108,6 +110,6 @@ def test_add_approval_date(app, db, monkeypatch):
         return approval_date
 
     # Approval date should be set on first role update
-    first_approval = update_role_and_get_approval_date("developer")
-    second_approval = update_role_and_get_approval_date("cidc-admin")
+    first_approval = update_role_and_get_approval_date(CIDCRole.DEVELOPER.value)
+    second_approval = update_role_and_get_approval_date(CIDCRole.ADMIN.value)
     assert first_approval == second_approval

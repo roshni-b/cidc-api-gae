@@ -35,11 +35,20 @@ class BearerAuth(TokenAuth):
         TODO: role-based resource/method-level authorization
         """
         profile = self.token_auth(id_token)
-        is_authorized = self.role_auth(profile, allowed_roles, resource, method)
 
-        print(
-            f"{'' if is_authorized else 'UN'}AUTHORIZED: {profile['email']} {method} /{resource or ''}"
-        )
+        def log_authorization(authorized):
+            """Track access attempts by authenticated users"""
+            print(
+                f"{'' if authorized else 'UN'}AUTHORIZED: {profile['email']} {method} /{resource or ''}"
+            )
+
+        try:
+            is_authorized = self.role_auth(profile, allowed_roles, resource, method)
+        except Unauthorized:
+            log_authorization(False)
+            raise
+
+        log_authorization(is_authorized)
 
         return is_authorized
 

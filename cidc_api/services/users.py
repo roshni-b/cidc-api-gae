@@ -15,7 +15,7 @@ from eve.auth import requires_auth
 from werkzeug.exceptions import Unauthorized, BadRequest
 
 import gcloud_client
-from models import Users
+from models import Users, CIDCRole
 from emails import new_user_registration, confirm_account_approval
 
 
@@ -68,7 +68,7 @@ def filter_user_lookup(request: Request, lookup: dict):
     current_user = _request_ctx_stack.top.current_user
 
     # If user isn't an admin, they can only lookup their own info.
-    if current_user.role != "cidc-admin":
+    if current_user.role != CIDCRole.ADMIN.value:
         lookup["email"] = current_user.email
 
 
