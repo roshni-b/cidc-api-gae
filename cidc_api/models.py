@@ -73,8 +73,8 @@ TRIAL_ID_FIELD = "lead_organization_study_id"
 
 def get_DOMAIN() -> dict:
     """
-    Render all cerberus domains for data model resources 
-    (i.e., any model extending `CommonColumns`).
+    Render all cerberus domains for API resources and set up method restrictions
+    and role-based access controls.
     """
     domain_config = {}
     domain_config["new_users"] = ResourceConfig(Users)
@@ -105,44 +105,36 @@ def get_DOMAIN() -> dict:
     domain["new_users"]["resource_methods"] = ["POST"]
 
     # Restrict operations on resources that only admins should be able to access
-    for resource in ["permissions", "trial_metadata"]:
+    for resource in ["users", "permissions", "trial_metadata"]:
         domain[resource]["allowed_roles"] = [CIDCRole.ADMIN.value]
         domain[resource]["allowed_item_roles"] = [CIDCRole.ADMIN.value]
 
     # Restrict operations on the 'assay_uploads' resource:
-    # * only admins can GET 'assay_uploads' (TODO: we may want people to be able to view their own uploads)
-    # * only admins and cimac users can PATCH 'assay_uploads'
+    # * only admins can list 'assay_uploads' (TODO: we may want people to be able to view their own uploads)
+    # * only admins and cimac users can GET items or PATCH 'assay_uploads'
+    admin_and_cimac = [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
     domain["assay_uploads"]["allowed_read_roles"] = [CIDCRole.ADMIN.value]
-    domain["assay_uploads"]["allowed_item_read_roles"] = [CIDCRole.ADMIN.value]
-    domain["assay_uploads"]["allowed_write_roles"] = [
-        CIDCRole.ADMIN.value,
-        CIDCRole.CIMAC_USER.value,
-    ]
-    domain["assay_uploads"]["allowed_item_write_roles"] = [
-        CIDCRole.ADMIN.value,
-        CIDCRole.CIMAC_USER.value,
-    ]
+    domain["assay_uploads"]["allowed_item_read_roles"] = admin_and_cimac
+    domain["assay_uploads"]["allowed_write_roles"] = admin_and_cimac
+    domain["assay_uploads"]["allowed_item_write_roles"] = admin_and_cimac
+    domain["assay_uploads"]["resource_methods"] = ["GET"]
+    domain["assay_uploads"]["item_methods"] = ["GET", "PATCH"]
 
     # Restrict operations on the 'manifest_uploads' resource:
     # * only admins can GET 'manifest_uploads'
-    # * only admins and NCI users can PATCH 'manifest_uploads'
+    # * only admins and NCI users can GET items or PATCH 'manifest_uploads'
+    admin_and_nci = [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
     domain["manifest_uploads"]["allowed_read_roles"] = [CIDCRole.ADMIN.value]
-    domain["manifest_uploads"]["allowed_item_read_roles"] = [CIDCRole.ADMIN.value]
-    domain["manifest_uploads"]["allowed_write_roles"] = [
-        CIDCRole.ADMIN.value,
-        CIDCRole.NCI_BIOBANK_USER.value,
-    ]
-    domain["manifest_uploads"]["allowed_item_write_roles"] = [
-        CIDCRole.ADMIN.value,
-        CIDCRole.NCI_BIOBANK_USER.value,
-    ]
-    domain["manifest_uploads"]["allowed_methods"] = ["GET"]
-    domain["manifest_uploads"]["allowed_item_methods"] = ["GET", "PATCH"]
+    domain["manifest_uploads"]["allowed_item_read_roles"] = admin_and_nci
+    domain["manifest_uploads"]["allowed_write_roles"] = admin_and_nci
+    domain["manifest_uploads"]["allowed_item_write_roles"] = admin_and_nci
+    domain["manifest_uploads"]["resource_methods"] = ["GET"]
+    domain["manifest_uploads"]["item_methods"] = ["GET", "PATCH"]
 
     # Restrict operations on the 'downloadable_files' resource:
     # * downloadable_files are read-only through the API
-    domain["downloadable_files"]["allowed_methods"] = ["GET"]
-    domain["downloadable_files"]["allowed_item_methods"] = ["GET"]
+    domain["downloadable_files"]["resource_methods"] = ["GET"]
+    domain["downloadable_files"]["item_methods"] = ["GET"]
 
     # Add the download_link field to the 'downloadable_files' resource schema
     domain["downloadable_files"]["schema"]["download_link"] = {"type": "string"}
