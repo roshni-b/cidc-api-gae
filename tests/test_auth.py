@@ -343,4 +343,3 @@ def test_rbac(monkeypatch, app, db):
                 assert res_get.status_code == 200
             else:
                 assert res_get.status_code == 401
-
