@@ -1,8 +1,10 @@
 """Endpoints for downloadable file operations"""
+import ast
 import json
 from multiprocessing.pool import ThreadPool
 
 from eve import Eve
+from eve_sqlalchemy import parse
 from flask import Request, _request_ctx_stack
 from werkzeug.exceptions import BadRequest
 from werkzeug.datastructures import ImmutableMultiDict
@@ -40,7 +42,7 @@ def update_file_filters(request: Request, _):
     # this query will look like:
     #   (trial==1 and assay_type==wes)or(trial==2 and assay_type==olink)
     where_query = "or".join(
-        f'(trial=={p.trial_id!r} and assay_type=={p.assay_type!r})' for p in permissions
+        f"(trial=={p.trial_id!r} and assay_type=={p.assay_type!r})" for p in permissions
     )
 
     user_where_query = request.args.get("where")
@@ -58,6 +60,13 @@ def update_file_filters(request: Request, _):
         except json.JSONDecodeError:
             # The user provided a non-JSON filter, which is what we want
             pass
+
+        try:
+            # Check that the filter is a valid filter (e.g., has balanced parentheses).
+            # We set mode to "eval" to compile the string to an expression.
+            mod = ast.parse(user_where_query, mode="eval")
+        except:
+            raise BadRequest(f"Could not parse filter {where_query!r}")
 
         # Add permission filters to the user's where query in an "and" clause
         where_query = f"({user_where_query})and({where_query})"

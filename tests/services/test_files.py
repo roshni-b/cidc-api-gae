@@ -99,6 +99,14 @@ def test_update_file_filters(db, app_no_auth, test_user):
     assert res.status_code == 400
     assert "Mongo-style JSON filters are not supported" in res.json["_error"]["message"]
 
+    # Injection attempt
+    injection_filter = (
+        f"trial=={t1} and assay_type==olink) or (trial=={t1} and assay_type==wes"
+    )
+    res = client.get(f"/downloadable_files?where={injection_filter}")
+    assert res.status_code == 400
+    assert "Could not parse filter" in res.json["_error"]["message"]
+
 
 def test_insert_download_url(monkeypatch):
     """
