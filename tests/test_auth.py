@@ -251,11 +251,18 @@ def test_rbac(monkeypatch, app, db):
 
         print("Checking RBAC for:", role.value)
 
-        # Test globally disabled item methods
+        # Test that PUT is globally disabled
         for resource in all_resources:
             for method in ["put", "delete"]:
                 res = getattr(client, method)(resource + "/1", headers=HEADER)
-                assert res.status_code == 405  # Method Not Allowed
+                # One exception: deletion is enabled on permissions for admins
+                if resource == "permissions" and method == "delete":
+                    if role == CIDCRole.ADMIN:
+                        assert res.status_code == 404
+                    else:
+                        assert res.status_code == 401
+                else:
+                    assert res.status_code == 405  # Method Not Allowed
 
         # No one can GET new_users
         res = client.get("new_users")

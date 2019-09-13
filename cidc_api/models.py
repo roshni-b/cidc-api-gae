@@ -109,6 +109,9 @@ def get_DOMAIN() -> dict:
         domain[resource]["allowed_roles"] = [CIDCRole.ADMIN.value]
         domain[resource]["allowed_item_roles"] = [CIDCRole.ADMIN.value]
 
+    # Make permissions deletable by admins
+    domain["permissions"]["item_methods"] = ["GET", "DELETE", "PATCH"]
+
     # Restrict operations on the 'assay_uploads' resource:
     # * only admins can list 'assay_uploads' (TODO: we may want people to be able to view their own uploads)
     # * only admins and cimac users can GET items or PATCH 'assay_uploads'
