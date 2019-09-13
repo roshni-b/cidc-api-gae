@@ -6,7 +6,13 @@ import pytest
 from flask import _request_ctx_stack
 from werkzeug.datastructures import ImmutableMultiDict
 
-from cidc_api.models import Users, TrialMetadata, Permissions, DownloadableFiles
+from cidc_api.models import (
+    Users,
+    TrialMetadata,
+    Permissions,
+    DownloadableFiles,
+    CIDCRole,
+)
 from cidc_api.services.files import (
     update_file_filters,
     insert_download_url,
@@ -106,6 +112,14 @@ def test_update_file_filters(db, app_no_auth, test_user):
     res = client.get(f"/downloadable_files?where={injection_filter}")
     assert res.status_code == 400
     assert "Could not parse filter" in res.json["_error"]["message"]
+
+    # Admins should be able to access data regardless of permissions
+    test_user.role = CIDCRole.ADMIN.value
+    db.commit()
+    disallowed_filter = f"trial=={t1} and assay_type==olink"
+    res = client.get(f"/downloadable_files?where={disallowed_filter}")
+    assert res.status_code == 200
+    assert len(res.json["_items"]) == 1
 
 
 def test_insert_download_url(monkeypatch):

@@ -10,7 +10,7 @@ from werkzeug.exceptions import BadRequest
 from werkzeug.datastructures import ImmutableMultiDict
 
 import gcloud_client
-from models import Users, Permissions
+from models import Users, Permissions, CIDCRole
 
 
 def register_files_hooks(app: Eve):
@@ -25,6 +25,10 @@ def update_file_filters(request: Request, _):
     a user doesn't have permission to see.
     """
     user = _request_ctx_stack.top.current_user
+
+    # Admins can do whatever they want
+    if user.role == CIDCRole.ADMIN.value:
+        return
 
     permissions = Permissions.find_for_user(user)
 
