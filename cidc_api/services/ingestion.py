@@ -167,6 +167,7 @@ def upload_manifest():
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         trial_id, "manifest", schema_hint, xlsx_file, upload_moment
     )
+    # TODO maybe rely on default session
     session = Session.object_session(trial)
     # TODO move to prism
     DownloadableFiles.create_from_metadata(
@@ -191,6 +192,7 @@ def upload_manifest():
         uploader_email=user_email,
         metadata=md_patch,
         gcs_xlsx_uri=gcs_blob.name,
+        session=session,
     )
 
     return jsonify({"metadata_json_patch": md_patch})
