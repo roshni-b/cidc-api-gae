@@ -105,11 +105,16 @@ def get_DOMAIN() -> dict:
     domain["new_users"]["resource_methods"] = ["POST"]
 
     # Restrict operations on resources that only admins should be able to access
-    for resource in ["users", "permissions", "trial_metadata"]:
+    for resource in ["users", "trial_metadata"]:
         domain[resource]["allowed_roles"] = [CIDCRole.ADMIN.value]
         domain[resource]["allowed_item_roles"] = [CIDCRole.ADMIN.value]
 
-    # Make permissions deletable by admins
+    # Restrict operations on the 'permissions' resource:
+    # * Only admins can write or update 'permissions'
+    # * All users can read permissions, but the results will be filtered by
+    #   services.permissions.update_permission_filters to only include their permissions
+    domain["permissions"]["allowed_write_roles"] = [CIDCRole.ADMIN.value]
+    domain["permissions"]["allowed_item_roles"] = [CIDCRole.ADMIN.value]
     domain["permissions"]["item_methods"] = ["GET", "DELETE", "PATCH"]
 
     # Restrict operations on the 'assay_uploads' resource:
