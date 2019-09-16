@@ -338,7 +338,7 @@ class TrialMetadata(CommonColumns):
             and manifest patch strategies.
         """
 
-        trial = TrialMetadata.select_for_update_by_trial_id(trial_id)
+        trial = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
 
         # Merge assay metadata into the existing clinical trial metadata
         updated_metadata = prism.merge_clinical_trial_metadata(
