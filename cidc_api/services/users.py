@@ -18,6 +18,18 @@ import gcloud_client
 from models import Users, CIDCRole
 from emails import new_user_registration, confirm_account_approval
 
+users_api = Blueprint("users", __name__, url_prefix="/users")
+
+
+@users_api.route("/self", methods=["GET"])
+@requires_auth("users.self")
+def get_self():
+    jsonish_user = _request_ctx_stack.top.current_user.__dict__
+    # Don't try to serialize SQLAlchemy state data
+    if "_sa_instance_state" in jsonish_user:
+        del jsonish_user["_sa_instance_state"]
+    return jsonify(jsonish_user)
+
 
 def register_users_hooks(app: Eve):
     # new_users hooks
@@ -25,7 +37,6 @@ def register_users_hooks(app: Eve):
     app.on_inserted_new_users += alert_new_user_registered
 
     # users hooks
-    app.on_pre_GET_users += filter_user_lookup
     app.on_pre_PATCH_users += add_approval_date
     app.on_update_users += alert_new_user_approved
 
@@ -59,17 +70,6 @@ def alert_new_user_registered(items: list):
     email = new_user_registration(new_user["email"])
 
     gcloud_client.send_email(**email)
-
-
-def filter_user_lookup(request: Request, lookup: dict):
-    """
-    Ensure that non-admin users can only look up their own account info.
-    """
-    current_user = _request_ctx_stack.top.current_user
-
-    # If user isn't an admin, they can only lookup their own info.
-    if current_user.role != CIDCRole.ADMIN.value:
-        lookup["email"] = current_user.email
 
 
 def add_approval_date(request: Request, lookup: dict):
