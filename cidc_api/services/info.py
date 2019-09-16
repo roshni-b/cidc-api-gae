@@ -7,6 +7,7 @@ from cidc_schemas import prism
 
 info_api = Blueprint("info", __name__, url_prefix="/info")
 
+
 @info_api.route("assays", methods=["GET"])
 def assays():
     """List all supported assays"""
