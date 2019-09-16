@@ -41,8 +41,13 @@ def test_filter_user_lookups(app, db, monkeypatch):
 
     # Create two new users
     with app.app_context():
-        Users.create(profile)
-        Users.create(other_profile)
+        user1 = Users.create(profile)
+        user1.role = "cimac-user"
+        user1.approval_date = datetime.now()
+        user2 = Users.create(other_profile)
+        user2.role = "cimac-user"
+        user2.approval_date = datetime.now()
+        db.commit()
 
     # Check that a user can only look themselves up
     response = client.get(USERS, headers=AUTH_HEADER)
