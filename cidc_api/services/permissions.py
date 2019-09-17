@@ -22,4 +22,3 @@ def update_permissions_filters(request: Request, lookup: dict):
 
     # Otherwise, only include permissions granted to this user
     lookup["to_user"] = user.id
-
