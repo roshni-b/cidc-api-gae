@@ -285,11 +285,14 @@ def test_rbac(monkeypatch, app, db):
         res = client.get("downloadable_files", headers=HEADER)
         assert res.status_code == 200
 
+        # Everyone can read permissions (though the results will be filtered)
+        res = client.get("permissions", headers=HEADER)
+        assert res.status_code == 200
+
         # Test admin-restricted GETs
         admin_only_GETable = [
             "users",
             "trial_metadata",
-            "permissions",
             "assay_uploads",
             "manifest_uploads",
         ]

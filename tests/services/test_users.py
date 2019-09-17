@@ -33,46 +33,29 @@ def test_enforce_self_creation(app, db, monkeypatch):
     assert response.status_code == 201  # Created
 
 
-def test_filter_user_lookups(app, db, monkeypatch):
-    """Check user GET-request role-based filtering"""
+def test_get_self(app, db, monkeypatch):
+    """Check that a low-privilege user can get their own account info"""
     monkeypatch.setattr(app.auth, "token_auth", fake_token_auth)
 
     client = app.test_client()
 
     # Create two new users
     with app.app_context():
-        Users.create(profile)
-        Users.create(other_profile)
-
-    # Check that a user can only look themselves up
-    response = client.get(USERS, headers=AUTH_HEADER)
-    assert response.status_code == 200
-    users = response.json["_items"]
-    assert len(users) == 1
-    assert users[0]["email"] == profile["email"]
-
-    filtered_response = client.get(
-        USERS + '?where{"email": "%s"}' % EMAIL, headers=AUTH_HEADER
-    )
-    assert filtered_response.status_code == 200
-    assert filtered_response.json["_items"] == response.json["_items"]
-
-    # If the user tries to look up someone else, they get nothing back
-    response = client.get(
-        USERS + '?where={"email": "%s"}' % other_profile["email"], headers=AUTH_HEADER
-    )
-    assert response.status_code == 200
-    assert len(response.json["_items"]) == 0
-
-    # Make a user an admin
-    with app.app_context():
-        db.query(Users).filter_by(email=EMAIL).update({"role": CIDCRole.ADMIN.value})
+        user = Users.create(profile)
+        user.role = "cimac-user"
+        user.approval_date = datetime.now()
+        other_user = Users.create(other_profile)
         db.commit()
 
-    # Admins should be able to list all users
-    response = client.get(USERS, headers=AUTH_HEADER)
+    # Check that a low-privs user can look themselves up at the users/self endpoint
+    response = client.get(USERS + "/self", headers=AUTH_HEADER)
     assert response.status_code == 200
-    assert len(response.json["_items"]) == 2
+    user = response.json
+    assert user["email"] == profile["email"]
+
+    # Check that a low-privs user cannot look up other users
+    response = client.get(USERS, headers=AUTH_HEADER)
+    assert response.status_code == 401
 
 
 def test_add_approval_date(app, db, monkeypatch):
