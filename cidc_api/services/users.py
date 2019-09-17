@@ -24,11 +24,11 @@ users_api = Blueprint("users", __name__, url_prefix="/users")
 @users_api.route("/self", methods=["GET"])
 @requires_auth("users.self")
 def get_self():
-    jsonish_user = _request_ctx_stack.top.current_user.__dict__
-    # Don't try to serialize SQLAlchemy state data
-    if "_sa_instance_state" in jsonish_user:
-        del jsonish_user["_sa_instance_state"]
-    return jsonify(jsonish_user)
+    user = _request_ctx_stack.top.current_user
+    # Extract fields from the database record
+    column_names = user.__table__.columns.keys()
+    user_dict = dict((col, getattr(user, col)) for col in column_names)
+    return jsonify(user_dict)
 
 
 def register_users_hooks(app: Eve):

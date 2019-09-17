@@ -111,7 +111,7 @@ def get_DOMAIN() -> dict:
 
     # Restrict operations on the 'permissions' resource:
     # * Only admins can write or update 'permissions'
-    # * All users can read permissions, but the results will be filtered by
+    # * All users can list the 'permissions' resource, but the results will be filtered by
     #   services.permissions.update_permission_filters to only include their permissions
     domain["permissions"]["allowed_write_roles"] = [CIDCRole.ADMIN.value]
     domain["permissions"]["allowed_item_roles"] = [CIDCRole.ADMIN.value]
