@@ -39,13 +39,22 @@ def test_get_self(app, db, monkeypatch):
 
     client = app.test_client()
 
-    # Create two new users
+    # Create two new unregistered users
     with app.app_context():
         user = Users.create(profile)
-        user.role = "cimac-user"
-        user.approval_date = datetime.now()
         other_user = Users.create(other_profile)
         db.commit()
+
+    # Ensure that an unregistered user can get their own data
+    response = client.get(USERS + "/self", headers=AUTH_HEADER)
+    assert response.status_code == 200
+    assert response.json["email"] == EMAIL
+
+    # Register the first user
+    with app.app_context():
+        user = Users.find_by_email(EMAIL)
+        user.role = "cimac-user"
+        user.approval_date = datetime.now()
 
     # Check that a low-privs user can look themselves up at the users/self endpoint
     response = client.get(USERS + "/self", headers=AUTH_HEADER)

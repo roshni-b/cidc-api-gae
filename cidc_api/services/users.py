@@ -11,18 +11,19 @@ from flask import (
     current_app as app,
 )
 from eve import Eve
-from eve.auth import requires_auth
 from werkzeug.exceptions import Unauthorized, BadRequest
 
 import gcloud_client
 from models import Users, CIDCRole
 from emails import new_user_registration, confirm_account_approval
 
+from .utils import resource
+
 users_api = Blueprint("users", __name__, url_prefix="/users")
 
 
 @users_api.route("/self", methods=["GET"])
-@requires_auth("users.self")
+@resource("users/self")
 def get_self():
     user = _request_ctx_stack.top.current_user
     # Extract fields from the database record
