@@ -73,8 +73,6 @@ class BearerAuth(TokenAuth):
 
         # User is registered but not yet approved.
         if not user.approval_date:
-            print(resource)
-
             # Unapproved users are not authorized to do anything but access their
             # account info.
             if resource == "users/self" and method == "GET":
