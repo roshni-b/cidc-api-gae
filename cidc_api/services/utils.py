@@ -14,6 +14,8 @@ def resource(
     """
     Decorator for custom endpoints that adds and configures that endpoint
     as a resource in the Eve API's DOMAIN config.
+
+    Only works for endpoint functions that take no arguments.
     """
 
     def decorator(f):
@@ -30,6 +32,8 @@ def resource(
 
             @requires_auth("resource")
             def f_w_args(*args, **kwargs):
+                # See: https://stackoverflow.com/a/44148483
+                # for an explanation of the Eve weirdness at work here.
                 return f()
 
             return f_w_args(*args, **kwargs)
