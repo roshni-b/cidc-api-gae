@@ -75,7 +75,7 @@ class BearerAuth(TokenAuth):
         if not user.approval_date:
             # Unapproved users are not authorized to do anything but access their
             # account info.
-            if resource == "users" and method == "GET":
+            if resource == "users/self" and method == "GET":
                 return True
 
             raise Unauthorized(
