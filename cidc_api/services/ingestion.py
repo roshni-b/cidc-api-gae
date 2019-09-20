@@ -6,7 +6,13 @@ import json
 import datetime
 from typing import BinaryIO, Tuple, List
 
-from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
+from werkzeug.exceptions import (
+    BadRequest,
+    InternalServerError,
+    NotFound,
+    NotImplemented,
+    Unauthorized,
+)
 
 from eve import Eve
 from sqlalchemy.orm.exc import NoResultFound
@@ -291,6 +297,46 @@ def upload_assay():
         "gcs_bucket": GOOGLE_UPLOAD_BUCKET,
     }
     return jsonify(response)
+
+
+@ingestion_api.route("/poll_upload_merge_status", methods=["GET"])
+@resource("ingestion/poll_upload_merge_status")
+def poll_upload_merge_status():
+    """
+    Check an assay upload's status, and supply the client with directions on when to retry the check.
+
+    Request: no body
+        query parameter "id": the id of the assay_upload of interest
+    Response: application/json
+        status {str or None}: the current status of the assay_upload (empty if not MERGE_FAILED or MERGE_COMPLETED)
+        retry_in {str or None}: the time in seconds to wait before making another request to this endpoint (empty if `status` has a value)
+    Raises:
+        400: no "id" query parameter is supplied
+        401: the requesting user did not create the requested upload job
+        404: no upload job with id "id" is found
+    """
+    upload_id = request.args.get("id")
+    if not upload_id:
+        raise BadRequest("Missing expected query parameter 'id'")
+
+    upload = AssayUploads.find_by_id(upload_id)
+
+    if not upload:
+        raise NotFound(f"Could not find assay upload job with id {upload_id}")
+
+    # Users should only be able to poll the status of their own uploads
+    user = _request_ctx_stack.top.current_user
+    if not user.email == upload.uploader_email:
+        raise Unauthorized(f"{user.email} can only view their own upload status")
+
+    if upload.status in [
+        AssayUploadStatus.MERGE_COMPLETED.value,
+        AssayUploadStatus.MERGE_FAILED.value,
+    ]:
+        return jsonify({"status": upload.status})
+
+    # TODO: get smarter about retry-scheduling
+    return jsonify({"retry_in": 5})
 
 
 def on_post_PATCH_assay_uploads(request: Request, payload: Response):

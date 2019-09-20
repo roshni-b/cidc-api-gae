@@ -1,4 +1,5 @@
 import io
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -17,6 +18,14 @@ from . import open_data_file
 from ..test_models import db_test
 from ..util import assert_same_elements
 from ..conftest import TEST_EMAIL
+
+from cidc_api.models import (
+    Users,
+    AssayUploads,
+    AssayUploadStatus,
+    TrialMetadata,
+    CIDCRole,
+)
 
 
 @pytest.fixture
@@ -344,3 +353,102 @@ def test_upload_olink(
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
+<<<<<<< HEAD
+=======
+
+
+def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
+    """
+    Check pull_upload_merge_status endpoint behavior
+    """
+    trial_id = "test-12345"
+    metadata = {"lead_organization_study_id": trial_id}
+
+    with app.app_context():
+        user = Users.create({"email": test_user.email})
+        user.role = CIDCRole.CIMAC_BIOFX_USER.value
+        user.approval_date = datetime.now()
+
+        Users.create({"email": "other@email.com"})
+        db.add(TrialMetadata(trial_id=trial_id, metadata_json={}))
+        upload_1 = AssayUploads.create(
+            assay_type="wes",
+            uploader_email=test_user.email,
+            gcs_file_map={},
+            metadata=metadata,
+            gcs_xlsx_uri="",
+        )
+
+        user_created = upload_1.id
+        upload_2 = AssayUploads.create(
+            assay_type="wes",
+            uploader_email="other@email.com",
+            gcs_file_map={},
+            metadata=metadata,
+            gcs_xlsx_uri="",
+        )
+
+        not_user_created = upload_2.id
+
+        db.commit()
+
+    monkeypatch.setattr(
+        app.auth, "token_auth", lambda *args: {"email": test_user.email}
+    )
+
+    client = app.test_client()
+
+    HEADER = {"Authorization": "Bearer foo"}
+
+    # Upload not found
+    res = client.get("/ingestion/poll_upload_merge_status?id=12345", headers=HEADER)
+    assert res.status_code == 404
+
+    # Upload not created by user
+    res = client.get(
+        f"/ingestion/poll_upload_merge_status?id={not_user_created}", headers=HEADER
+    )
+    assert res.status_code == 401
+
+    user_created_url = f"/ingestion/poll_upload_merge_status?id={user_created}"
+
+    # Upload not-yet-ready
+    res = client.get(user_created_url, headers=HEADER)
+    assert res.status_code == 200
+    assert "retry_in" in res.json and res.json["retry_in"] == 5
+    assert "status" not in res.json
+
+    for status in [
+        AssayUploadStatus.MERGE_COMPLETED.value,
+        AssayUploadStatus.MERGE_FAILED.value,
+    ]:
+        # Simulate cloud function merge status update
+        with app.app_context():
+            upload = AssayUploads.find_by_id(user_created)
+            upload.status = status
+            db.commit()
+
+        # Upload ready
+        res = client.get(user_created_url, headers=HEADER)
+        assert res.status_code == 200
+        assert "retry_in" not in res.json
+        assert "status" in res.json and res.json["status"] == status
+
+
+def test_signed_upload_urls(app_no_auth, monkeypatch):
+    """
+    Ensure the signed upload urls endpoint responds with the expected structure
+    
+    TODO: an integration test that actually calls out to GCS
+    """
+    client = app_no_auth.test_client()
+    data = {
+        "directory_name": "my-assay-run-id",
+        "object_names": ["my-fastq-1.fastq.gz", "my-fastq-2.fastq.gz"],
+    }
+
+    monkeypatch.setattr("google.cloud.storage.Client", MagicMock)
+    res = client.post("/ingestion/signed-upload-urls", json=data)
+
+    assert_same_elements(res.json.keys(), data["object_names"])
+>>>>>>> Add poll_upload_merge_status endpoint
