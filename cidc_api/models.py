@@ -390,9 +390,6 @@ class TrialMetadata(CommonColumns):
         )
 
 
-STATUSES = ["started", "completed", "errored"]
-
-
 class UploadForeignKeys:
     # Link to the user who created this upload.
     @declared_attr
@@ -458,10 +455,23 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         return upload
 
 
+class AssayUploadStatus(EnumBaseClass):
+    STARTED = "started"
+    # Set by CLI based on GCS upload results
+    UPLOAD_COMPLETE = "upload-completed"
+    UPLOAD_FAILED = "upload-failed"
+    # Set by ingest_uploads cloud function based on merge / transfer results
+    MERGE_COMPLETE = "merge-completed"
+    MERGE_FAILED = "merge-failed"
+
+
+STATUSES = [s.value for s in AssayUploadStatus]
+
+
 class AssayUploads(CommonColumns, UploadForeignKeys):
     __tablename__ = "assay_uploads"
     # The current status of the upload job
-    status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
+    status = Column(Enum(*STATUSES, name="assay_upload_status"), nullable=False)
     # The object names for the files to be uploaded mapped to upload_placeholder uuids
     gcs_file_map = Column(JSONB, nullable=False)
     # track the GCS URI of the .xlsx file used for this upload
