@@ -458,10 +458,10 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
 class AssayUploadStatus(EnumBaseClass):
     STARTED = "started"
     # Set by CLI based on GCS upload results
-    UPLOAD_COMPLETE = "upload-completed"
+    UPLOAD_COMPLETED = "upload-completed"
     UPLOAD_FAILED = "upload-failed"
     # Set by ingest_uploads cloud function based on merge / transfer results
-    MERGE_COMPLETE = "merge-completed"
+    MERGE_COMPLETED = "merge-completed"
     MERGE_FAILED = "merge-failed"
 
 

@@ -17,7 +17,7 @@ from cidc_schemas import constants, validate_xlsx, prism, template
 import gcloud_client
 from models import (
     AssayUploads,
-    STATUSES,
+    AssayUploadStatus,
     TRIAL_ID_FIELD,
     TrialMetadata,
     DownloadableFiles,
@@ -306,7 +306,7 @@ def on_post_PATCH_assay_uploads(request: Request, payload: Response):
     status = request.json["status"]
 
     # If this is a successful upload job, publish this info to Pub/Sub
-    if status == "completed":
+    if status == AssayUploadStatus.UPLOAD_COMPLETED.value:
         gcloud_client.publish_upload_success(job_id)
 
     # Revoke the user's write access

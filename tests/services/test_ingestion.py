@@ -11,7 +11,7 @@ from werkzeug.exceptions import (
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.services.ingestion import extract_schema_and_xlsx
-from cidc_api.models import TrialMetadata, Users, TRIAL_ID_FIELD
+from cidc_api.models import TrialMetadata, Users, TRIAL_ID_FIELD, AssayUploadStatus
 
 from . import open_data_file
 from ..test_models import db_test
@@ -263,7 +263,7 @@ def test_upload_wes(
     # Report an upload failure
     res = client.patch(
         update_url,
-        json={"status": "errored"},
+        json={"status": AssayUploadStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
@@ -274,7 +274,7 @@ def test_upload_wes(
     # Report an upload success
     res = client.patch(
         update_url,
-        json={"status": "completed"},
+        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
@@ -329,7 +329,7 @@ def test_upload_olink(
     # Report an upload failure
     res = client.patch(
         update_url,
-        json={"status": "errored"},
+        json={"status": AssayUploadStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
@@ -340,7 +340,7 @@ def test_upload_olink(
     # Report an upload success
     res = client.patch(
         update_url,
-        json={"status": "completed"},
+        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
