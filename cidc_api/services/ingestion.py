@@ -26,8 +26,6 @@ from models import (
 )
 from config.settings import GOOGLE_UPLOAD_BUCKET
 
-from .utils import resource
-
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 
 
@@ -84,7 +82,7 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
 
 
 @ingestion_api.route("/validate", methods=["POST"])
-@resource("ingestion/validate")
+@requires_auth("ingestion.validate")
 def validate():
     """
     Validate a .xlsx manifest or assay metadata template.
@@ -131,7 +129,7 @@ def validate_excel_payload(f):
 
 
 @ingestion_api.route("/upload_manifest", methods=["POST"])
-@resource("ingestion/upload_manifest")
+@requires_auth("ingestion.upload_manifest")
 @validate_excel_payload
 def upload_manifest():
     """
@@ -201,7 +199,7 @@ def upload_manifest():
 
 
 @ingestion_api.route("/upload_assay", methods=["POST"])
-@resource("ingestion/upload_assay")
+@requires_auth("ingestion.upload_assay")
 @validate_excel_payload
 def upload_assay():
     """

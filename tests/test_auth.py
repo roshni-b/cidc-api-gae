@@ -170,11 +170,9 @@ def test_role_auth(bearer_auth, app, db):
         with pytest.raises(Unauthorized, match="not registered"):
             bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
 
-        # Unregistered user should not be able to GET self
+        # Unregistered user should not be able to GET users
         with pytest.raises(Unauthorized, match="not registered"):
-            bearer_auth.role_auth(profile, [], "users/self", "GET")
-
-        # Unregistered user should not be able to GET
+            bearer_auth.role_auth(profile, [], "users", "GET")
 
         # Unregistered user should be able to POST users
         assert bearer_auth.role_auth(profile, [], "new_users", "POST")
@@ -186,9 +184,6 @@ def test_role_auth(bearer_auth, app, db):
         # Unapproved user isn't authorized to do anything
         with pytest.raises(Unauthorized, match="pending approval"):
             bearer_auth.role_auth(profile, [], "new_users", "POST")
-
-        # Ensure unapproved user can access their own data
-        assert bearer_auth.role_auth(profile, [], "users/self", "GET")
 
         # Give the user a role but don't approve them
         db.query(Users).filter_by(email=EMAIL).update(
