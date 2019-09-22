@@ -1,14 +1,34 @@
 import logging
+from functools import wraps
 from typing import List
 
 import requests
-from eve.auth import TokenAuth, requires_auth
+from eve.auth import TokenAuth
 from jose import jwt
-from flask import _request_ctx_stack, current_app as app
+from flask import _request_ctx_stack, request, current_app as app
 from werkzeug.exceptions import Unauthorized
 
 from models import Users
 from config.settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID, TESTING
+
+
+def requires_auth(resource: str, allowed_roles: list = []):
+    """
+    A decorator that adds authentication and basic role-based access to a custom endpoint.
+
+    A workaround for the issues with eve.auth.requires_auth: 
+    https://github.com/pyeve/eve/issues/860
+    """
+
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            app.auth.authorized(allowed_roles, resource, request.method)
+            return f(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
 
 
 class BearerAuth(TokenAuth):
@@ -58,6 +78,8 @@ class BearerAuth(TokenAuth):
         """Check if the current user is authorized to act on the current request's resource."""
         user = Users.find_by_email(profile["email"])
         _request_ctx_stack.top.current_user = user
+
+        print(resource, "!!*!*!*!*!!")
 
         # User hasn't registered yet.
         if not user:
