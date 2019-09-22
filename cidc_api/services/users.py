@@ -18,11 +18,11 @@ import gcloud_client
 from models import Users, CIDCRole
 from emails import new_user_registration, confirm_account_approval
 
-users_api = Blueprint("users", __name__, url_prefix="/users")
+users_api = Blueprint("users", __name__)
 
 
 @users_api.route("/self", methods=["GET"])
-@requires_auth("users.self")
+@requires_auth("")
 def get_self():
     user = _request_ctx_stack.top.current_user
     # Extract fields from the database record

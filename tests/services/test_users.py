@@ -48,7 +48,7 @@ def test_get_self(app, db, monkeypatch):
         db.commit()
 
     # Check that a low-privs user can look themselves up at the users/self endpoint
-    response = client.get(USERS + "/self", headers=AUTH_HEADER)
+    response = client.get("/self", headers=AUTH_HEADER)
     assert response.status_code == 200
     user = response.json
     assert user["email"] == profile["email"]

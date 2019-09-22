@@ -82,7 +82,7 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
 
 
 @ingestion_api.route("/validate", methods=["POST"])
-@requires_auth("ingestion.validate")
+@requires_auth("")
 def validate():
     """
     Validate a .xlsx manifest or assay metadata template.
@@ -129,7 +129,7 @@ def validate_excel_payload(f):
 
 
 @ingestion_api.route("/upload_manifest", methods=["POST"])
-@requires_auth("ingestion.upload_manifest")
+@requires_auth("")
 @validate_excel_payload
 def upload_manifest():
     """
@@ -199,7 +199,7 @@ def upload_manifest():
 
 
 @ingestion_api.route("/upload_assay", methods=["POST"])
-@requires_auth("ingestion.upload_assay")
+@requires_auth("")
 @validate_excel_payload
 def upload_assay():
     """
@@ -300,7 +300,7 @@ def on_post_PATCH_assay_uploads(request: Request, payload: Response):
 
 
 @ingestion_api.route("/signed-upload-urls", methods=["POST"])
-@requires_auth("ingestion.signed-upload-urls")
+@requires_auth("")
 def signed_upload_urls():
     """
     NOTE: We will use IAM for managing bucket access instead of signed URLs, 
