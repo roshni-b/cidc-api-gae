@@ -79,8 +79,6 @@ class BearerAuth(TokenAuth):
         user = Users.find_by_email(profile["email"])
         _request_ctx_stack.top.current_user = user
 
-        print(resource, "!!*!*!*!*!!")
-
         # User hasn't registered yet.
         if not user:
             # Although the user doesn't exist in the database, we still
