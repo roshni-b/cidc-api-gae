@@ -388,4 +388,3 @@ def test_rbac(monkeypatch, app, db):
         else:
             assert res.status_code == 401
         client.get("/ingestion/upload_assay").status_code == 403
-
