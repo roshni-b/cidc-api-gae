@@ -300,7 +300,10 @@ def upload_assay():
 
 
 @ingestion_api.route("/poll_upload_merge_status", methods=["GET"])
-@resource("ingestion/poll_upload_merge_status")
+@requires_auth(
+    "ingestion/poll_upload_merge_status",
+    [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value],
+)
 def poll_upload_merge_status():
     """
     Check an assay upload's status, and supply the client with directions on when to retry the check.

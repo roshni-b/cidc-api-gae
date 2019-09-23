@@ -372,26 +372,23 @@ def test_rbac(monkeypatch, app, db):
         assert res.status_code == 200
         client.post("/users/self").status_code == 403
 
-        # Test ingestion/validate
-        res = client.post("/ingestion/validate", headers=HEADER, data={})
-        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
-            assert res.status_code != 401
-        else:
-            assert res.status_code == 401
-        client.get("/ingestion/validate").status_code == 403
+        # Test manifest uploads
+        for resource in ["/ingestion/validate", "/ingestion/upload_manifest"]:
+            res = client.post(resource, headers=HEADER, data={})
+            if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
+                assert res.status_code != 401
+            else:
+                assert res.status_code == 401
+            client.get(resource).status_code == 403
 
-        # Test ingestion/upload_manifest
-        res = client.post("/ingestion/upload_manifest", headers=HEADER, data={})
-        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
-            assert res.status_code != 401
-        else:
-            assert res.status_code == 401
-        client.get("/ingestion/update_manifest").status_code == 403
-
-        # Test ingestion/upload_assay
-        res = client.post("/ingestion/upload_assay", headers=HEADER, data={})
-        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIMAC_BIOFX_USER]:
-            assert res.status_code != 401
-        else:
-            assert res.status_code == 401
-        client.get("/ingestion/upload_assay").status_code == 403
+        # Test assay uploads
+        for resource, method in [
+            ("/ingestion/upload_assay", "post"),
+            ("/ingestion/poll_upload_merge_status", "get"),
+        ]:
+            res = getattr(client, method)(resource, headers=HEADER, data={})
+            if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIMAC_BIOFX_USER]:
+                assert res.status_code != 401
+            else:
+                assert res.status_code == 401
+            client.get(resource).status_code == 403
