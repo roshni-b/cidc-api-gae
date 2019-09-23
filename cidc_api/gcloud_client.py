@@ -131,6 +131,11 @@ def _encode_and_publish(content: str, topic: str) -> Future:
     topic = pubsub_publisher.topic_path(GOOGLE_CLOUD_PROJECT, topic)
     data = bytes(content, "utf-8")
 
+    # Don't actually publish to Pub/Sub if running locally
+    if ENV == "dev":
+        print(f"Would publish message {content} to topic {topic}")
+        return
+
     # The Pub/Sub publisher client returns a concurrent.futures.Future
     # containing info about whether the publishing was successful.
     report = pubsub_publisher.publish(topic, data=data)
