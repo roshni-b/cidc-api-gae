@@ -472,6 +472,8 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
     __tablename__ = "assay_uploads"
     # The current status of the upload job
     status = Column(Enum(*STATUSES, name="assay_upload_status"), nullable=False)
+    # Text containing feedback on why the upload status is what it is
+    status_details = Column(String, nullable=True)
     # The object names for the files to be uploaded mapped to upload_placeholder uuids
     gcs_file_map = Column(JSONB, nullable=False)
     # track the GCS URI of the .xlsx file used for this upload
