@@ -312,6 +312,7 @@ def poll_upload_merge_status():
         query parameter "id": the id of the assay_upload of interest
     Response: application/json
         status {str or None}: the current status of the assay_upload (empty if not MERGE_FAILED or MERGE_COMPLETED)
+        status_details {str or None}: information about `status` (e.g., error details). Only present if `status` is present.
         retry_in {str or None}: the time in seconds to wait before making another request to this endpoint (empty if `status` has a value)
     Raises:
         400: no "id" query parameter is supplied
@@ -336,7 +337,9 @@ def poll_upload_merge_status():
         AssayUploadStatus.MERGE_COMPLETED.value,
         AssayUploadStatus.MERGE_FAILED.value,
     ]:
-        return jsonify({"status": upload.status})
+        return jsonify(
+            {"status": upload.status, "status_details": upload.status_details}
+        )
 
     # TODO: get smarter about retry-scheduling
     return jsonify({"retry_in": 5})

@@ -416,6 +416,7 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
     assert "retry_in" in res.json and res.json["retry_in"] == 5
     assert "status" not in res.json
 
+    test_details = "A human-friendly reason for this "
     for status in [
         AssayUploadStatus.MERGE_COMPLETED.value,
         AssayUploadStatus.MERGE_FAILED.value,
@@ -424,6 +425,7 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
         with app.app_context():
             upload = AssayUploads.find_by_id(user_created)
             upload.status = status
+            upload.status_details = test_details
             db.commit()
 
         # Upload ready
@@ -431,3 +433,7 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
         assert res.status_code == 200
         assert "retry_in" not in res.json
         assert "status" in res.json and res.json["status"] == status
+        assert (
+            "status_details" in res.json and res.json["status_details"] == test_details
+        )
+
