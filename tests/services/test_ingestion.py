@@ -436,4 +436,3 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
         assert (
             "status_details" in res.json and res.json["status_details"] == test_details
         )
-
