@@ -53,8 +53,9 @@ def test_get_self(app, db, monkeypatch):
     # Register the first user
     with app.app_context():
         user = Users.find_by_email(EMAIL)
-        user.role = "cimac-user"
+        user.role = CIDCRole.CIMAC_USER.value
         user.approval_date = datetime.now()
+        db.commit()
 
     # Check that a low-privs user can look themselves up at the users/self endpoint
     response = client.get(USERS + "/self", headers=AUTH_HEADER)

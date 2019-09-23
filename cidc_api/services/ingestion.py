@@ -9,7 +9,6 @@ from typing import BinaryIO, Tuple, List
 from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
 
 from eve import Eve
-from eve.auth import requires_auth
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
@@ -23,10 +22,10 @@ from models import (
     TrialMetadata,
     DownloadableFiles,
     ManifestUploads,
+    CIDCRole,
 )
+from auth import requires_auth
 from config.settings import GOOGLE_UPLOAD_BUCKET
-
-from .utils import resource
 
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 
@@ -84,7 +83,17 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
 
 
 @ingestion_api.route("/validate", methods=["POST"])
-@resource("ingestion/validate")
+@requires_auth(
+    "ingestion/validate", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
+)
+def validate_endpoint():
+    """
+    Separated from `validate` function so that RBAC from requires_auth doesn't affect
+    internal invocations of `validate` (in, e.g., the /ingestion/upload_assay endpoint).
+    """
+    return validate()
+
+
 def validate():
     """
     Validate a .xlsx manifest or assay metadata template.
@@ -131,7 +140,9 @@ def validate_excel_payload(f):
 
 
 @ingestion_api.route("/upload_manifest", methods=["POST"])
-@resource("ingestion/upload_manifest")
+@requires_auth(
+    "ingestion/upload_manifest", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
+)
 @validate_excel_payload
 def upload_manifest():
     """
@@ -201,7 +212,9 @@ def upload_manifest():
 
 
 @ingestion_api.route("/upload_assay", methods=["POST"])
-@resource("ingestion/upload_assay")
+@requires_auth(
+    "ingestion/upload_assay", [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
+)
 @validate_excel_payload
 def upload_assay():
     """
@@ -301,8 +314,8 @@ def on_post_PATCH_assay_uploads(request: Request, payload: Response):
     gcloud_client.revoke_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
 
 
-@ingestion_api.route("/signed-upload-urls", methods=["POST"])
-@requires_auth("ingestion.signed-upload-urls")
+# @ingestion_api.route("/signed-upload-urls", methods=["POST"])
+# NOTE: this endpoint isn't used currently, so it's not added to the API.
 def signed_upload_urls():
     """
     NOTE: We will use IAM for managing bucket access instead of signed URLs, 

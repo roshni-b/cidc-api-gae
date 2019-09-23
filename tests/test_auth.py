@@ -170,11 +170,13 @@ def test_role_auth(bearer_auth, app, db):
         with pytest.raises(Unauthorized, match="not registered"):
             bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
 
+        # Unregistered user should not be able to GET users
+        with pytest.raises(Unauthorized, match="not registered"):
+            bearer_auth.role_auth(profile, [], "users", "GET")
+
         # Unregistered user should not be able to GET self
         with pytest.raises(Unauthorized, match="not registered"):
-            bearer_auth.role_auth(profile, [], "users/self", "GET")
-
-        # Unregistered user should not be able to GET
+            bearer_auth.role_auth(profile, [], "self", "GET")
 
         # Unregistered user should be able to POST users
         assert bearer_auth.role_auth(profile, [], "new_users", "POST")
@@ -188,7 +190,7 @@ def test_role_auth(bearer_auth, app, db):
             bearer_auth.role_auth(profile, [], "new_users", "POST")
 
         # Ensure unapproved user can access their own data
-        assert bearer_auth.role_auth(profile, [], "users/self", "GET")
+        assert bearer_auth.role_auth(profile, [], "self", "GET")
 
         # Give the user a role but don't approve them
         db.query(Users).filter_by(email=EMAIL).update(
@@ -239,14 +241,18 @@ def test_rbac(monkeypatch, app, db):
     user = Users.create(PAYLOAD)
     db.commit()
 
+    client = app.test_client()
+
+    # Check that an unapproved user can GET the `self` resource
+    res = client.get("/users/self", headers=HEADER)
+    assert res.status_code == 200
+
     def update_user_role(role: str):
         """Make current user assume a given role"""
         user = Users.find_by_email(EMAIL)
         user.role = role
         user.approval_date = datetime.now()
         db.commit()
-
-    client = app.test_client()
 
     all_resources = app.config["DOMAIN"].keys()
 
@@ -358,3 +364,34 @@ def test_rbac(monkeypatch, app, db):
                 assert res_get.status_code == 200
             else:
                 assert res_get.status_code == 401
+
+        # CUSTOM ENDPOINTS
+
+        # All users should be able to GET the '/self' endpoint
+        res = client.get("/users/self", headers=HEADER)
+        assert res.status_code == 200
+        client.post("/users/self").status_code == 403
+
+        # Test ingestion/validate
+        res = client.post("/ingestion/validate", headers=HEADER, data={})
+        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
+            assert res.status_code != 401
+        else:
+            assert res.status_code == 401
+        client.get("/ingestion/validate").status_code == 403
+
+        # Test ingestion/upload_manifest
+        res = client.post("/ingestion/upload_manifest", headers=HEADER, data={})
+        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
+            assert res.status_code != 401
+        else:
+            assert res.status_code == 401
+        client.get("/ingestion/update_manifest").status_code == 403
+
+        # Test ingestion/upload_assay
+        res = client.post("/ingestion/upload_assay", headers=HEADER, data={})
+        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIMAC_BIOFX_USER]:
+            assert res.status_code != 401
+        else:
+            assert res.status_code == 401
+        client.get("/ingestion/upload_assay").status_code == 403

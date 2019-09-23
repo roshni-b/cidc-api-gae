@@ -16,14 +16,13 @@ from werkzeug.exceptions import Unauthorized, BadRequest
 import gcloud_client
 from models import Users, CIDCRole
 from emails import new_user_registration, confirm_account_approval
-
-from .utils import resource
+from auth import requires_auth
 
 users_api = Blueprint("users", __name__, url_prefix="/users")
 
 
 @users_api.route("/self", methods=["GET"])
-@resource("users/self")
+@requires_auth("self")  # Every authenticated user has access
 def get_self():
     user = _request_ctx_stack.top.current_user
     # Extract fields from the database record

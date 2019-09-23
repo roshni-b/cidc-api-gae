@@ -344,21 +344,3 @@ def test_upload_olink(
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
-
-
-def test_signed_upload_urls(app_no_auth, monkeypatch):
-    """
-    Ensure the signed upload urls endpoint responds with the expected structure
-    
-    TODO: an integration test that actually calls out to GCS
-    """
-    client = app_no_auth.test_client()
-    data = {
-        "directory_name": "my-assay-run-id",
-        "object_names": ["my-fastq-1.fastq.gz", "my-fastq-2.fastq.gz"],
-    }
-
-    monkeypatch.setattr("google.cloud.storage.Client", MagicMock)
-    res = client.post("/ingestion/signed-upload-urls", json=data)
-
-    assert_same_elements(res.json.keys(), data["object_names"])
