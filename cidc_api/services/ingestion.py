@@ -84,13 +84,16 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
 
 @ingestion_api.route("/validate", methods=["POST"])
 @requires_auth(
-    "ingestion/validate",
-    [
-        CIDCRole.ADMIN.value,
-        CIDCRole.CIMAC_BIOFX_USER.value,
-        CIDCRole.NCI_BIOBANK_USER.value,
-    ],
+    "ingestion/validate", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
 )
+def validate_endpoint():
+    """
+    Separated from `validate` function so that RBAC from requires_auth doesn't affect
+    internal invocations of `validate` (in, e.g., the /ingestion/upload_assay endpoint).
+    """
+    return validate()
+
+
 def validate():
     """
     Validate a .xlsx manifest or assay metadata template.
@@ -210,7 +213,7 @@ def upload_manifest():
 
 @ingestion_api.route("/upload_assay", methods=["POST"])
 @requires_auth(
-    "ingestion/upload_manifest", [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
+    "ingestion/upload_assay", [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
 )
 @validate_excel_payload
 def upload_assay():

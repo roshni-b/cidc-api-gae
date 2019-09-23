@@ -374,11 +374,7 @@ def test_rbac(monkeypatch, app, db):
 
         # Test ingestion/validate
         res = client.post("/ingestion/validate", headers=HEADER, data={})
-        if CIDCRole(role) in [
-            CIDCRole.ADMIN,
-            CIDCRole.CIMAC_BIOFX_USER,
-            CIDCRole.NCI_BIOBANK_USER,
-        ]:
+        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
             assert res.status_code != 401
         else:
             assert res.status_code == 401

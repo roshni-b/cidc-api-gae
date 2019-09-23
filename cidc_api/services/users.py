@@ -22,7 +22,7 @@ users_api = Blueprint("users", __name__, url_prefix="/users")
 
 
 @users_api.route("/self", methods=["GET"])
-@requires_auth("self")
+@requires_auth("self")  # Every authenticated user has access
 def get_self():
     user = _request_ctx_stack.top.current_user
     # Extract fields from the database record

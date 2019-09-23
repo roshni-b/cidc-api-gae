@@ -18,6 +18,9 @@ def requires_auth(resource: str, allowed_roles: list = []):
 
     A workaround for the issues with eve.auth.requires_auth: 
     https://github.com/pyeve/eve/issues/860
+
+    NOTE: leaving the `allowed_roles` argument empty allows any authenticated user to access
+    the decorated endpoint.
     """
 
     def decorator(f):
