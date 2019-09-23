@@ -234,14 +234,18 @@ def test_rbac(monkeypatch, app, db):
     user = Users.create(PAYLOAD)
     db.commit()
 
+    client = app.test_client()
+
+    # Check that an unapproved user can GET the `self` resource
+    res = client.get("/users/self", headers=HEADER)
+    assert res.status_code == 200
+
     def update_user_role(role: str):
         """Make current user assume a given role"""
         user = Users.find_by_email(EMAIL)
         user.role = role
         user.approval_date = datetime.now()
         db.commit()
-
-    client = app.test_client()
 
     all_resources = app.config["DOMAIN"].keys()
 
