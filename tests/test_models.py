@@ -179,7 +179,6 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
     """Try to create a downloadable file from artifact_core metadata"""
     # fake file metadata
     file_metadata = {
-        "artifact_category": "Assay Artifact from CIMAC",
         "object_url": "10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
         "file_name": "wes_forward.fastq",
         "file_size_bytes": 1,

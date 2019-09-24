@@ -565,7 +565,6 @@ class DownloadableFiles(CommonColumns):
     file_name = Column(String, nullable=False)
     file_size_bytes = Column(Integer, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
-    artifact_category = Column(String, nullable=False)
     data_format = Column(String, nullable=False)
     # TODO rename assay_type, because we store manifests in there too.
     assay_type = Column(String, nullable=False)
