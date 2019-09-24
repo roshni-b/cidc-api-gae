@@ -325,13 +325,10 @@ def poll_upload_merge_status():
 
     upload = AssayUploads.find_by_id(upload_id)
 
-    if not upload:
-        raise NotFound(f"Could not find assay upload job with id {upload_id}")
-
     # Users should only be able to poll the status of their own uploads
     user = _request_ctx_stack.top.current_user
-    if not user.email == upload.uploader_email:
-        raise Unauthorized(f"{user.email} can only view their own upload status")
+    if not upload or user.email != upload.uploader_email:
+        raise NotFound(f"Could not find assay upload job with id {upload_id}")
 
     if upload.status in [
         AssayUploadStatus.MERGE_COMPLETED.value,

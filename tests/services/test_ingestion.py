@@ -406,7 +406,7 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
     res = client.get(
         f"/ingestion/poll_upload_merge_status?id={not_user_created}", headers=HEADER
     )
-    assert res.status_code == 401
+    assert res.status_code == 404
 
     user_created_url = f"/ingestion/poll_upload_merge_status?id={user_created}"
 

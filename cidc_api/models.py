@@ -190,7 +190,7 @@ class CommonColumns(BaseModel):
 
     @classmethod
     @with_default_session
-    def find_by_id(cls, id: int, session: Session):
+    def find_by_id(cls, id: int, session: Session, **filters: dict):
         """Find the record with this id"""
         return session.query(cls).get(id)
 
