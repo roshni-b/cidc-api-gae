@@ -14,6 +14,7 @@ from cidc_api.models import (
     Permissions,
     DownloadableFiles,
     with_default_session,
+    AssayUploadStatus,
 )
 
 from .util import assert_same_elements
@@ -155,7 +156,7 @@ def test_create_assay_upload(db):
     new_job = AssayUploads.create(
         "wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri
     )
-    job = AssayUploads.find_by_id(new_job.id)
+    job = AssayUploads.find_by_id_and_email(new_job.id, PROFILE["email"])
     assert_same_elements(new_job.gcs_file_map, job.gcs_file_map)
     assert job.status == "started"
 
@@ -216,3 +217,26 @@ def test_with_default_session(app_no_auth):
         check_default_session(app_no_auth.data.driver.session)
         fake_session = "some other db session"
         check_default_session(fake_session, session=fake_session)
+
+
+def test_assay_upload_status():
+    """Test AssayUploadStatus transition validation logic"""
+    upload_statuses = [
+        AssayUploadStatus.UPLOAD_COMPLETED.value,
+        AssayUploadStatus.UPLOAD_FAILED.value,
+    ]
+    merge_statuses = [
+        AssayUploadStatus.MERGE_COMPLETED.value,
+        AssayUploadStatus.MERGE_FAILED.value,
+    ]
+    for upload in upload_statuses:
+        for merge in merge_statuses:
+            for status in [upload, merge]:
+                assert AssayUploadStatus.is_valid_transition(
+                    AssayUploadStatus.STARTED, status
+                )
+                assert not AssayUploadStatus.is_valid_transition(
+                    status, AssayUploadStatus.STARTED
+                )
+            assert AssayUploadStatus.is_valid_transition(upload, merge)
+            assert not AssayUploadStatus.is_valid_transition(merge, upload)

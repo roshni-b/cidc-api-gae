@@ -131,6 +131,11 @@ def _encode_and_publish(content: str, topic: str) -> Future:
     topic = pubsub_publisher.topic_path(GOOGLE_CLOUD_PROJECT, topic)
     data = bytes(content, "utf-8")
 
+    # Don't actually publish to Pub/Sub if running locally
+    if ENV == "dev":
+        print(f"Would publish message {content} to topic {topic}")
+        return
+
     # The Pub/Sub publisher client returns a concurrent.futures.Future
     # containing info about whether the publishing was successful.
     report = pubsub_publisher.publish(topic, data=data)
@@ -144,7 +149,8 @@ def publish_upload_success(job_id: int):
 
     # For now, we wait await this Future. Going forward, maybe
     # we should look for a way to leverage asynchrony here.
-    report.result()
+    if report:
+        report.result()
 
 
 def send_email(to_emails: List[str], subject: str, html_content: str):
@@ -161,4 +167,5 @@ def send_email(to_emails: List[str], subject: str, html_content: str):
     report = _encode_and_publish(email_json, GOOGLE_EMAILS_TOPIC)
 
     # Await confirmation that the published message was received.
-    report.result()
+    if report:
+        report.result()

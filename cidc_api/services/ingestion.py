@@ -6,7 +6,13 @@ import json
 import datetime
 from typing import BinaryIO, Tuple, List
 
-from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
+from werkzeug.exceptions import (
+    BadRequest,
+    InternalServerError,
+    NotFound,
+    NotImplemented,
+    Unauthorized,
+)
 
 from eve import Eve
 from sqlalchemy.orm.exc import NoResultFound
@@ -17,7 +23,7 @@ from cidc_schemas import constants, validate_xlsx, prism, template
 import gcloud_client
 from models import (
     AssayUploads,
-    STATUSES,
+    AssayUploadStatus,
     TRIAL_ID_FIELD,
     TrialMetadata,
     DownloadableFiles,
@@ -32,6 +38,7 @@ ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 
 def register_ingestion_hooks(app: Eve):
     """Set up ingestion-related hooks on an Eve app instance"""
+    app.on_pre_PATCH_assay_uploads = validate_assay_upload_status_update
     app.on_post_PATCH_assay_uploads = on_post_PATCH_assay_uploads
 
 
@@ -293,6 +300,71 @@ def upload_assay():
     return jsonify(response)
 
 
+@ingestion_api.route("/poll_upload_merge_status", methods=["GET"])
+@requires_auth(
+    "ingestion/poll_upload_merge_status",
+    [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value],
+)
+def poll_upload_merge_status():
+    """
+    Check an assay upload's status, and supply the client with directions on when to retry the check.
+
+    Request: no body
+        query parameter "id": the id of the assay_upload of interest
+    Response: application/json
+        status {str or None}: the current status of the assay_upload (empty if not MERGE_FAILED or MERGE_COMPLETED)
+        status_details {str or None}: information about `status` (e.g., error details). Only present if `status` is present.
+        retry_in {str or None}: the time in seconds to wait before making another request to this endpoint (empty if `status` has a value)
+    Raises:
+        400: no "id" query parameter is supplied
+        401: the requesting user did not create the requested upload job
+        404: no upload job with id "id" is found
+    """
+    upload_id = request.args.get("id")
+    if not upload_id:
+        raise BadRequest("Missing expected query parameter 'id'")
+
+    user = _request_ctx_stack.top.current_user
+    upload = AssayUploads.find_by_id_and_email(upload_id, user.email)
+    if not upload:
+        raise NotFound(f"Could not find assay upload job with id {upload_id}")
+
+    if upload.status in [
+        AssayUploadStatus.MERGE_COMPLETED.value,
+        AssayUploadStatus.MERGE_FAILED.value,
+    ]:
+        return jsonify(
+            {"status": upload.status, "status_details": upload.status_details}
+        )
+
+    # TODO: get smarter about retry-scheduling
+    return jsonify({"retry_in": 5})
+
+
+def validate_assay_upload_status_update(request: Request, _: dict):
+    """Event hook ensuring a user is requesting a valid upload job status transition"""
+    # Extract the target status
+    upload_patch = request.json
+    target_status = upload_patch.get("status")
+    if not target_status:
+        # Let Eve's input validation handle this
+        return
+
+    # Look up the current status
+    user = _request_ctx_stack.top.current_user
+    upload_id = request.view_args["id"]
+    upload = AssayUploads.find_by_id_and_email(upload_id, user.email)
+    if not upload:
+        raise NotFound(f"Could not find assay upload job with id {upload_id}")
+
+    # Check that the requested status update is valid
+    if not AssayUploadStatus.is_valid_transition(upload.status, target_status):
+        raise BadRequest(
+            f"Cannot set assay upload status to '{target_status}': "
+            f"current status is '{upload.status}'"
+        )
+
+
 def on_post_PATCH_assay_uploads(request: Request, payload: Response):
     """Revoke the user's write access to the objects they've uploaded to."""
     if not payload.json or not "id" in payload.json:
@@ -306,7 +378,7 @@ def on_post_PATCH_assay_uploads(request: Request, payload: Response):
     status = request.json["status"]
 
     # If this is a successful upload job, publish this info to Pub/Sub
-    if status == "completed":
+    if status == AssayUploadStatus.UPLOAD_COMPLETED.value:
         gcloud_client.publish_upload_success(job_id)
 
     # Revoke the user's write access

@@ -1,4 +1,5 @@
 import io
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,12 +12,20 @@ from werkzeug.exceptions import (
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.services.ingestion import extract_schema_and_xlsx
-from cidc_api.models import TrialMetadata, Users, TRIAL_ID_FIELD
+from cidc_api.models import TrialMetadata, Users, TRIAL_ID_FIELD, AssayUploadStatus
 
 from . import open_data_file
 from ..test_models import db_test
 from ..util import assert_same_elements
 from ..conftest import TEST_EMAIL
+
+from cidc_api.models import (
+    Users,
+    AssayUploads,
+    AssayUploadStatus,
+    TrialMetadata,
+    CIDCRole,
+)
 
 
 @pytest.fixture
@@ -227,7 +236,7 @@ class UploadMocks:
 
 
 def test_upload_wes(
-    app_no_auth, wes_xlsx, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, wes_xlsx, test_user, db_with_trial_and_user, db, monkeypatch
 ):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
@@ -263,7 +272,7 @@ def test_upload_wes(
     # Report an upload failure
     res = client.patch(
         update_url,
-        json={"status": "errored"},
+        json={"status": AssayUploadStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
@@ -271,10 +280,16 @@ def test_upload_wes(
     # This was an upload failure, so success shouldn't have been published
     mocks.publish_success.assert_not_called()
 
+    # Reset the upload status and try the request again
+    with app_no_auth.app_context():
+        job = AssayUploads.find_by_id_and_email(job_id, test_user.email)
+        job.status = AssayUploadStatus.STARTED.value
+        db.commit()
+
     # Report an upload success
     res = client.patch(
         update_url,
-        json={"status": "completed"},
+        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
@@ -294,7 +309,7 @@ OLINK_TESTDATA = [
 
 
 def test_upload_olink(
-    app_no_auth, olink_xlsx, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, olink_xlsx, test_user, db_with_trial_and_user, db, monkeypatch
 ):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
@@ -329,7 +344,7 @@ def test_upload_olink(
     # Report an upload failure
     res = client.patch(
         update_url,
-        json={"status": "errored"},
+        json={"status": AssayUploadStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
@@ -337,10 +352,109 @@ def test_upload_olink(
     # This was an upload failure, so success shouldn't have been published
     mocks.publish_success.assert_not_called()
 
-    # Report an upload success
+    # Test upload status validation - since the upload job's current status
+    # is UPLOAD_FAILED, the API shouldn't permit this status to be updated to
+    # UPLOAD_COMPLETED.
+    bad_res = client.patch(
+        update_url,
+        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
+        headers={"If-Match": res.json["_etag"]},
+    )
+    assert bad_res.status_code == 400
+    assert "Cannot set assay upload status" in bad_res.json["_error"]["message"]
+
+    # Reset the upload status and try the request again
+    with app_no_auth.app_context():
+        job = AssayUploads.find_by_id_and_email(job_id, test_user.email)
+        job.status = AssayUploadStatus.STARTED.value
+        db.commit()
+
     res = client.patch(
         update_url,
-        json={"status": "completed"},
+        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
+
+
+def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
+    """
+    Check pull_upload_merge_status endpoint behavior
+    """
+    trial_id = "test-12345"
+    metadata = {"lead_organization_study_id": trial_id}
+
+    with app.app_context():
+        user = Users.create({"email": test_user.email})
+        user.role = CIDCRole.CIMAC_BIOFX_USER.value
+        user.approval_date = datetime.now()
+
+        Users.create({"email": "other@email.com"})
+        db.add(TrialMetadata(trial_id=trial_id, metadata_json={}))
+        upload_1 = AssayUploads.create(
+            assay_type="wes",
+            uploader_email=test_user.email,
+            gcs_file_map={},
+            metadata=metadata,
+            gcs_xlsx_uri="",
+        )
+
+        user_created = upload_1.id
+        upload_2 = AssayUploads.create(
+            assay_type="wes",
+            uploader_email="other@email.com",
+            gcs_file_map={},
+            metadata=metadata,
+            gcs_xlsx_uri="",
+        )
+
+        not_user_created = upload_2.id
+
+        db.commit()
+
+    monkeypatch.setattr(
+        app.auth, "token_auth", lambda *args: {"email": test_user.email}
+    )
+
+    client = app.test_client()
+
+    HEADER = {"Authorization": "Bearer foo"}
+
+    # Upload not found
+    res = client.get("/ingestion/poll_upload_merge_status?id=12345", headers=HEADER)
+    assert res.status_code == 404
+
+    # Upload not created by user
+    res = client.get(
+        f"/ingestion/poll_upload_merge_status?id={not_user_created}", headers=HEADER
+    )
+    assert res.status_code == 404
+
+    user_created_url = f"/ingestion/poll_upload_merge_status?id={user_created}"
+
+    # Upload not-yet-ready
+    res = client.get(user_created_url, headers=HEADER)
+    assert res.status_code == 200
+    assert "retry_in" in res.json and res.json["retry_in"] == 5
+    assert "status" not in res.json
+
+    test_details = "A human-friendly reason for this "
+    for status in [
+        AssayUploadStatus.MERGE_COMPLETED.value,
+        AssayUploadStatus.MERGE_FAILED.value,
+    ]:
+        # Simulate cloud function merge status update
+        with app.app_context():
+            upload = AssayUploads.find_by_id_and_email(user_created, test_user.email)
+            upload.status = status
+            upload.status_details = test_details
+            db.commit()
+
+        # Upload ready
+        res = client.get(user_created_url, headers=HEADER)
+        assert res.status_code == 200
+        assert "retry_in" not in res.json
+        assert "status" in res.json and res.json["status"] == status
+        assert (
+            "status_details" in res.json and res.json["status_details"] == test_details
+        )

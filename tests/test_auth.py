@@ -224,7 +224,6 @@ def test_role_auth(bearer_auth, app, db):
         assert bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
 
 
-@db_test
 def test_rbac(monkeypatch, app, db):
     """
     Check that the role-based access control constraints appear to be enforced.
@@ -238,8 +237,9 @@ def test_rbac(monkeypatch, app, db):
     HEADER = {"Authorization": f"Bearer {TOKEN}"}
 
     # Initialize user
-    user = Users.create(PAYLOAD)
-    db.commit()
+    with app.app_context():
+        user = Users.create(PAYLOAD)
+        db.commit()
 
     client = app.test_client()
 
@@ -249,10 +249,11 @@ def test_rbac(monkeypatch, app, db):
 
     def update_user_role(role: str):
         """Make current user assume a given role"""
-        user = Users.find_by_email(EMAIL)
-        user.role = role
-        user.approval_date = datetime.now()
-        db.commit()
+        with app.app_context():
+            user = Users.find_by_email(EMAIL)
+            user.role = role
+            user.approval_date = datetime.now()
+            db.commit()
 
     all_resources = app.config["DOMAIN"].keys()
 
@@ -372,26 +373,23 @@ def test_rbac(monkeypatch, app, db):
         assert res.status_code == 200
         client.post("/users/self").status_code == 403
 
-        # Test ingestion/validate
-        res = client.post("/ingestion/validate", headers=HEADER, data={})
-        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
-            assert res.status_code != 401
-        else:
-            assert res.status_code == 401
-        client.get("/ingestion/validate").status_code == 403
+        # Test manifest uploads
+        for resource in ["/ingestion/validate", "/ingestion/upload_manifest"]:
+            res = client.post(resource, headers=HEADER, data={})
+            if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
+                assert res.status_code != 401
+            else:
+                assert res.status_code == 401
+            client.get(resource).status_code == 403
 
-        # Test ingestion/upload_manifest
-        res = client.post("/ingestion/upload_manifest", headers=HEADER, data={})
-        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
-            assert res.status_code != 401
-        else:
-            assert res.status_code == 401
-        client.get("/ingestion/update_manifest").status_code == 403
-
-        # Test ingestion/upload_assay
-        res = client.post("/ingestion/upload_assay", headers=HEADER, data={})
-        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIMAC_BIOFX_USER]:
-            assert res.status_code != 401
-        else:
-            assert res.status_code == 401
-        client.get("/ingestion/upload_assay").status_code == 403
+        # Test assay uploads
+        for resource, method in [
+            ("/ingestion/upload_assay", "post"),
+            ("/ingestion/poll_upload_merge_status", "get"),
+        ]:
+            res = getattr(client, method)(resource, headers=HEADER, data={})
+            if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIMAC_BIOFX_USER]:
+                assert res.status_code != 401
+            else:
+                assert res.status_code == 401
+            client.get(resource).status_code == 403

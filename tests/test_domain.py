@@ -7,7 +7,6 @@ from .test_models import db_test
 EMAIL = "test@email.com"
 
 
-@db_test
 def test_new_users_POST(app_no_auth, db):
     """Check that you can't create a new use with a role or approval date"""
     client = app_no_auth.test_client()

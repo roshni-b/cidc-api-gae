@@ -390,9 +390,6 @@ class TrialMetadata(CommonColumns):
         )
 
 
-STATUSES = ["started", "completed", "errored"]
-
-
 class UploadForeignKeys:
     # Link to the user who created this upload.
     @declared_attr
@@ -458,10 +455,45 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         return upload
 
 
+class AssayUploadStatus(EnumBaseClass):
+    STARTED = "started"
+    # Set by CLI based on GCS upload results
+    UPLOAD_COMPLETED = "upload-completed"
+    UPLOAD_FAILED = "upload-failed"
+    # Set by ingest_uploads cloud function based on merge / transfer results
+    MERGE_COMPLETED = "merge-completed"
+    MERGE_FAILED = "merge-failed"
+
+    @classmethod
+    def is_valid_transition(cls, current: str, target: str) -> bool:
+        """
+        Enforce logic about which state transitions are valid. E.g.,
+        an upload whose status is "merge-completed" should never be updated
+        to "started".
+        """
+        c = cls(current)
+        t = cls(target)
+        upload_statuses = [cls.UPLOAD_COMPLETED, cls.UPLOAD_FAILED]
+        merge_statuses = [cls.MERGE_COMPLETED, cls.MERGE_FAILED]
+        if c != t:
+            if t == cls.STARTED:
+                return False
+            if c in upload_statuses and t not in merge_statuses:
+                return False
+            if c in merge_statuses:
+                return False
+        return True
+
+
+STATUSES = [s.value for s in AssayUploadStatus]
+
+
 class AssayUploads(CommonColumns, UploadForeignKeys):
     __tablename__ = "assay_uploads"
     # The current status of the upload job
-    status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
+    status = Column(Enum(*STATUSES, name="assay_upload_status"), nullable=False)
+    # Text containing feedback on why the upload status is what it is
+    status_details = Column(String, nullable=True)
     # The object names for the files to be uploaded mapped to upload_placeholder uuids
     gcs_file_map = Column(JSONB, nullable=False)
     # track the GCS URI of the .xlsx file used for this upload
@@ -518,6 +550,14 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
             session.commit()
 
         return job
+
+    @classmethod
+    @with_default_session
+    def find_by_id_and_email(cls, id, email, session):
+        upload = super().find_by_id(id, session=session)
+        if upload and upload.uploader_email != email:
+            return None
+        return upload
 
 
 class DownloadableFiles(CommonColumns):
