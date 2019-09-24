@@ -325,7 +325,7 @@ def poll_upload_merge_status():
         raise BadRequest("Missing expected query parameter 'id'")
 
     user = _request_ctx_stack.top.current_user
-    upload = AssayUploads.find_by_id(upload_id, user.email)
+    upload = AssayUploads.find_by_id_with_email(upload_id, user.email)
     if not upload:
         raise NotFound(f"Could not find assay upload job with id {upload_id}")
 
@@ -353,7 +353,7 @@ def validate_assay_upload_status_update(request: Request, _: dict):
     # Look up the current status
     user = _request_ctx_stack.top.current_user
     upload_id = request.view_args["id"]
-    upload = AssayUploads.find_by_id(upload_id, user.email)
+    upload = AssayUploads.find_by_id_with_email(upload_id, user.email)
     if not upload:
         raise NotFound(f"Could not find assay upload job with id {upload_id}")
 

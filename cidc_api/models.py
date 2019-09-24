@@ -553,7 +553,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
 
     @classmethod
     @with_default_session
-    def find_by_id(cls, id, email, session):
+    def find_by_id_and_email(cls, id, email, session):
         upload = super().find_by_id(id, session=session)
         if upload and upload.uploader_email != email:
             return None

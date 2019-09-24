@@ -282,7 +282,7 @@ def test_upload_wes(
 
     # Reset the upload status and try the request again
     with app_no_auth.app_context():
-        job = AssayUploads.find_by_id(job_id, test_user.email)
+        job = AssayUploads.find_by_id_with_email(job_id, test_user.email)
         job.status = AssayUploadStatus.STARTED.value
         db.commit()
 
@@ -365,7 +365,7 @@ def test_upload_olink(
 
     # Reset the upload status and try the request again
     with app_no_auth.app_context():
-        job = AssayUploads.find_by_id(job_id, test_user.email)
+        job = AssayUploads.find_by_id_with_email(job_id, test_user.email)
         job.status = AssayUploadStatus.STARTED.value
         db.commit()
 
@@ -445,7 +445,7 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
     ]:
         # Simulate cloud function merge status update
         with app.app_context():
-            upload = AssayUploads.find_by_id(user_created, test_user.email)
+            upload = AssayUploads.find_by_id_with_email(user_created, test_user.email)
             upload.status = status
             upload.status_details = test_details
             db.commit()
