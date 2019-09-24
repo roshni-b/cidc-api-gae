@@ -149,7 +149,8 @@ def publish_upload_success(job_id: int):
 
     # For now, we wait await this Future. Going forward, maybe
     # we should look for a way to leverage asynchrony here.
-    report.result()
+    if report:
+        report.result()
 
 
 def send_email(to_emails: List[str], subject: str, html_content: str):
@@ -166,4 +167,5 @@ def send_email(to_emails: List[str], subject: str, html_content: str):
     report = _encode_and_publish(email_json, GOOGLE_EMAILS_TOPIC)
 
     # Await confirmation that the published message was received.
-    report.result()
+    if report:
+        report.result()
