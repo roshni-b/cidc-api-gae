@@ -240,4 +240,3 @@ def test_assay_upload_status():
                 )
             assert AssayUploadStatus.is_valid_transition(upload, merge)
             assert not AssayUploadStatus.is_valid_transition(merge, upload)
-
