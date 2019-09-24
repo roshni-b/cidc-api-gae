@@ -156,7 +156,7 @@ def test_create_assay_upload(db):
     new_job = AssayUploads.create(
         "wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri
     )
-    job = AssayUploads.find_by_id_with_email(new_job.id, PROFILE["email"])
+    job = AssayUploads.find_by_id_and_email(new_job.id, PROFILE["email"])
     assert_same_elements(new_job.gcs_file_map, job.gcs_file_map)
     assert job.status == "started"
 
