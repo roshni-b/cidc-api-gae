@@ -44,12 +44,6 @@ class CIDCRole(EnumBaseClass):
 ROLES = [role.value for role in CIDCRole]
 
 # See: https://github.com/CIMAC-CIDC/cidc-schemas/blob/master/cidc_schemas/schemas/artifacts/artifact_core.json
-ARTIFACT_CATEGORIES = [
-    "Assay Artifact from CIMAC",
-    "Pipeline Artifact",
-    "Manifest File",
-    "Other",
-]
 FILE_TYPES = [
     "FASTA",
     "FASTQ",
@@ -571,9 +565,6 @@ class DownloadableFiles(CommonColumns):
     file_name = Column(String, nullable=False)
     file_size_bytes = Column(Integer, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
-    artifact_category = Column(
-        Enum(*ARTIFACT_CATEGORIES, name="artifact_category"), nullable=False
-    )
     data_format = Column(String, nullable=False)
     # TODO rename assay_type, because we store manifests in there too.
     assay_type = Column(String, nullable=False)
