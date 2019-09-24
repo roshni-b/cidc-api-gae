@@ -236,7 +236,7 @@ class UploadMocks:
 
 
 def test_upload_wes(
-    app_no_auth, wes_xlsx, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, wes_xlsx, test_user, db_with_trial_and_user, db, monkeypatch
 ):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
@@ -280,6 +280,12 @@ def test_upload_wes(
     # This was an upload failure, so success shouldn't have been published
     mocks.publish_success.assert_not_called()
 
+    # Reset the upload status and try the request again
+    with app_no_auth.app_context():
+        job = AssayUploads.find_by_id(job_id, test_user.email)
+        job.status = AssayUploadStatus.STARTED.value
+        db.commit()
+
     # Report an upload success
     res = client.patch(
         update_url,
@@ -303,7 +309,7 @@ OLINK_TESTDATA = [
 
 
 def test_upload_olink(
-    app_no_auth, olink_xlsx, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, olink_xlsx, test_user, db_with_trial_and_user, db, monkeypatch
 ):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
@@ -346,7 +352,23 @@ def test_upload_olink(
     # This was an upload failure, so success shouldn't have been published
     mocks.publish_success.assert_not_called()
 
-    # Report an upload success
+    # Test upload status validation - since the upload job's current status
+    # is UPLOAD_FAILED, the API shouldn't permit this status to be updated to
+    # UPLOAD_COMPLETED.
+    bad_res = client.patch(
+        update_url,
+        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
+        headers={"If-Match": res.json["_etag"]},
+    )
+    assert bad_res.status_code == 400
+    assert "Cannot set assay upload status" in bad_res.json["_error"]["message"]
+
+    # Reset the upload status and try the request again
+    with app_no_auth.app_context():
+        job = AssayUploads.find_by_id(job_id, test_user.email)
+        job.status = AssayUploadStatus.STARTED.value
+        db.commit()
+
     res = client.patch(
         update_url,
         json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
@@ -423,7 +445,7 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
     ]:
         # Simulate cloud function merge status update
         with app.app_context():
-            upload = AssayUploads.find_by_id(user_created)
+            upload = AssayUploads.find_by_id(user_created, test_user.email)
             upload.status = status
             upload.status_details = test_details
             db.commit()

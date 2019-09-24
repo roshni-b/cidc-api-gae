@@ -190,7 +190,7 @@ class CommonColumns(BaseModel):
 
     @classmethod
     @with_default_session
-    def find_by_id(cls, id: int, session: Session, **filters: dict):
+    def find_by_id(cls, id: int, session: Session):
         """Find the record with this id"""
         return session.query(cls).get(id)
 
@@ -464,6 +464,26 @@ class AssayUploadStatus(EnumBaseClass):
     MERGE_COMPLETED = "merge-completed"
     MERGE_FAILED = "merge-failed"
 
+    @classmethod
+    def is_valid_transition(cls, current: str, target: str) -> bool:
+        """
+        Enforce logic about which state transitions are valid. E.g.,
+        an upload whose status is "merge-completed" should never be updated
+        to "started".
+        """
+        c = cls(current)
+        t = cls(target)
+        upload_statuses = [cls.UPLOAD_COMPLETED, cls.UPLOAD_FAILED]
+        merge_statuses = [cls.MERGE_COMPLETED, cls.MERGE_FAILED]
+        if c != t:
+            if t == cls.STARTED:
+                return False
+            if c in upload_statuses and t not in merge_statuses:
+                return False
+            if c in merge_statuses:
+                return False
+        return True
+
 
 STATUSES = [s.value for s in AssayUploadStatus]
 
@@ -530,6 +550,14 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
             session.commit()
 
         return job
+
+    @classmethod
+    @with_default_session
+    def find_by_id(cls, id, email, session):
+        upload = super().find_by_id(id, session=session)
+        if upload and upload.uploader_email != email:
+            return None
+        return upload
 
 
 class DownloadableFiles(CommonColumns):

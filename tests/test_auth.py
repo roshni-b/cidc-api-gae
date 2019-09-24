@@ -224,7 +224,6 @@ def test_role_auth(bearer_auth, app, db):
         assert bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
 
 
-@db_test
 def test_rbac(monkeypatch, app, db):
     """
     Check that the role-based access control constraints appear to be enforced.
@@ -238,8 +237,9 @@ def test_rbac(monkeypatch, app, db):
     HEADER = {"Authorization": f"Bearer {TOKEN}"}
 
     # Initialize user
-    user = Users.create(PAYLOAD)
-    db.commit()
+    with app.app_context():
+        user = Users.create(PAYLOAD)
+        db.commit()
 
     client = app.test_client()
 
@@ -249,10 +249,11 @@ def test_rbac(monkeypatch, app, db):
 
     def update_user_role(role: str):
         """Make current user assume a given role"""
-        user = Users.find_by_email(EMAIL)
-        user.role = role
-        user.approval_date = datetime.now()
-        db.commit()
+        with app.app_context():
+            user = Users.find_by_email(EMAIL)
+            user.role = role
+            user.approval_date = datetime.now()
+            db.commit()
 
     all_resources = app.config["DOMAIN"].keys()
 

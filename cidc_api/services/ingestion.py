@@ -38,6 +38,7 @@ ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 
 def register_ingestion_hooks(app: Eve):
     """Set up ingestion-related hooks on an Eve app instance"""
+    app.on_pre_PATCH_assay_uploads = validate_assay_upload_status_update
     app.on_post_PATCH_assay_uploads = on_post_PATCH_assay_uploads
 
 
@@ -323,11 +324,9 @@ def poll_upload_merge_status():
     if not upload_id:
         raise BadRequest("Missing expected query parameter 'id'")
 
-    upload = AssayUploads.find_by_id(upload_id)
-
-    # Users should only be able to poll the status of their own uploads
     user = _request_ctx_stack.top.current_user
-    if not upload or user.email != upload.uploader_email:
+    upload = AssayUploads.find_by_id(upload_id, user.email)
+    if not upload:
         raise NotFound(f"Could not find assay upload job with id {upload_id}")
 
     if upload.status in [
@@ -340,6 +339,30 @@ def poll_upload_merge_status():
 
     # TODO: get smarter about retry-scheduling
     return jsonify({"retry_in": 5})
+
+
+def validate_assay_upload_status_update(request: Request, _: dict):
+    """Event hook ensuring a user is requesting a valid upload job status transition"""
+    # Extract the target status
+    upload_patch = request.json
+    target_status = upload_patch.get("status")
+    if not target_status:
+        # Let Eve's input validation handle this
+        return
+
+    # Look up the current status
+    user = _request_ctx_stack.top.current_user
+    upload_id = request.view_args["id"]
+    upload = AssayUploads.find_by_id(upload_id, user.email)
+    if not upload:
+        raise NotFound(f"Could not find assay upload job with id {upload_id}")
+
+    # Check that the requested status update is valid
+    if not AssayUploadStatus.is_valid_transition(upload.status, target_status):
+        raise BadRequest(
+            f"Cannot set assay upload status to '{target_status}': "
+            f"current status is '{upload.status}'"
+        )
 
 
 def on_post_PATCH_assay_uploads(request: Request, payload: Response):
