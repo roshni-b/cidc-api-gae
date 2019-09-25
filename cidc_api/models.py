@@ -25,7 +25,7 @@ from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 
-from cidc_schemas import prism
+from cidc_schemas import prism, unprism
 
 ## Constants
 ORGS = ["CIDC", "DFCI", "ICAHN", "STANFORD", "ANDERSON"]
@@ -382,6 +382,24 @@ class TrialMetadata(CommonColumns):
             uploaded_timestamp=gcs_object.time_created.isoformat(),
             md5_hash=gcs_object.md5_hash,
         )
+
+    @classmethod
+    @with_default_session
+    def generate_patient_csv(cls, trial_id: str, session: Session) -> str:
+        """Get the current patient CSV for this trial."""
+        trial = cls.find_by_trial_id(trial_id)
+        if not trial:
+            raise NoResultFound(f"No trial found with id {trial_id}")
+        return unprism.unprism_participants(trial.metadata_json)
+
+    @classmethod
+    @with_default_session
+    def generate_sample_csv(cls, trial_id: str, session: Session) -> str:
+        """Get the current sample CSV for this trial."""
+        trial = cls.find_by_trial_id(trial_id)
+        if not trial:
+            raise NoResultFound(f"No trial found with id {trial_id}")
+        return unprism.unprism_samples(trial.metadata_json)
 
 
 class UploadForeignKeys:
