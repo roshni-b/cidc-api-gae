@@ -75,7 +75,7 @@ def test_trial_metadata_patch_manifest(db):
     metadata_with_participant["participants"] = [
         {
             "samples": [],
-            "cimac_participant_id": "b",
+            "cimac_participant_id": "CM-TEST-1234",
             "trial_participant_id": "trial a",
             "cohort_id": "cohort_id",
             "arm_id": "arm_id",
