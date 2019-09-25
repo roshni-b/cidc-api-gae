@@ -33,7 +33,7 @@ before_deploy:
 deploy:
   - provider: script
     # we need `beta` for the `--no-cache` flag, which disables dependency caching
-    script: gcloud beta app deploy app.staging.yaml --project cidc-dfci-staging --no-cache
+    script: gcloud beta app deploy app.staging.yaml --project cidc-dfci-staging --no-cache -v "travis-$TRAVIS_BRANCH-$TRAVIS_COMMIT-$TRAVIS_BUILD_NUMBER"
     on:
       branch: master
   - provider: script
