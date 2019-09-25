@@ -68,25 +68,23 @@ ASSAY_UPLOAD = "/ingestion/upload_assay"
 MANIFEST_UPLOAD = "/ingestion/upload_manifest"
 
 
-
 def test_validate_valid_template(app_no_auth, some_file, monkeypatch):
     """Ensure that the validation endpoint returns no errors for a known-valid .xlsx file"""
     client = app_no_auth.test_client()
     data = form_data("pbmc.xlsx", some_file, "pbmc")
 
     mocks = UploadMocks(monkeypatch)
-    
+
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 200
     assert res.json["errors"] == []
     mocks.validate_excel.assert_called_once()
 
 
-
 def test_validate_invalid_template(app_no_auth, some_file, monkeypatch):
     """Ensure that the validation endpoint returns errors for a known-invalid .xlsx file"""
     mocks = UploadMocks(monkeypatch)
-    mocks.validate_excel.return_value = ['error-1']
+    mocks.validate_excel.return_value = ["error-1"]
     client = app_no_auth.test_client()
     data = form_data("pbmc.xlsx", some_file, "pbmc")
     res = client.post(VALIDATE, data=data)
@@ -130,12 +128,10 @@ def test_upload_manifest_non_existing_trial_id(
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
 
     mocks = UploadMocks(monkeypatch, prismify_trial_id="test-non-existing-trial-id")
-    
+
     client = app_no_auth.test_client()
 
-    res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc")
-    )
+    res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 400
     assert "test-non-existing-trial-id" in res.json["_error"]["message"]
 
@@ -143,7 +139,7 @@ def test_upload_manifest_non_existing_trial_id(
     mocks.upload_xlsx.assert_not_called()
     mocks.validate_excel.assert_called_once()
     mocks.prismify.assert_called_once()
-    
+
 
 def test_upload_invalid_manifest(
     app_no_auth, some_file, test_user, db_with_trial_and_user, monkeypatch
@@ -156,9 +152,7 @@ def test_upload_invalid_manifest(
 
     client = app_no_auth.test_client()
 
-    res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc")
-    )
+    res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 400
 
     assert len(res.json["_error"]["message"]["errors"]) > 0
@@ -197,16 +191,21 @@ def test_upload_manifest(
 
     client = app_no_auth.test_client()
 
-    res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc")
-    )
+    res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 200
 
     # Check that we tried to upload the excel file
     mocks.make_all_assertions()
 
+
 class UploadMocks:
-    def __init__(self, monkeypatch, prismify_trial_id="test_trial", prismify_file_entries=None, prismify_extra=None):
+    def __init__(
+        self,
+        monkeypatch,
+        prismify_trial_id="test_trial",
+        prismify_file_entries=None,
+        prismify_extra=None,
+    ):
         self.grant_write = MagicMock()
         monkeypatch.setattr("gcloud_client.grant_upload_access", self.grant_write)
 
@@ -228,23 +227,28 @@ class UploadMocks:
         )
 
         self.validate_excel = MagicMock(name="validate_excel")
-        monkeypatch.setattr("cidc_schemas.template.Template.validate_excel",  self.validate_excel)
+        monkeypatch.setattr(
+            "cidc_schemas.template.Template.validate_excel", self.validate_excel
+        )
         self.validate_excel.return_value = True
 
         self.prismify = MagicMock(name="prismify")
-        monkeypatch.setattr("cidc_schemas.prism.prismify",  self.prismify)
-        self.prismify.return_value = dict(lead_organization_study_id=prismify_trial_id, **(prismify_extra or {})), \
-            prismify_file_entries or []
-
+        monkeypatch.setattr("cidc_schemas.prism.prismify", self.prismify)
+        self.prismify.return_value = (
+            dict(
+                lead_organization_study_id=prismify_trial_id, **(prismify_extra or {})
+            ),
+            prismify_file_entries or [],
+        )
 
     def make_all_assertions(self):
         self.upload_xlsx.assert_called_once()
-        self.prismify.assert_called_once() 
-        self.validate_excel.assert_called_once() 
-
+        self.prismify.assert_called_once()
+        self.validate_excel.assert_called_once()
 
 
 finfo = namedtuple("finfo", ["gs_key", "local_path", "upload_placeholder"])
+
 
 def test_upload_wes(
     app_no_auth, some_file, test_user, db_with_trial_and_user, db, monkeypatch
@@ -252,9 +256,12 @@ def test_upload_wes(
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 
-    mocks = UploadMocks(monkeypatch, prismify_file_entries=[
-        finfo('test_trial/url/file.ext', "localfile.ext", 'uuid-1')
-    ])
+    mocks = UploadMocks(
+        monkeypatch,
+        prismify_file_entries=[
+            finfo("test_trial/url/file.ext", "localfile.ext", "uuid-1")
+        ],
+    )
 
     res = client.post(ASSAY_UPLOAD, data=form_data("wes.xlsx", some_file, "wes"))
     assert res.json
@@ -326,9 +333,13 @@ def test_upload_olink(
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 
-    mocks = UploadMocks(monkeypatch, prismify_file_entries=[
-        finfo(url, lp, 'uuid'+str(i)) for i, (lp, url) in enumerate(OLINK_TESTDATA)
-        ])
+    mocks = UploadMocks(
+        monkeypatch,
+        prismify_file_entries=[
+            finfo(url, lp, "uuid" + str(i))
+            for i, (lp, url) in enumerate(OLINK_TESTDATA)
+        ],
+    )
 
     res = client.post(ASSAY_UPLOAD, data=form_data("olink.xlsx", some_file, "olink"))
     assert res.json
