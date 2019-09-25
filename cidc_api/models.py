@@ -584,7 +584,7 @@ class DownloadableFiles(CommonColumns):
         commit: bool = True,
     ):
         """
-        Create a new DownloadableFiles record from a GCS blob.
+        Create a new DownloadableFiles record from artifact metadata.
         """
         etag = make_etag(*(file_metadata.values()))
 
@@ -598,6 +598,37 @@ class DownloadableFiles(CommonColumns):
 
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
+        if commit:
+            session.commit()
+
+        return new_file
+
+    @staticmethod
+    @with_default_session
+    def create_from_blob(
+        trial_id: str,
+        assay_type: str,
+        data_format: str,
+        blob: Blob,
+        session: Session,
+        commit: bool = True,
+    ):
+        """
+        Create a new DownloadableFiles record from from a GCS blob.
+        """
+        new_file = DownloadableFiles(
+            trial_id=trial_id,
+            assay_type=assay_type,
+            data_format=data_format,
+            object_url=blob.name,
+            file_name=blob.name,
+            file_size_bytes=blob.size,
+            md5_hash=blob.md5_hash,
+            uploaded_timestamp=blob.time_created,
+        )
+
+        session.add(new_file)
+
         if commit:
             session.commit()
 

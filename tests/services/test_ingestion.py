@@ -223,6 +223,7 @@ class UploadMocks:
         self.upload_xlsx.return_value.name = "trial_id/xlsx/assays/wes/12345"
         self.upload_xlsx.return_value.size = 100
         self.upload_xlsx.return_value.md5_hash = "md5_hash"
+        self.upload_xlsx.return_value.time_created = datetime.now()
 
         monkeypatch.setattr("gcloud_client.upload_xlsx_to_gcs", self.upload_xlsx)
 

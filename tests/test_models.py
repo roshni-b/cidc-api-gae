@@ -205,6 +205,26 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
         assert getattr(new_file, k) == file_metadata[k]
 
 
+@db_test
+def test_create_downloadable_file_from_blob(db, monkeypatch):
+    """Try to create a downloadable file from a GCS blob"""
+    fake_blob = MagicMock()
+    fake_blob.name = "name"
+    fake_blob.md5_hash = "12345"
+    fake_blob.size = 5
+    fake_blob.time_created = datetime.now()
+
+    db.add(TrialMetadata(trial_id="id", metadata_json={}))
+    df = DownloadableFiles.create_from_blob(
+        "id", "pbmc", "Shipping Manifest", fake_blob
+    )
+
+    # Check that the file was created
+    df_lookup = DownloadableFiles.find_by_id(df.id)
+    assert df_lookup.object_url == fake_blob.name
+    assert df_lookup.data_format == "Shipping Manifest"
+
+
 def test_with_default_session(app_no_auth):
     """Test that the with_default_session decorator provides defaults as expected"""
 

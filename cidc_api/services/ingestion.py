@@ -190,17 +190,11 @@ def upload_manifest():
     # TODO maybe rely on default session
     session = Session.object_session(trial)
     # TODO move to prism
-    DownloadableFiles.create_from_metadata(
+    DownloadableFiles.create_from_blob(
         trial_id,
-        assay_type=schema_hint,
-        file_metadata={
-            "object_url": gcs_blob.name,
-            "file_name": gcs_blob.name,
-            "file_size_bytes": gcs_blob.size,
-            "md5_hash": gcs_blob.md5_hash,
-            "uploaded_timestamp": upload_moment,
-            "data_format": "Shipping Manifest",
-        },
+        schema_hint,
+        "Shipping Manifest",
+        gcs_blob,
         session=session,
         commit=False,
     )
