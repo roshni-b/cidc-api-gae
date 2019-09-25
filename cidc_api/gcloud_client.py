@@ -15,6 +15,7 @@ from config.settings import (
     GOOGLE_DATA_BUCKET,
     GOOGLE_CLOUD_PROJECT,
     GOOGLE_EMAILS_TOPIC,
+    GOOGLE_PATIENT_SAMPLE_TOPIC,
     TESTING,
     ENV,
 )
@@ -149,6 +150,15 @@ def publish_upload_success(job_id: int):
 
     # For now, we wait await this Future. Going forward, maybe
     # we should look for a way to leverage asynchrony here.
+    if report:
+        report.result()
+
+
+def publish_patient_sample_update(trial_id: int):
+    """Publish to the patient_sample_update topic that patient/sample info for the given trial has been updated."""
+    report = _encode_and_publish(str(trial_id), GOOGLE_PATIENT_SAMPLE_TOPIC)
+
+    # Wait for response from pub/sub
     if report:
         report.result()
 

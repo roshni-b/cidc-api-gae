@@ -194,6 +194,9 @@ def test_upload_manifest(
     res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 200
 
+    # Check that we tried to publish a patient/sample update
+    mocks.publish_patient_sample_update.assert_called_once()
+
     # Check that we tried to upload the excel file
     mocks.make_all_assertions()
 
@@ -224,6 +227,12 @@ class UploadMocks:
         self.publish_success = MagicMock(name="publish_success")
         monkeypatch.setattr(
             "gcloud_client.publish_upload_success", self.publish_success
+        )
+
+        self.publish_patient_sample_update = MagicMock()
+        monkeypatch.setattr(
+            "gcloud_client.publish_patient_sample_update",
+            self.publish_patient_sample_update,
         )
 
         self.validate_excel = MagicMock(name="validate_excel")

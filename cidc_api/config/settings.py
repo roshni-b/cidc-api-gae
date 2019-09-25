@@ -32,6 +32,7 @@ GOOGLE_UPLOAD_BUCKET = environ.get("GOOGLE_UPLOAD_BUCKET")
 GOOGLE_UPLOAD_TOPIC = environ.get("GOOGLE_UPLOAD_TOPIC")
 GOOGLE_DATA_BUCKET = environ.get("GOOGLE_DATA_BUCKET")
 GOOGLE_UPLOAD_ROLE = "roles/storage.objectCreator"
+GOOGLE_PATIENT_SAMPLE_TOPIC = environ.get("GOOGLE_PATIENT_SAMPLE_TOPIC")
 GOOGLE_EMAILS_TOPIC = environ.get("GOOGLE_EMAILS_TOPIC")
 
 # Download the credentials file to a temporary file,

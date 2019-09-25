@@ -183,6 +183,9 @@ def upload_manifest():
     except NoResultFound as e:
         raise BadRequest(f"Trial with {TRIAL_ID_FIELD}={trial_id} not found.")
 
+    # Publish that this trial's metadata has been updated
+    gcloud_client.publish_patient_sample_update(trial_id)
+
     xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         trial_id, "manifest", schema_hint, xlsx_file, upload_moment
