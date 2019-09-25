@@ -31,30 +31,9 @@ from cidc_api.models import (
 
 
 @pytest.fixture
-def pbmc_valid_xlsx():
-    with open_data_file("pbmc_valid.xlsx") as xlsx:
-        yield xlsx
-
-
-@pytest.fixture
-def pbmc_non_existing_trial():
-    with open_data_file("pbmc_non_existing_trial.xlsx") as xlsx:
-        yield xlsx
-
-
-@pytest.fixture
-def pbmc_invalid_xlsx():
-    yield open_data_file("pbmc_invalid.xlsx")
-
-
-@pytest.fixture
-def wes_xlsx():
-    yield open_data_file("wes_data.xlsx")
-
-
-@pytest.fixture
-def olink_xlsx():
-    yield open_data_file("olink_data.xlsx")
+def some_file():
+    with open_data_file("some_file") as f:
+        yield f
 
 
 @pytest.fixture
@@ -90,10 +69,10 @@ MANIFEST_UPLOAD = "/ingestion/upload_manifest"
 
 
 
-def test_validate_valid_template(app_no_auth, pbmc_valid_xlsx, monkeypatch):
+def test_validate_valid_template(app_no_auth, some_file, monkeypatch):
     """Ensure that the validation endpoint returns no errors for a known-valid .xlsx file"""
     client = app_no_auth.test_client()
-    data = form_data("pbmc.xlsx", pbmc_valid_xlsx, "pbmc")
+    data = form_data("pbmc.xlsx", some_file, "pbmc")
 
     mocks = UploadMocks(monkeypatch)
     
@@ -104,10 +83,12 @@ def test_validate_valid_template(app_no_auth, pbmc_valid_xlsx, monkeypatch):
 
 
 
-def test_validate_invalid_template(app_no_auth, pbmc_invalid_xlsx):
+def test_validate_invalid_template(app_no_auth, some_file, monkeypatch):
     """Ensure that the validation endpoint returns errors for a known-invalid .xlsx file"""
+    mocks = UploadMocks(monkeypatch)
+    mocks.validate_excel.return_value = ['error-1']
     client = app_no_auth.test_client()
-    data = form_data("pbmc.xlsx", pbmc_invalid_xlsx, "pbmc")
+    data = form_data("pbmc.xlsx", some_file, "pbmc")
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 200
     assert len(res.json["errors"]) > 0
@@ -144,7 +125,7 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
 
 
 def test_upload_manifest_non_existing_trial_id(
-    app_no_auth, pbmc_non_existing_trial, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, some_file, test_user, db_with_trial_and_user, monkeypatch
 ):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
 
@@ -153,7 +134,7 @@ def test_upload_manifest_non_existing_trial_id(
     client = app_no_auth.test_client()
 
     res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_non_existing_trial, "pbmc")
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc")
     )
     assert res.status_code == 400
     assert "test-non-existing-trial-id" in res.json["_error"]["message"]
@@ -165,7 +146,7 @@ def test_upload_manifest_non_existing_trial_id(
     
 
 def test_upload_invalid_manifest(
-    app_no_auth, pbmc_invalid_xlsx, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, some_file, test_user, db_with_trial_and_user, monkeypatch
 ):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
 
@@ -176,7 +157,7 @@ def test_upload_invalid_manifest(
     client = app_no_auth.test_client()
 
     res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_invalid_xlsx, "pbmc")
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc")
     )
     assert res.status_code == 400
 
@@ -187,7 +168,7 @@ def test_upload_invalid_manifest(
 
 
 def test_upload_unsupported_manifest(
-    app_no_auth, pbmc_valid_xlsx, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, some_file, test_user, db_with_trial_and_user, monkeypatch
 ):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
 
@@ -196,7 +177,7 @@ def test_upload_unsupported_manifest(
     client = app_no_auth.test_client()
 
     res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_valid_xlsx, "UNSUPPORTED_")
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "UNSUPPORTED_")
     )
     assert res.status_code == 400
 
@@ -208,7 +189,7 @@ def test_upload_unsupported_manifest(
 
 
 def test_upload_manifest(
-    app_no_auth, pbmc_valid_xlsx, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, some_file, test_user, db_with_trial_and_user, monkeypatch
 ):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
 
@@ -217,7 +198,7 @@ def test_upload_manifest(
     client = app_no_auth.test_client()
 
     res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_valid_xlsx, "pbmc")
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc")
     )
     assert res.status_code == 200
 
@@ -266,7 +247,7 @@ class UploadMocks:
 finfo = namedtuple("finfo", ["gs_key", "local_path", "upload_placeholder"])
 
 def test_upload_wes(
-    app_no_auth, wes_xlsx, test_user, db_with_trial_and_user, db, monkeypatch
+    app_no_auth, some_file, test_user, db_with_trial_and_user, db, monkeypatch
 ):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
@@ -275,14 +256,13 @@ def test_upload_wes(
         finfo('test_trial/url/file.ext', "localfile.ext", 'uuid-1')
     ])
 
-    res = client.post(ASSAY_UPLOAD, data=form_data("wes.xlsx", wes_xlsx, "wes"))
+    res = client.post(ASSAY_UPLOAD, data=form_data("wes.xlsx", some_file, "wes"))
     assert res.json
     assert "url_mapping" in res.json
 
     url_mapping = res.json["url_mapping"]
 
     # We expect local_path to map to a gcs object name with gcs_prefix
-    # based on the contents of wes_xlsx.
     local_path = "localfile.ext"
     gcs_prefix = "test_trial/url/file.ext"
     gcs_object_name = url_mapping[local_path]
@@ -341,7 +321,7 @@ OLINK_TESTDATA = [
 
 
 def test_upload_olink(
-    app_no_auth, olink_xlsx, test_user, db_with_trial_and_user, db, monkeypatch
+    app_no_auth, some_file, test_user, db_with_trial_and_user, db, monkeypatch
 ):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
@@ -350,14 +330,13 @@ def test_upload_olink(
         finfo(url, lp, 'uuid'+str(i)) for i, (lp, url) in enumerate(OLINK_TESTDATA)
         ])
 
-    res = client.post(ASSAY_UPLOAD, data=form_data("olink.xlsx", olink_xlsx, "olink"))
+    res = client.post(ASSAY_UPLOAD, data=form_data("olink.xlsx", some_file, "olink"))
     assert res.json
     assert "url_mapping" in res.json
 
     url_mapping = res.json["url_mapping"]
 
-    # We expect local_path to map to a gcs object name with gcs_prefix
-    # based on the contents of olink_xlsx.
+    # We expect local_path to map to a gcs object name with gcs_prefix.
     for local_path, gcs_prefix in OLINK_TESTDATA:
         gcs_object_name = url_mapping[local_path]
         assert local_path in url_mapping
