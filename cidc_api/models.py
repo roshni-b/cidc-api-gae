@@ -387,7 +387,7 @@ class TrialMetadata(CommonColumns):
     @with_default_session
     def generate_patient_csv(cls, trial_id: str, session: Session) -> str:
         """Get the current patient CSV for this trial."""
-        trial = cls.find_by_trial_id(trial_id)
+        trial = cls.find_by_trial_id(trial_id, session=session)
         if not trial:
             raise NoResultFound(f"No trial found with id {trial_id}")
         return unprism.unprism_participants(trial.metadata_json)
@@ -396,7 +396,7 @@ class TrialMetadata(CommonColumns):
     @with_default_session
     def generate_sample_csv(cls, trial_id: str, session: Session) -> str:
         """Get the current sample CSV for this trial."""
-        trial = cls.find_by_trial_id(trial_id)
+        trial = cls.find_by_trial_id(trial_id, session=session)
         if not trial:
             raise NoResultFound(f"No trial found with id {trial_id}")
         return unprism.unprism_samples(trial.metadata_json)
