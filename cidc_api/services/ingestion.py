@@ -18,7 +18,7 @@ from eve import Eve
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
-from cidc_schemas import constants, validate_xlsx, prism, template
+from cidc_schemas import constants, validate_xlsx, prism, template, template_reader
 
 import gcloud_client
 from models import (
@@ -116,6 +116,11 @@ def validate():
         error_list = validate_xlsx(
             template_file, template_type, raise_validation_errors=False
         )
+    except template_reader.ValidationError as e:
+        # In case raise_validation_errors=False isn't respected by validate_xlsx,
+        # capture the validation error and return its message.
+        # TODO: fix this in cidc_schemas, not here.
+        error_list = [str(e)]
     except Exception as e:
         if "unknown template type" in str(e):
             raise BadRequest(str(e))
