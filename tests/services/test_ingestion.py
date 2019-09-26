@@ -11,10 +11,11 @@ from werkzeug.exceptions import (
     BadRequest,
     NotImplemented,
 )
+from cidc_schemas import prism
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.services.ingestion import extract_schema_and_xlsx
-from cidc_api.models import TrialMetadata, Users, TRIAL_ID_FIELD, AssayUploadStatus
+from cidc_api.models import TrialMetadata, Users, AssayUploadStatus
 
 from . import open_data_file
 from ..test_models import db_test
@@ -41,7 +42,7 @@ def some_file():
 def db_with_trial_and_user(db, test_user):
     # Create the target trial and the uploader
     TrialMetadata.create(
-        "test_trial", {TRIAL_ID_FIELD: "test_trial", "participants": []}
+        "test_trial", {prism.PROTOCOL_ID_FIELD_NAME: "test_trial", "participants": []}
     )
     Users.create(profile={"email": test_user.email})
 
@@ -244,9 +245,7 @@ class UploadMocks:
         self.prismify = MagicMock(name="prismify")
         monkeypatch.setattr("cidc_schemas.prism.prismify", self.prismify)
         self.prismify.return_value = (
-            dict(
-                lead_organization_study_id=prismify_trial_id, **(prismify_extra or {})
-            ),
+            dict(protocol_id=prismify_trial_id, **(prismify_extra or {})),
             prismify_file_entries or [],
         )
 
@@ -415,7 +414,7 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
     Check pull_upload_merge_status endpoint behavior
     """
     trial_id = "test-12345"
-    metadata = {"lead_organization_study_id": trial_id}
+    metadata = {"protocol_id": trial_id}
 
     with app.app_context():
         user = Users.create({"email": test_user.email})

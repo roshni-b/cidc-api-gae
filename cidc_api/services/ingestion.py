@@ -24,7 +24,6 @@ import gcloud_client
 from models import (
     AssayUploads,
     AssayUploadStatus,
-    TRIAL_ID_FIELD,
     TrialMetadata,
     DownloadableFiles,
     ManifestUploads,
@@ -179,14 +178,16 @@ def upload_manifest():
     md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
 
     try:
-        trial_id = md_patch[TRIAL_ID_FIELD]
+        trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
     except KeyError:
-        raise BadRequest(f"{TRIAL_ID_FIELD} field not found.")
+        raise BadRequest(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
 
     try:
         trial = TrialMetadata.patch_manifest(trial_id, md_patch, commit=False)
     except NoResultFound as e:
-        raise BadRequest(f"Trial with {TRIAL_ID_FIELD}={trial_id} not found.")
+        raise BadRequest(
+            f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
+        )
 
     # Publish that this trial's metadata has been updated
     gcloud_client.publish_patient_sample_update(trial_id)
@@ -248,15 +249,17 @@ def upload_assay():
     md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
 
     try:
-        trial_id = md_patch[TRIAL_ID_FIELD]
+        trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
     except KeyError:
-        print(f"{TRIAL_ID_FIELD} field not found in patch {md_patch}.")
-        raise BadRequest(f"{TRIAL_ID_FIELD} field not found.")
+        print(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found in patch {md_patch}.")
+        raise BadRequest(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
 
     trial = TrialMetadata.find_by_trial_id(trial_id)
     if trial is None:
-        print(f"Trial with {TRIAL_ID_FIELD}={trial_id} not found.")
-        raise BadRequest(f"Trial with {TRIAL_ID_FIELD}={trial_id} not found.")
+        print(f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found.")
+        raise BadRequest(
+            f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
+        )
 
     upload_moment = datetime.datetime.now().isoformat()
     uri2uuid = {}

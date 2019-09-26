@@ -60,10 +60,6 @@ FILE_TYPES = [
     "Other",
 ]
 
-# TODO: prism should own this functionality...
-TRIAL_ID_FIELD = "lead_organization_study_id"
-## End constants
-
 
 def get_DOMAIN() -> dict:
     """
@@ -449,8 +445,10 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         commit: bool = True,
     ):
         """Create a new ManifestUpload for the given trial manifest patch."""
-        assert TRIAL_ID_FIELD in metadata, "metadata patch must have a trial ID"
-        trial_id = metadata[TRIAL_ID_FIELD]
+        assert (
+            prism.PROTOCOL_ID_FIELD_NAME in metadata
+        ), "metadata patch must have a trial ID"
+        trial_id = metadata[prism.PROTOCOL_ID_FIELD_NAME]
 
         upload = ManifestUploads(
             trial_id=trial_id,
@@ -542,8 +540,8 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
         commit: bool = True,
     ):
         """Create a new upload job for the given trial metadata patch."""
-        assert TRIAL_ID_FIELD in metadata, "metadata must have a trial ID"
-        trial_id = metadata[TRIAL_ID_FIELD]
+        assert prism.PROTOCOL_ID_FIELD_NAME in metadata, "metadata must have a trial ID"
+        trial_id = metadata[prism.PROTOCOL_ID_FIELD_NAME]
 
         job = AssayUploads(
             trial_id=trial_id,
