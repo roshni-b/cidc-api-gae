@@ -245,7 +245,10 @@ class UploadMocks:
         self.prismify = MagicMock(name="prismify")
         monkeypatch.setattr("cidc_schemas.prism.prismify", self.prismify)
         self.prismify.return_value = (
-            dict(protocol_id=prismify_trial_id, **(prismify_extra or {})),
+            dict(
+                **{prism.PROTOCOL_ID_FIELD_NAME: prismify_trial_id},
+                **(prismify_extra or {}),
+            ),
             prismify_file_entries or [],
         )
 
@@ -414,7 +417,7 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
     Check pull_upload_merge_status endpoint behavior
     """
     trial_id = "test-12345"
-    metadata = {"protocol_id": trial_id}
+    metadata = {prism.PROTOCOL_ID_FIELD_NAME: trial_id}
 
     with app.app_context():
         user = Users.create({"email": test_user.email})

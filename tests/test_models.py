@@ -16,6 +16,7 @@ from cidc_api.models import (
     with_default_session,
     AssayUploadStatus,
 )
+from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 
 from .util import assert_same_elements
 
@@ -55,7 +56,7 @@ def test_duplicate_user(db):
 
 
 TRIAL_ID = "cimac-12345"
-METADATA = {"protocol_id": TRIAL_ID, "participants": []}
+METADATA = {PROTOCOL_ID_FIELD_NAME: TRIAL_ID, "participants": []}
 
 
 @db_test
@@ -77,9 +78,7 @@ def test_trial_metadata_patch_manifest(db):
             "samples": [],
             "cimac_participant_id": "CM-TEST-1234",
             "participant_id": "trial a",
-            "cohort_name": "cohort_name",
-            "cohort_id": "cohort_id",
-            "arm_id": "arm_id",
+            "cohort_name": "Arm_Z",
         }
     ]
 
@@ -129,7 +128,7 @@ def test_partial_patch_trial_metadata(db):
     db.commit()
 
     # Create patch without all required fields (no "participants")
-    metadata_patch = {"protocol_id": TRIAL_ID, "assays": {}}
+    metadata_patch = {PROTOCOL_ID_FIELD_NAME: TRIAL_ID, "assays": {}}
 
     # patch it - should be no error/exception
     TrialMetadata._patch_trial_metadata(TRIAL_ID, metadata_patch)
@@ -144,7 +143,7 @@ def test_create_assay_upload(db):
         "my/first/wes/blob1/2019-08-30T15:51:38.450978": "test-uuid-1",
         "my/first/wes/blob2/2019-08-30T15:51:38.450978": "test-uuid-2",
     }
-    metadata_patch = {"protocol_id": TRIAL_ID}
+    metadata_patch = {PROTOCOL_ID_FIELD_NAME: TRIAL_ID}
     gcs_xlsx_uri = "xlsx/assays/wes/12:0:1.5123095"
 
     # Should fail, since trial doesn't exist yet

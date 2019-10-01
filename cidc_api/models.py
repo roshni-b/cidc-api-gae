@@ -602,7 +602,6 @@ class DownloadableFiles(CommonColumns):
         """
         Create a new DownloadableFiles record from artifact metadata.
         """
-        etag = make_etag(*(file_metadata.values()))
 
         # Filter out keys that aren't columns
         supported_columns = DownloadableFiles.__table__.columns.keys()
@@ -611,6 +610,8 @@ class DownloadableFiles(CommonColumns):
             if key in supported_columns:
                 filtered_metadata[key] = value
         # TODO maybe put non supported stuff from file_metadata to some misc jsonb column?
+
+        etag = make_etag(*(filtered_metadata.values()))
 
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
