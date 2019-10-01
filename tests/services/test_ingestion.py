@@ -245,7 +245,10 @@ class UploadMocks:
         self.prismify = MagicMock(name="prismify")
         monkeypatch.setattr("cidc_schemas.prism.prismify", self.prismify)
         self.prismify.return_value = (
-            dict(**{prism.PROTOCOL_ID_FIELD_NAME:prismify_trial_id}, **(prismify_extra or {})),
+            dict(
+                **{prism.PROTOCOL_ID_FIELD_NAME: prismify_trial_id},
+                **(prismify_extra or {}),
+            ),
             prismify_file_entries or [],
         )
 

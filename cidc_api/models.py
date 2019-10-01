@@ -612,7 +612,7 @@ class DownloadableFiles(CommonColumns):
         # TODO maybe put non supported stuff from file_metadata to some misc jsonb column?
 
         etag = make_etag(*(filtered_metadata.values()))
-        
+
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
         if commit:
