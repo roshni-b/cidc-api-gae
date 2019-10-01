@@ -14,7 +14,7 @@ env:
     - GOOGLE_APPLICATION_CREDENTIALS=$HOME/credentials.json
     - CLOUDSDK_CORE_DISABLE_PROMPTS=1
 install:
-  - pip install -r requirements.txt -r requirements.dev.txt
+  - pip install -r requirements.dev.txt
 before_script:
   - psql -c "create user cidcdev with password '1234'"
   - psql -c "create database cidctest"
