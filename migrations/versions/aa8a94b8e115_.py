@@ -31,11 +31,14 @@ def upgrade():
 	        	join 
 		        	(
 		        		select 
-		        			max(_updated), object_url 
+		        			max(_updated),
+		        			object_url 
 		        		from 
 		        			downloadable_files 
 		        		group by 
 		        			object_url
+		        		having 
+		        			count(*) > 1
 		        	) gm 
 	        	on 
 	        		gm.object_url = d.object_url 
