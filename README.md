@@ -27,7 +27,7 @@ The next generation of the CIDC API, reworked to use Google Cloud-managed servic
 ## Install Python dependencies
 Install both the production and development dependencies.
 ```python
-pip install -r requirements.txt -r requirements.dev.txt
+pip install -r requirements.dev.txt
 ```
 
 ## Database Management

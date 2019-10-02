@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from cidc_api.models import Users
+from cidc_api.models import Users, CIDCRole
 
 NEW_USERS = "new_users"
 USERS = "users"
@@ -33,46 +33,39 @@ def test_enforce_self_creation(app, db, monkeypatch):
     assert response.status_code == 201  # Created
 
 
-def test_filter_user_lookups(app, db, monkeypatch):
-    """Check user GET-request role-based filtering"""
+def test_get_self(app, db, monkeypatch):
+    """Check that a low-privilege user can get their own account info"""
     monkeypatch.setattr(app.auth, "token_auth", fake_token_auth)
 
     client = app.test_client()
 
-    # Create two new users
+    # Create two new unregistered users
     with app.app_context():
-        Users.create(profile)
-        Users.create(other_profile)
-
-    # Check that a user can only look themselves up
-    response = client.get(USERS, headers=AUTH_HEADER)
-    assert response.status_code == 200
-    users = response.json["_items"]
-    assert len(users) == 1
-    assert users[0]["email"] == profile["email"]
-
-    filtered_response = client.get(
-        USERS + '?where{"email": "%s"}' % EMAIL, headers=AUTH_HEADER
-    )
-    assert filtered_response.status_code == 200
-    assert filtered_response.json["_items"] == response.json["_items"]
-
-    # If the user tries to look up someone else, they get nothing back
-    response = client.get(
-        USERS + '?where={"email": "%s"}' % other_profile["email"], headers=AUTH_HEADER
-    )
-    assert response.status_code == 200
-    assert len(response.json["_items"]) == 0
-
-    # Make a user an admin
-    with app.app_context():
-        db.query(Users).filter_by(email=EMAIL).update({"role": "cidc-admin"})
+        user = Users.create(profile)
+        other_user = Users.create(other_profile)
         db.commit()
 
-    # Admins should be able to list all users
-    response = client.get(USERS, headers=AUTH_HEADER)
+    # Ensure that an unregistered user can get their own data
+    response = client.get(USERS + "/self", headers=AUTH_HEADER)
     assert response.status_code == 200
-    assert len(response.json["_items"]) == 2
+    assert response.json["email"] == EMAIL
+
+    # Register the first user
+    with app.app_context():
+        user = Users.find_by_email(EMAIL)
+        user.role = CIDCRole.CIMAC_USER.value
+        user.approval_date = datetime.now()
+        db.commit()
+
+    # Check that a low-privs user can look themselves up at the users/self endpoint
+    response = client.get(USERS + "/self", headers=AUTH_HEADER)
+    assert response.status_code == 200
+    user = response.json
+    assert user["email"] == profile["email"]
+
+    # Check that a low-privs user cannot look up other users
+    response = client.get(USERS, headers=AUTH_HEADER)
+    assert response.status_code == 401
 
 
 def test_add_approval_date(app, db, monkeypatch):
@@ -81,7 +74,9 @@ def test_add_approval_date(app, db, monkeypatch):
 
     # Create one registered admin and one new user
     with app.app_context():
-        db.add(Users(role="cidc-admin", approval_date=datetime.now(), **profile))
+        db.add(
+            Users(role=CIDCRole.ADMIN.value, approval_date=datetime.now(), **profile)
+        )
         db.commit()
         Users.create(other_profile)
 
@@ -108,6 +103,6 @@ def test_add_approval_date(app, db, monkeypatch):
         return approval_date
 
     # Approval date should be set on first role update
-    first_approval = update_role_and_get_approval_date("developer")
-    second_approval = update_role_and_get_approval_date("cidc-admin")
+    first_approval = update_role_and_get_approval_date(CIDCRole.DEVELOPER.value)
+    second_approval = update_role_and_get_approval_date(CIDCRole.ADMIN.value)
     assert first_approval == second_approval

@@ -6,24 +6,30 @@ import json
 import datetime
 from typing import BinaryIO, Tuple, List
 
-from werkzeug.exceptions import BadRequest, InternalServerError, NotImplemented
+from werkzeug.exceptions import (
+    BadRequest,
+    InternalServerError,
+    NotFound,
+    NotImplemented,
+    Unauthorized,
+)
 
 from eve import Eve
-from eve.auth import requires_auth
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
-from cidc_schemas import constants, validate_xlsx, prism, template
+from cidc_schemas import constants, validate_xlsx, prism, template, template_reader
 
 import gcloud_client
 from models import (
     AssayUploads,
-    STATUSES,
-    TRIAL_ID_FIELD,
+    AssayUploadStatus,
     TrialMetadata,
     DownloadableFiles,
     ManifestUploads,
+    CIDCRole,
 )
+from auth import requires_auth
 from config.settings import GOOGLE_UPLOAD_BUCKET
 
 ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
@@ -31,6 +37,7 @@ ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 
 def register_ingestion_hooks(app: Eve):
     """Set up ingestion-related hooks on an Eve app instance"""
+    app.on_pre_PATCH_assay_uploads = validate_assay_upload_status_update
     app.on_post_PATCH_assay_uploads = on_post_PATCH_assay_uploads
 
 
@@ -82,13 +89,24 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
 
 
 @ingestion_api.route("/validate", methods=["POST"])
-@requires_auth("ingestion.validate")
+@requires_auth(
+    "ingestion/validate", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
+)
+def validate_endpoint():
+    """
+    Separated from `validate` function so that RBAC from requires_auth doesn't affect
+    internal invocations of `validate` (in, e.g., the /ingestion/upload_assay endpoint).
+    """
+    return validate()
+
+
 def validate():
     """
     Validate a .xlsx manifest or assay metadata template.
 
     TODO: add this endpoint to the OpenAPI docs
     """
+    print(f"validate started")
     # Extract info from the request context
     template_type, _, template_file = extract_schema_and_xlsx()
 
@@ -97,6 +115,11 @@ def validate():
         error_list = validate_xlsx(
             template_file, template_type, raise_validation_errors=False
         )
+    except template_reader.ValidationError as e:
+        # In case raise_validation_errors=False isn't respected by validate_xlsx,
+        # capture the validation error and return its message.
+        # TODO: fix this in cidc_schemas, not here.
+        error_list = [str(e)]
     except Exception as e:
         if "unknown template type" in str(e):
             raise BadRequest(str(e))
@@ -104,9 +127,11 @@ def validate():
 
     json = {"errors": []}
     if type(error_list) == bool and error_list is True:
+        print(f"validate passed")
         # The spreadsheet is valid
         return jsonify(json)
     else:
+        print(f"{len(error_list)} validation errors: [{error_list[0]!r}, ...]")
         # The spreadsheet is invalid
         json["errors"] = error_list
         return jsonify(json)
@@ -114,10 +139,11 @@ def validate():
 
 def validate_excel_payload(f):
     def wrapped(*args, **kwargs):
+        print(f"validate_excel_payload started")
         # Run basic validations on the provided Excel file
         validations = validate()
         if len(validations.json["errors"]) > 0:
-            return BadRequest(validations)
+            raise BadRequest(validations.json)
         return f(*args, **kwargs)
 
     wrapped.__name__ = f.__name__
@@ -125,7 +151,9 @@ def validate_excel_payload(f):
 
 
 @ingestion_api.route("/upload_manifest", methods=["POST"])
-@requires_auth("ingestion.upload_manifest")
+@requires_auth(
+    "ingestion/upload_manifest", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
+)
 @validate_excel_payload
 def upload_manifest():
     """
@@ -149,32 +177,33 @@ def upload_manifest():
 
     md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
 
-    trial_id = md_patch[TRIAL_ID_FIELD]
+    try:
+        trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
+    except KeyError:
+        raise BadRequest(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
+
+    try:
+        trial = TrialMetadata.patch_manifest(trial_id, md_patch, commit=False)
+    except NoResultFound as e:
+        raise BadRequest(
+            f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
+        )
+
+    # Publish that this trial's metadata has been updated
+    gcloud_client.publish_patient_sample_update(trial_id)
 
     xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         trial_id, "manifest", schema_hint, xlsx_file, upload_moment
     )
-
-    try:
-        trial = TrialMetadata.patch_manifest(trial_id, md_patch, commit=False)
-    except NoResultFound as e:
-        raise BadRequest(f"Trial with {TRIAL_ID_FIELD} {trial_id} not found.")
-
+    # TODO maybe rely on default session
     session = Session.object_session(trial)
     # TODO move to prism
-    DownloadableFiles.create_from_metadata(
+    DownloadableFiles.create_from_blob(
         trial_id,
-        assay_type=schema_hint,
-        file_metadata={
-            "artifact_category": "Manifest File",
-            "object_url": gcs_blob.name,
-            "file_name": gcs_blob.name,
-            "file_size_bytes": gcs_blob.size,
-            "md5_hash": gcs_blob.md5_hash,
-            "uploaded_timestamp": upload_moment,
-            "data_format": "XLSX",
-        },
+        schema_hint,
+        "Shipping Manifest",
+        gcs_blob,
         session=session,
         commit=False,
     )
@@ -185,13 +214,16 @@ def upload_manifest():
         uploader_email=user_email,
         metadata=md_patch,
         gcs_xlsx_uri=gcs_blob.name,
+        session=session,
     )
 
     return jsonify({"metadata_json_patch": md_patch})
 
 
 @ingestion_api.route("/upload_assay", methods=["POST"])
-@requires_auth("ingestion.upload_assay")
+@requires_auth(
+    "ingestion/upload_assay", [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
+)
 @validate_excel_payload
 def upload_assay():
     """
@@ -209,11 +241,25 @@ def upload_assay():
     
     # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
     """
+    print(f"upload_assay started")
     schema_hint, schema_path, xlsx_file = extract_schema_and_xlsx()
 
     # Extract the clinical trial metadata blob contained in the .xlsx file,
     # along with information about the files the template references.
-    metadata_json, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
+    md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
+
+    try:
+        trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
+    except KeyError:
+        print(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found in patch {md_patch}.")
+        raise BadRequest(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
+
+    trial = TrialMetadata.find_by_trial_id(trial_id)
+    if trial is None:
+        print(f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found.")
+        raise BadRequest(
+            f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
+        )
 
     upload_moment = datetime.datetime.now().isoformat()
     uri2uuid = {}
@@ -237,13 +283,13 @@ def upload_assay():
     # Upload the xlsx template file to GCS
     xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
-        metadata_json[TRIAL_ID_FIELD], "assays", schema_hint, xlsx_file, upload_moment
+        trial_id, "assays", schema_hint, xlsx_file, upload_moment
     )
 
     # Save the upload job to the database
     user_email = _request_ctx_stack.top.current_user.email
     job = AssayUploads.create(
-        schema_hint, user_email, uri2uuid, metadata_json, gcs_blob.name
+        schema_hint, user_email, uri2uuid, md_patch, gcs_blob.name
     )
 
     # Grant the user upload access to the upload bucket
@@ -256,6 +302,71 @@ def upload_assay():
         "gcs_bucket": GOOGLE_UPLOAD_BUCKET,
     }
     return jsonify(response)
+
+
+@ingestion_api.route("/poll_upload_merge_status", methods=["GET"])
+@requires_auth(
+    "ingestion/poll_upload_merge_status",
+    [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value],
+)
+def poll_upload_merge_status():
+    """
+    Check an assay upload's status, and supply the client with directions on when to retry the check.
+
+    Request: no body
+        query parameter "id": the id of the assay_upload of interest
+    Response: application/json
+        status {str or None}: the current status of the assay_upload (empty if not MERGE_FAILED or MERGE_COMPLETED)
+        status_details {str or None}: information about `status` (e.g., error details). Only present if `status` is present.
+        retry_in {str or None}: the time in seconds to wait before making another request to this endpoint (empty if `status` has a value)
+    Raises:
+        400: no "id" query parameter is supplied
+        401: the requesting user did not create the requested upload job
+        404: no upload job with id "id" is found
+    """
+    upload_id = request.args.get("id")
+    if not upload_id:
+        raise BadRequest("Missing expected query parameter 'id'")
+
+    user = _request_ctx_stack.top.current_user
+    upload = AssayUploads.find_by_id_and_email(upload_id, user.email)
+    if not upload:
+        raise NotFound(f"Could not find assay upload job with id {upload_id}")
+
+    if upload.status in [
+        AssayUploadStatus.MERGE_COMPLETED.value,
+        AssayUploadStatus.MERGE_FAILED.value,
+    ]:
+        return jsonify(
+            {"status": upload.status, "status_details": upload.status_details}
+        )
+
+    # TODO: get smarter about retry-scheduling
+    return jsonify({"retry_in": 5})
+
+
+def validate_assay_upload_status_update(request: Request, _: dict):
+    """Event hook ensuring a user is requesting a valid upload job status transition"""
+    # Extract the target status
+    upload_patch = request.json
+    target_status = upload_patch.get("status")
+    if not target_status:
+        # Let Eve's input validation handle this
+        return
+
+    # Look up the current status
+    user = _request_ctx_stack.top.current_user
+    upload_id = request.view_args["id"]
+    upload = AssayUploads.find_by_id_and_email(upload_id, user.email)
+    if not upload:
+        raise NotFound(f"Could not find assay upload job with id {upload_id}")
+
+    # Check that the requested status update is valid
+    if not AssayUploadStatus.is_valid_transition(upload.status, target_status):
+        raise BadRequest(
+            f"Cannot set assay upload status to '{target_status}': "
+            f"current status is '{upload.status}'"
+        )
 
 
 def on_post_PATCH_assay_uploads(request: Request, payload: Response):
@@ -271,7 +382,7 @@ def on_post_PATCH_assay_uploads(request: Request, payload: Response):
     status = request.json["status"]
 
     # If this is a successful upload job, publish this info to Pub/Sub
-    if status == "completed":
+    if status == AssayUploadStatus.UPLOAD_COMPLETED.value:
         gcloud_client.publish_upload_success(job_id)
 
     # Revoke the user's write access
@@ -279,8 +390,8 @@ def on_post_PATCH_assay_uploads(request: Request, payload: Response):
     gcloud_client.revoke_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
 
 
-@ingestion_api.route("/signed-upload-urls", methods=["POST"])
-@requires_auth("ingestion.signed-upload-urls")
+# @ingestion_api.route("/signed-upload-urls", methods=["POST"])
+# NOTE: this endpoint isn't used currently, so it's not added to the API.
 def signed_upload_urls():
     """
     NOTE: We will use IAM for managing bucket access instead of signed URLs, 

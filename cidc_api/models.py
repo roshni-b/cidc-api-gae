@@ -1,7 +1,8 @@
 import os
 import hashlib
+from enum import Enum as EnumBaseClass
 from functools import wraps
-from typing import BinaryIO, Optional
+from typing import BinaryIO, Optional, List
 
 from flask import current_app as app
 from google.cloud.storage import Blob
@@ -24,41 +25,25 @@ from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
 from sqlalchemy.ext.declarative import declarative_base, declared_attr
 from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 
-from cidc_schemas import prism
+from cidc_schemas import prism, unprism
 
 ## Constants
 ORGS = ["CIDC", "DFCI", "ICAHN", "STANFORD", "ANDERSON"]
-ROLES = [
-    "cidc-admin",
-    "cidc-biofx-user",
-    "cimac-biofx-user",
-    "cimac-user",
-    "developer",
-    "devops",
-    "nci-biobank-user",
-]
+
+
+class CIDCRole(EnumBaseClass):
+    ADMIN = "cidc-admin"
+    CIDC_BIOFX_USER = "cidc-biofx-user"
+    CIMAC_BIOFX_USER = "cimac-biofx-user"
+    CIMAC_USER = "cimac-user"
+    DEVELOPER = "developer"
+    DEVOPS = "devops"
+    NCI_BIOBANK_USER = "nci-biobank-user"
+
+
+ROLES = [role.value for role in CIDCRole]
 
 # See: https://github.com/CIMAC-CIDC/cidc-schemas/blob/master/cidc_schemas/schemas/artifacts/artifact_core.json
-ARTIFACT_CATEGORIES = [
-    "Assay Artifact from CIMAC",
-    "Pipeline Artifact",
-    "Manifest File",
-    "Other",
-]
-ASSAY_CATEGORIES = [
-    "Whole Exome Sequencing (WES)",
-    "RNASeq",
-    "Conventional Immunohistochemistry",
-    "Multiplex Immunohistochemistry",
-    "Multiplex Immunofluorescence",
-    "CyTOF",
-    "OLink",
-    "NanoString",
-    "ELISpot",
-    "Multiplexed Ion-Beam Imaging (MIBI)",
-    "Other",
-    "None",
-]
 FILE_TYPES = [
     "FASTA",
     "FASTQ",
@@ -75,15 +60,11 @@ FILE_TYPES = [
     "Other",
 ]
 
-# TODO: prism should own this functionality...
-TRIAL_ID_FIELD = "lead_organization_study_id"
-## End constants
-
 
 def get_DOMAIN() -> dict:
     """
-    Render all cerberus domains for data model resources 
-    (i.e., any model extending `CommonColumns`).
+    Render all cerberus domains for API resources and set up method restrictions
+    and role-based access controls.
     """
     domain_config = {}
     domain_config["new_users"] = ResourceConfig(Users)
@@ -105,17 +86,55 @@ def get_DOMAIN() -> dict:
 
     domain = DomainConfig(domain_config, related_resources).render()
 
-    # Restrict operations on the 'new_users' resource
+    # Restrict operations on the 'new_users' resource:
+    # * A new_user cannot be created with a role or an approval date
+    # * A new_user can _only_ be created (not updated)
     del domain["new_users"]["schema"]["role"]
     del domain["new_users"]["schema"]["approval_date"]
     domain["new_users"]["item_methods"] = []
     domain["new_users"]["resource_methods"] = ["POST"]
 
-    # Make downloadable_files read-only
-    domain["downloadable_files"]["allowed_methods"] = ["GET"]
-    domain["downloadable_files"]["allowed_item_methods"] = ["GET"]
+    # Restrict operations on resources that only admins should be able to access
+    for resource in ["users", "trial_metadata"]:
+        domain[resource]["allowed_roles"] = [CIDCRole.ADMIN.value]
+        domain[resource]["allowed_item_roles"] = [CIDCRole.ADMIN.value]
 
-    # Add the download_link field to the downloadable_files schema
+    # Restrict operations on the 'permissions' resource:
+    # * Only admins can write or update 'permissions'
+    # * All users can list the 'permissions' resource, but the results will be filtered by
+    #   services.permissions.update_permission_filters to only include their permissions
+    domain["permissions"]["allowed_write_roles"] = [CIDCRole.ADMIN.value]
+    domain["permissions"]["allowed_item_roles"] = [CIDCRole.ADMIN.value]
+    domain["permissions"]["item_methods"] = ["GET", "DELETE", "PATCH"]
+
+    # Restrict operations on the 'assay_uploads' resource:
+    # * only admins can list 'assay_uploads' (TODO: we may want people to be able to view their own uploads)
+    # * only admins and cimac users can GET items or PATCH 'assay_uploads'
+    admin_and_cimac = [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
+    domain["assay_uploads"]["allowed_read_roles"] = [CIDCRole.ADMIN.value]
+    domain["assay_uploads"]["allowed_item_read_roles"] = admin_and_cimac
+    domain["assay_uploads"]["allowed_write_roles"] = admin_and_cimac
+    domain["assay_uploads"]["allowed_item_write_roles"] = admin_and_cimac
+    domain["assay_uploads"]["resource_methods"] = ["GET"]
+    domain["assay_uploads"]["item_methods"] = ["GET", "PATCH"]
+
+    # Restrict operations on the 'manifest_uploads' resource:
+    # * only admins can GET 'manifest_uploads'
+    # * only admins and NCI users can GET items or PATCH 'manifest_uploads'
+    admin_and_nci = [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
+    domain["manifest_uploads"]["allowed_read_roles"] = [CIDCRole.ADMIN.value]
+    domain["manifest_uploads"]["allowed_item_read_roles"] = admin_and_nci
+    domain["manifest_uploads"]["allowed_write_roles"] = admin_and_nci
+    domain["manifest_uploads"]["allowed_item_write_roles"] = admin_and_nci
+    domain["manifest_uploads"]["resource_methods"] = ["GET"]
+    domain["manifest_uploads"]["item_methods"] = ["GET", "PATCH"]
+
+    # Restrict operations on the 'downloadable_files' resource:
+    # * downloadable_files are read-only through the API
+    domain["downloadable_files"]["resource_methods"] = ["GET"]
+    domain["downloadable_files"]["item_methods"] = ["GET"]
+
+    # Add the download_link field to the 'downloadable_files' resource schema
     domain["downloadable_files"]["schema"]["download_link"] = {"type": "string"}
 
     return domain
@@ -228,8 +247,13 @@ class Permissions(CommonColumns):
     )
     trial = relationship("TrialMetadata", foreign_keys=[trial_id])
 
-    assay_type = Column(Enum(*ASSAY_CATEGORIES, name="assays"), nullable=False)
-    mode = Column(Enum("read", "write", name="mode"))
+    assay_type = Column(String, nullable=False)
+
+    @staticmethod
+    @with_default_session
+    def find_for_user(user: Users, session: Session) -> List:
+        """Find all Permissions granted to the given user."""
+        return session.query(Permissions).filter_by(granted_to_user=user.id).all()
 
 
 class TrialMetadata(CommonColumns):
@@ -309,7 +333,7 @@ class TrialMetadata(CommonColumns):
             and manifest patch strategies.
         """
 
-        trial = TrialMetadata.select_for_update_by_trial_id(trial_id)
+        trial = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
 
         # Merge assay metadata into the existing clinical trial metadata
         updated_metadata = prism.merge_clinical_trial_metadata(
@@ -355,8 +379,23 @@ class TrialMetadata(CommonColumns):
             md5_hash=gcs_object.md5_hash,
         )
 
+    @classmethod
+    @with_default_session
+    def generate_patient_csv(cls, trial_id: str, session: Session) -> str:
+        """Get the current patient CSV for this trial."""
+        trial = cls.find_by_trial_id(trial_id, session=session)
+        if not trial:
+            raise NoResultFound(f"No trial found with id {trial_id}")
+        return unprism.unprism_participants(trial.metadata_json)
 
-STATUSES = ["started", "completed", "errored"]
+    @classmethod
+    @with_default_session
+    def generate_sample_csv(cls, trial_id: str, session: Session) -> str:
+        """Get the current sample CSV for this trial."""
+        trial = cls.find_by_trial_id(trial_id, session=session)
+        if not trial:
+            raise NoResultFound(f"No trial found with id {trial_id}")
+        return unprism.unprism_samples(trial.metadata_json)
 
 
 class UploadForeignKeys:
@@ -406,8 +445,10 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         commit: bool = True,
     ):
         """Create a new ManifestUpload for the given trial manifest patch."""
-        assert TRIAL_ID_FIELD in metadata, "metadata patch must have a trial ID"
-        trial_id = metadata[TRIAL_ID_FIELD]
+        assert (
+            prism.PROTOCOL_ID_FIELD_NAME in metadata
+        ), "metadata patch must have a trial ID"
+        trial_id = metadata[prism.PROTOCOL_ID_FIELD_NAME]
 
         upload = ManifestUploads(
             trial_id=trial_id,
@@ -424,10 +465,45 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         return upload
 
 
+class AssayUploadStatus(EnumBaseClass):
+    STARTED = "started"
+    # Set by CLI based on GCS upload results
+    UPLOAD_COMPLETED = "upload-completed"
+    UPLOAD_FAILED = "upload-failed"
+    # Set by ingest_uploads cloud function based on merge / transfer results
+    MERGE_COMPLETED = "merge-completed"
+    MERGE_FAILED = "merge-failed"
+
+    @classmethod
+    def is_valid_transition(cls, current: str, target: str) -> bool:
+        """
+        Enforce logic about which state transitions are valid. E.g.,
+        an upload whose status is "merge-completed" should never be updated
+        to "started".
+        """
+        c = cls(current)
+        t = cls(target)
+        upload_statuses = [cls.UPLOAD_COMPLETED, cls.UPLOAD_FAILED]
+        merge_statuses = [cls.MERGE_COMPLETED, cls.MERGE_FAILED]
+        if c != t:
+            if t == cls.STARTED:
+                return False
+            if c in upload_statuses and t not in merge_statuses:
+                return False
+            if c in merge_statuses:
+                return False
+        return True
+
+
+STATUSES = [s.value for s in AssayUploadStatus]
+
+
 class AssayUploads(CommonColumns, UploadForeignKeys):
     __tablename__ = "assay_uploads"
     # The current status of the upload job
-    status = Column(Enum(*STATUSES, name="job_statuses"), nullable=False)
+    status = Column(Enum(*STATUSES, name="assay_upload_status"), nullable=False)
+    # Text containing feedback on why the upload status is what it is
+    status_details = Column(String, nullable=True)
     # The object names for the files to be uploaded mapped to upload_placeholder uuids
     gcs_file_map = Column(JSONB, nullable=False)
     # track the GCS URI of the .xlsx file used for this upload
@@ -464,8 +540,8 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
         commit: bool = True,
     ):
         """Create a new upload job for the given trial metadata patch."""
-        assert TRIAL_ID_FIELD in metadata, "metadata must have a trial ID"
-        trial_id = metadata[TRIAL_ID_FIELD]
+        assert prism.PROTOCOL_ID_FIELD_NAME in metadata, "metadata must have a trial ID"
+        trial_id = metadata[prism.PROTOCOL_ID_FIELD_NAME]
 
         job = AssayUploads(
             trial_id=trial_id,
@@ -485,6 +561,14 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
 
         return job
 
+    @classmethod
+    @with_default_session
+    def find_by_id_and_email(cls, id, email, session):
+        upload = super().find_by_id(id, session=session)
+        if upload and upload.uploader_email != email:
+            return None
+        return upload
+
 
 class DownloadableFiles(CommonColumns):
     """
@@ -497,9 +581,6 @@ class DownloadableFiles(CommonColumns):
     file_name = Column(String, nullable=False)
     file_size_bytes = Column(Integer, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
-    artifact_category = Column(
-        Enum(*ARTIFACT_CATEGORIES, name="artifact_category"), nullable=False
-    )
     data_format = Column(String, nullable=False)
     # TODO rename assay_type, because we store manifests in there too.
     assay_type = Column(String, nullable=False)
@@ -519,9 +600,8 @@ class DownloadableFiles(CommonColumns):
         commit: bool = True,
     ):
         """
-        Create a new DownloadableFiles record from a GCS blob.
+        Create a new DownloadableFiles record from artifact metadata.
         """
-        etag = make_etag(*(file_metadata.values()))
 
         # Filter out keys that aren't columns
         supported_columns = DownloadableFiles.__table__.columns.keys()
@@ -531,8 +611,41 @@ class DownloadableFiles(CommonColumns):
                 filtered_metadata[key] = value
         # TODO maybe put non supported stuff from file_metadata to some misc jsonb column?
 
+        etag = make_etag(*(filtered_metadata.values()))
+
         new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
         session.add(new_file)
+        if commit:
+            session.commit()
+
+        return new_file
+
+    @staticmethod
+    @with_default_session
+    def create_from_blob(
+        trial_id: str,
+        assay_type: str,
+        data_format: str,
+        blob: Blob,
+        session: Session,
+        commit: bool = True,
+    ):
+        """
+        Create a new DownloadableFiles record from from a GCS blob.
+        """
+        new_file = DownloadableFiles(
+            trial_id=trial_id,
+            assay_type=assay_type,
+            data_format=data_format,
+            object_url=blob.name,
+            file_name=blob.name,
+            file_size_bytes=blob.size,
+            md5_hash=blob.md5_hash,
+            uploaded_timestamp=blob.time_created,
+        )
+
+        session.add(new_file)
+
         if commit:
             session.commit()
 

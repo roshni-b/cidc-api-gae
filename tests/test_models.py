@@ -14,7 +14,9 @@ from cidc_api.models import (
     Permissions,
     DownloadableFiles,
     with_default_session,
+    AssayUploadStatus,
 )
+from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 
 from .util import assert_same_elements
 
@@ -54,7 +56,7 @@ def test_duplicate_user(db):
 
 
 TRIAL_ID = "cimac-12345"
-METADATA = {"lead_organization_study_id": TRIAL_ID, "participants": []}
+METADATA = {PROTOCOL_ID_FIELD_NAME: TRIAL_ID, "participants": []}
 
 
 @db_test
@@ -74,10 +76,9 @@ def test_trial_metadata_patch_manifest(db):
     metadata_with_participant["participants"] = [
         {
             "samples": [],
-            "cimac_participant_id": "b",
-            "trial_participant_id": "trial a",
-            "cohort_id": "cohort_id",
-            "arm_id": "arm_id",
+            "cimac_participant_id": "CM-TEST-1234",
+            "participant_id": "trial a",
+            "cohort_name": "Arm_Z",
         }
     ]
 
@@ -127,7 +128,7 @@ def test_partial_patch_trial_metadata(db):
     db.commit()
 
     # Create patch without all required fields (no "participants")
-    metadata_patch = {"lead_organization_study_id": TRIAL_ID, "assays": {}}
+    metadata_patch = {PROTOCOL_ID_FIELD_NAME: TRIAL_ID, "assays": {}}
 
     # patch it - should be no error/exception
     TrialMetadata._patch_trial_metadata(TRIAL_ID, metadata_patch)
@@ -142,7 +143,7 @@ def test_create_assay_upload(db):
         "my/first/wes/blob1/2019-08-30T15:51:38.450978": "test-uuid-1",
         "my/first/wes/blob2/2019-08-30T15:51:38.450978": "test-uuid-2",
     }
-    metadata_patch = {"lead_organization_study_id": TRIAL_ID}
+    metadata_patch = {PROTOCOL_ID_FIELD_NAME: TRIAL_ID}
     gcs_xlsx_uri = "xlsx/assays/wes/12:0:1.5123095"
 
     # Should fail, since trial doesn't exist yet
@@ -155,7 +156,7 @@ def test_create_assay_upload(db):
     new_job = AssayUploads.create(
         "wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri
     )
-    job = AssayUploads.find_by_id(new_job.id)
+    job = AssayUploads.find_by_id_and_email(new_job.id, PROFILE["email"])
     assert_same_elements(new_job.gcs_file_map, job.gcs_file_map)
     assert job.status == "started"
 
@@ -178,7 +179,6 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
     """Try to create a downloadable file from artifact_core metadata"""
     # fake file metadata
     file_metadata = {
-        "artifact_category": "Assay Artifact from CIMAC",
         "object_url": "10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
         "file_name": "wes_forward.fastq",
         "file_size_bytes": 1,
@@ -205,6 +205,26 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
         assert getattr(new_file, k) == file_metadata[k]
 
 
+@db_test
+def test_create_downloadable_file_from_blob(db, monkeypatch):
+    """Try to create a downloadable file from a GCS blob"""
+    fake_blob = MagicMock()
+    fake_blob.name = "name"
+    fake_blob.md5_hash = "12345"
+    fake_blob.size = 5
+    fake_blob.time_created = datetime.now()
+
+    db.add(TrialMetadata(trial_id="id", metadata_json={}))
+    df = DownloadableFiles.create_from_blob(
+        "id", "pbmc", "Shipping Manifest", fake_blob
+    )
+
+    # Check that the file was created
+    df_lookup = DownloadableFiles.find_by_id(df.id)
+    assert df_lookup.object_url == fake_blob.name
+    assert df_lookup.data_format == "Shipping Manifest"
+
+
 def test_with_default_session(app_no_auth):
     """Test that the with_default_session decorator provides defaults as expected"""
 
@@ -216,3 +236,26 @@ def test_with_default_session(app_no_auth):
         check_default_session(app_no_auth.data.driver.session)
         fake_session = "some other db session"
         check_default_session(fake_session, session=fake_session)
+
+
+def test_assay_upload_status():
+    """Test AssayUploadStatus transition validation logic"""
+    upload_statuses = [
+        AssayUploadStatus.UPLOAD_COMPLETED.value,
+        AssayUploadStatus.UPLOAD_FAILED.value,
+    ]
+    merge_statuses = [
+        AssayUploadStatus.MERGE_COMPLETED.value,
+        AssayUploadStatus.MERGE_FAILED.value,
+    ]
+    for upload in upload_statuses:
+        for merge in merge_statuses:
+            for status in [upload, merge]:
+                assert AssayUploadStatus.is_valid_transition(
+                    AssayUploadStatus.STARTED, status
+                )
+                assert not AssayUploadStatus.is_valid_transition(
+                    status, AssayUploadStatus.STARTED
+                )
+            assert AssayUploadStatus.is_valid_transition(upload, merge)
+            assert not AssayUploadStatus.is_valid_transition(merge, upload)

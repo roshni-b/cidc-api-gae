@@ -14,7 +14,7 @@ env:
     - GOOGLE_APPLICATION_CREDENTIALS=$HOME/credentials.json
     - CLOUDSDK_CORE_DISABLE_PROMPTS=1
 install:
-  - pip install -r requirements.txt -r requirements.dev.txt
+  - pip install -r requirements.dev.txt
 before_script:
   - psql -c "create user cidcdev with password '1234'"
   - psql -c "create database cidctest"
@@ -33,7 +33,7 @@ before_deploy:
 deploy:
   - provider: script
     # we need `beta` for the `--no-cache` flag, which disables dependency caching
-    script: gcloud beta app deploy app.staging.yaml --project cidc-dfci-staging --no-cache
+    script: gcloud beta app deploy app.staging.yaml --project cidc-dfci-staging --no-cache -v "travis-$TRAVIS_BRANCH-$TRAVIS_COMMIT-$TRAVIS_BUILD_NUMBER"
     on:
       branch: master
   - provider: script

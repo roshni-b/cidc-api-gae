@@ -1,4 +1,7 @@
 import io
+from datetime import datetime
+from contextlib import contextmanager
+from collections import namedtuple
 from unittest.mock import MagicMock
 
 import pytest
@@ -8,42 +11,30 @@ from werkzeug.exceptions import (
     BadRequest,
     NotImplemented,
 )
+from cidc_schemas import prism
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.services.ingestion import extract_schema_and_xlsx
-from cidc_api.models import TrialMetadata, Users, TRIAL_ID_FIELD
+from cidc_api.models import TrialMetadata, Users, AssayUploadStatus
 
 from . import open_data_file
 from ..test_models import db_test
 from ..util import assert_same_elements
 from ..conftest import TEST_EMAIL
 
-
-@pytest.fixture
-def pbmc_valid_xlsx():
-    with open_data_file("pbmc_valid.xlsx") as xlsx:
-        yield xlsx
-
-
-@pytest.fixture
-def pbmc_non_existing_trial():
-    with open_data_file("pbmc_non_existing_trial.xlsx") as xlsx:
-        yield xlsx
+from cidc_api.models import (
+    Users,
+    AssayUploads,
+    AssayUploadStatus,
+    TrialMetadata,
+    CIDCRole,
+)
 
 
 @pytest.fixture
-def pbmc_invalid_xlsx():
-    yield open_data_file("pbmc_invalid.xlsx")
-
-
-@pytest.fixture
-def wes_xlsx():
-    yield open_data_file("wes_data.xlsx")
-
-
-@pytest.fixture
-def olink_xlsx():
-    yield open_data_file("olink_data.xlsx")
+def some_file():
+    with open_data_file("some_file") as f:
+        yield f
 
 
 @pytest.fixture
@@ -51,7 +42,7 @@ def olink_xlsx():
 def db_with_trial_and_user(db, test_user):
     # Create the target trial and the uploader
     TrialMetadata.create(
-        "test_trial", {TRIAL_ID_FIELD: "test_trial", "participants": []}
+        "test_trial", {prism.PROTOCOL_ID_FIELD_NAME: "test_trial", "participants": []}
     )
     Users.create(profile={"email": test_user.email})
 
@@ -78,19 +69,25 @@ ASSAY_UPLOAD = "/ingestion/upload_assay"
 MANIFEST_UPLOAD = "/ingestion/upload_manifest"
 
 
-def test_validate_valid_template(app_no_auth, pbmc_valid_xlsx):
+def test_validate_valid_template(app_no_auth, some_file, monkeypatch):
     """Ensure that the validation endpoint returns no errors for a known-valid .xlsx file"""
     client = app_no_auth.test_client()
-    data = form_data("pbmc.xlsx", pbmc_valid_xlsx, "pbmc")
+    data = form_data("pbmc.xlsx", some_file, "pbmc")
+
+    mocks = UploadMocks(monkeypatch)
+
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 200
     assert res.json["errors"] == []
+    mocks.validate_excel.assert_called_once()
 
 
-def test_validate_invalid_template(app_no_auth, pbmc_invalid_xlsx):
+def test_validate_invalid_template(app_no_auth, some_file, monkeypatch):
     """Ensure that the validation endpoint returns errors for a known-invalid .xlsx file"""
+    mocks = UploadMocks(monkeypatch)
+    mocks.validate_excel.return_value = ["error-1"]
     client = app_no_auth.test_client()
-    data = form_data("pbmc.xlsx", pbmc_invalid_xlsx, "pbmc")
+    data = form_data("pbmc.xlsx", some_file, "pbmc")
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 200
     assert len(res.json["errors"]) > 0
@@ -127,26 +124,46 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
 
 
 def test_upload_manifest_non_existing_trial_id(
-    app_no_auth, pbmc_non_existing_trial, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, some_file, test_user, db_with_trial_and_user, monkeypatch
 ):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
 
-    mocks = UploadMocks(monkeypatch)
+    mocks = UploadMocks(monkeypatch, prismify_trial_id="test-non-existing-trial-id")
 
     client = app_no_auth.test_client()
 
-    res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_non_existing_trial, "pbmc")
-    )
+    res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 400
     assert "test-non-existing-trial-id" in res.json["_error"]["message"]
 
     # Check that we tried to upload the excel file
-    mocks.upload_xlsx.assert_called_once()
+    mocks.upload_xlsx.assert_not_called()
+    mocks.validate_excel.assert_called_once()
+    mocks.prismify.assert_called_once()
 
 
-def test_upload_manifest(
-    app_no_auth, pbmc_valid_xlsx, test_user, db_with_trial_and_user, monkeypatch
+def test_upload_invalid_manifest(
+    app_no_auth, some_file, test_user, db_with_trial_and_user, monkeypatch
+):
+    """Ensure the upload_manifest endpoint follows the expected execution flow"""
+
+    mocks = UploadMocks(monkeypatch)
+
+    mocks.validate_excel.return_value = ["bad, bad error"]
+
+    client = app_no_auth.test_client()
+
+    res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
+    assert res.status_code == 400
+
+    assert len(res.json["_error"]["message"]["errors"]) > 0
+
+    # Check that we tried to upload the excel file
+    mocks.upload_xlsx.assert_not_called()
+
+
+def test_upload_unsupported_manifest(
+    app_no_auth, some_file, test_user, db_with_trial_and_user, monkeypatch
 ):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
 
@@ -155,54 +172,117 @@ def test_upload_manifest(
     client = app_no_auth.test_client()
 
     res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", pbmc_valid_xlsx, "pbmc")
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "UNSUPPORTED_")
     )
-    assert res.status_code == 200
+    assert res.status_code == 400
+
+    assert "Unknown template type" in res.json["_error"]["message"]
+    assert "UNSUPPORTED_".lower() in res.json["_error"]["message"]
 
     # Check that we tried to upload the excel file
-    mocks.upload_xlsx.assert_called_once()
+    mocks.upload_xlsx.assert_not_called()
+
+
+def test_upload_manifest(
+    app_no_auth, some_file, test_user, db_with_trial_and_user, monkeypatch
+):
+    """Ensure the upload_manifest endpoint follows the expected execution flow"""
+
+    mocks = UploadMocks(monkeypatch)
+
+    client = app_no_auth.test_client()
+
+    res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
+    assert res.status_code == 200
+
+    # Check that we tried to publish a patient/sample update
+    mocks.publish_patient_sample_update.assert_called_once()
+
+    # Check that we tried to upload the excel file
+    mocks.make_all_assertions()
 
 
 class UploadMocks:
-    def __init__(self, monkeypatch):
+    def __init__(
+        self,
+        monkeypatch,
+        prismify_trial_id="test_trial",
+        prismify_file_entries=None,
+        prismify_extra=None,
+    ):
         self.grant_write = MagicMock()
         monkeypatch.setattr("gcloud_client.grant_upload_access", self.grant_write)
 
-        self.upload_xlsx = MagicMock()
-        self.upload_xlsx.return_value = MagicMock()
+        self.upload_xlsx = MagicMock(name="upload_xlsx")
+        self.upload_xlsx.return_value = MagicMock(name="upload_xlsx.return_value")
         self.upload_xlsx.return_value.name = "trial_id/xlsx/assays/wes/12345"
         self.upload_xlsx.return_value.size = 100
         self.upload_xlsx.return_value.md5_hash = "md5_hash"
+        self.upload_xlsx.return_value.time_created = datetime.now()
 
         monkeypatch.setattr("gcloud_client.upload_xlsx_to_gcs", self.upload_xlsx)
 
-        self.revoke_write = MagicMock()
+        self.revoke_write = MagicMock(name="revoke_write")
         monkeypatch.setattr("gcloud_client.revoke_upload_access", self.revoke_write)
 
-        self.publish_success = MagicMock()
+        self.publish_success = MagicMock(name="publish_success")
         monkeypatch.setattr(
             "gcloud_client.publish_upload_success", self.publish_success
         )
 
+        self.publish_patient_sample_update = MagicMock()
+        monkeypatch.setattr(
+            "gcloud_client.publish_patient_sample_update",
+            self.publish_patient_sample_update,
+        )
+
+        self.validate_excel = MagicMock(name="validate_excel")
+        monkeypatch.setattr(
+            "cidc_schemas.template.Template.validate_excel", self.validate_excel
+        )
+        self.validate_excel.return_value = True
+
+        self.prismify = MagicMock(name="prismify")
+        monkeypatch.setattr("cidc_schemas.prism.prismify", self.prismify)
+        self.prismify.return_value = (
+            dict(
+                **{prism.PROTOCOL_ID_FIELD_NAME: prismify_trial_id},
+                **(prismify_extra or {}),
+            ),
+            prismify_file_entries or [],
+        )
+
+    def make_all_assertions(self):
+        self.upload_xlsx.assert_called_once()
+        self.prismify.assert_called_once()
+        self.validate_excel.assert_called_once()
+
+
+finfo = namedtuple("finfo", ["gs_key", "local_path", "upload_placeholder"])
+
 
 def test_upload_wes(
-    app_no_auth, wes_xlsx, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, some_file, test_user, db_with_trial_and_user, db, monkeypatch
 ):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 
-    mocks = UploadMocks(monkeypatch)
+    mocks = UploadMocks(
+        monkeypatch,
+        prismify_file_entries=[
+            finfo("test_trial/url/file.ext", "localfile.ext", "uuid-1")
+        ],
+    )
 
-    res = client.post(ASSAY_UPLOAD, data=form_data("wes.xlsx", wes_xlsx, "wes"))
+    res = client.post(ASSAY_UPLOAD, data=form_data("wes.xlsx", some_file, "wes"))
     assert res.json
     assert "url_mapping" in res.json
 
     url_mapping = res.json["url_mapping"]
 
     # We expect local_path to map to a gcs object name with gcs_prefix
-    # based on the contents of wes_xlsx.
-    local_path = "/local/path/to/rgm.1.1.1.txt"
-    gcs_prefix = "test_trial/wes example PA 1/wes example SA 1.1/wes example aliquot 1.1.1/wes/rgm.txt"
+    local_path = "localfile.ext"
+    gcs_prefix = "test_trial/url/file.ext"
     gcs_object_name = url_mapping[local_path]
     assert local_path in url_mapping
     assert gcs_object_name.startswith(gcs_prefix)
@@ -222,7 +302,7 @@ def test_upload_wes(
     # Report an upload failure
     res = client.patch(
         update_url,
-        json={"status": "errored"},
+        json={"status": AssayUploadStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
@@ -230,10 +310,16 @@ def test_upload_wes(
     # This was an upload failure, so success shouldn't have been published
     mocks.publish_success.assert_not_called()
 
+    # Reset the upload status and try the request again
+    with app_no_auth.app_context():
+        job = AssayUploads.find_by_id_and_email(job_id, test_user.email)
+        job.status = AssayUploadStatus.STARTED.value
+        db.commit()
+
     # Report an upload success
     res = client.patch(
         update_url,
-        json={"status": "completed"},
+        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
@@ -253,21 +339,26 @@ OLINK_TESTDATA = [
 
 
 def test_upload_olink(
-    app_no_auth, olink_xlsx, test_user, db_with_trial_and_user, monkeypatch
+    app_no_auth, some_file, test_user, db_with_trial_and_user, db, monkeypatch
 ):
     """Ensure the upload endpoint follows the expected execution flow"""
     client = app_no_auth.test_client()
 
-    mocks = UploadMocks(monkeypatch)
+    mocks = UploadMocks(
+        monkeypatch,
+        prismify_file_entries=[
+            finfo(url, lp, "uuid" + str(i))
+            for i, (lp, url) in enumerate(OLINK_TESTDATA)
+        ],
+    )
 
-    res = client.post(ASSAY_UPLOAD, data=form_data("olink.xlsx", olink_xlsx, "olink"))
+    res = client.post(ASSAY_UPLOAD, data=form_data("olink.xlsx", some_file, "olink"))
     assert res.json
     assert "url_mapping" in res.json
 
     url_mapping = res.json["url_mapping"]
 
-    # We expect local_path to map to a gcs object name with gcs_prefix
-    # based on the contents of olink_xlsx.
+    # We expect local_path to map to a gcs object name with gcs_prefix.
     for local_path, gcs_prefix in OLINK_TESTDATA:
         gcs_object_name = url_mapping[local_path]
         assert local_path in url_mapping
@@ -288,7 +379,7 @@ def test_upload_olink(
     # Report an upload failure
     res = client.patch(
         update_url,
-        json={"status": "errored"},
+        json={"status": AssayUploadStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
@@ -296,28 +387,109 @@ def test_upload_olink(
     # This was an upload failure, so success shouldn't have been published
     mocks.publish_success.assert_not_called()
 
-    # Report an upload success
+    # Test upload status validation - since the upload job's current status
+    # is UPLOAD_FAILED, the API shouldn't permit this status to be updated to
+    # UPLOAD_COMPLETED.
+    bad_res = client.patch(
+        update_url,
+        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
+        headers={"If-Match": res.json["_etag"]},
+    )
+    assert bad_res.status_code == 400
+    assert "Cannot set assay upload status" in bad_res.json["_error"]["message"]
+
+    # Reset the upload status and try the request again
+    with app_no_auth.app_context():
+        job = AssayUploads.find_by_id_and_email(job_id, test_user.email)
+        job.status = AssayUploadStatus.STARTED.value
+        db.commit()
+
     res = client.patch(
         update_url,
-        json={"status": "completed"},
+        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
 
 
-def test_signed_upload_urls(app_no_auth, monkeypatch):
+def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
     """
-    Ensure the signed upload urls endpoint responds with the expected structure
-    
-    TODO: an integration test that actually calls out to GCS
+    Check pull_upload_merge_status endpoint behavior
     """
-    client = app_no_auth.test_client()
-    data = {
-        "directory_name": "my-assay-run-id",
-        "object_names": ["my-fastq-1.fastq.gz", "my-fastq-2.fastq.gz"],
-    }
+    trial_id = "test-12345"
+    metadata = {prism.PROTOCOL_ID_FIELD_NAME: trial_id}
 
-    monkeypatch.setattr("google.cloud.storage.Client", MagicMock)
-    res = client.post("/ingestion/signed-upload-urls", json=data)
+    with app.app_context():
+        user = Users.create({"email": test_user.email})
+        user.role = CIDCRole.CIMAC_BIOFX_USER.value
+        user.approval_date = datetime.now()
 
-    assert_same_elements(res.json.keys(), data["object_names"])
+        Users.create({"email": "other@email.com"})
+        db.add(TrialMetadata(trial_id=trial_id, metadata_json={}))
+        upload_1 = AssayUploads.create(
+            assay_type="wes",
+            uploader_email=test_user.email,
+            gcs_file_map={},
+            metadata=metadata,
+            gcs_xlsx_uri="",
+        )
+
+        user_created = upload_1.id
+        upload_2 = AssayUploads.create(
+            assay_type="wes",
+            uploader_email="other@email.com",
+            gcs_file_map={},
+            metadata=metadata,
+            gcs_xlsx_uri="",
+        )
+
+        not_user_created = upload_2.id
+
+        db.commit()
+
+    monkeypatch.setattr(
+        app.auth, "token_auth", lambda *args: {"email": test_user.email}
+    )
+
+    client = app.test_client()
+
+    HEADER = {"Authorization": "Bearer foo"}
+
+    # Upload not found
+    res = client.get("/ingestion/poll_upload_merge_status?id=12345", headers=HEADER)
+    assert res.status_code == 404
+
+    # Upload not created by user
+    res = client.get(
+        f"/ingestion/poll_upload_merge_status?id={not_user_created}", headers=HEADER
+    )
+    assert res.status_code == 404
+
+    user_created_url = f"/ingestion/poll_upload_merge_status?id={user_created}"
+
+    # Upload not-yet-ready
+    res = client.get(user_created_url, headers=HEADER)
+    assert res.status_code == 200
+    assert "retry_in" in res.json and res.json["retry_in"] == 5
+    assert "status" not in res.json
+
+    test_details = "A human-friendly reason for this "
+    for status in [
+        AssayUploadStatus.MERGE_COMPLETED.value,
+        AssayUploadStatus.MERGE_FAILED.value,
+    ]:
+        # Simulate cloud function merge status update
+        with app.app_context():
+            upload = AssayUploads.find_by_id_and_email(user_created, test_user.email)
+            upload.status = status
+            upload.status_details = test_details
+            db.commit()
+
+        # Upload ready
+        res = client.get(user_created_url, headers=HEADER)
+        assert res.status_code == 200
+        assert "retry_in" not in res.json
+        assert "status" in res.json and res.json["status"] == status
+        assert (
+            "status_details" in res.json and res.json["status_details"] == test_details
+        )
