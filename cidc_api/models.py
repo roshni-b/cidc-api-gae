@@ -587,7 +587,7 @@ class DownloadableFiles(CommonColumns):
     md5_hash = Column(String, nullable=False)
     trial_id = Column(String, ForeignKey("trial_metadata.trial_id"), nullable=False)
     trial = relationship(TrialMetadata, foreign_keys=[trial_id])
-    object_url = Column(String, nullable=False)
+    object_url = Column(String, nullable=False, index=True, unique=True)
     visible = Column(Boolean, default=True)
 
     @staticmethod
@@ -613,12 +613,24 @@ class DownloadableFiles(CommonColumns):
 
         etag = make_etag(*(filtered_metadata.values()))
 
-        new_file = DownloadableFiles(_etag=etag, **filtered_metadata)
-        session.add(new_file)
+        df = (
+            session.query(DownloadableFiles)
+            .filter_by(object_url=filtered_metadata["object_url"])
+            .with_for_update()
+            .first()
+        )
+        if df:
+            df = session.merge(
+                DownloadableFiles(id=df.id, _etag=etag, **filtered_metadata)
+            )
+        else:
+            df = DownloadableFiles(_etag=etag, **filtered_metadata)
+
+        session.add(df)
         if commit:
             session.commit()
 
-        return new_file
+        return df
 
     @staticmethod
     @with_default_session
@@ -631,22 +643,32 @@ class DownloadableFiles(CommonColumns):
         commit: bool = True,
     ):
         """
-        Create a new DownloadableFiles record from from a GCS blob.
+        Create a new DownloadableFiles record from from a GCS blob,
+        or update an existing one, with the same object_url.
         """
-        new_file = DownloadableFiles(
-            trial_id=trial_id,
-            assay_type=assay_type,
-            data_format=data_format,
-            object_url=blob.name,
-            file_name=blob.name,
-            file_size_bytes=blob.size,
-            md5_hash=blob.md5_hash,
-            uploaded_timestamp=blob.time_created,
-        )
 
-        session.add(new_file)
+        # trying to find existing one
+        df = (
+            session.query(DownloadableFiles)
+            .filter_by(object_url=blob.name)
+            .with_for_update()
+            .first()
+        )
+        if not df:
+            df = DownloadableFiles()
+
+        df.trial_id = trial_id
+        df.assay_type = assay_type
+        df.data_format = data_format
+        df.object_url = blob.name
+        df.file_name = blob.name
+        df.file_size_bytes = blob.size
+        df.md5_hash = blob.md5_hash
+        df.uploaded_timestamp = blob.time_created
+
+        session.add(df)
 
         if commit:
             session.commit()
 
-        return new_file
+        return df
