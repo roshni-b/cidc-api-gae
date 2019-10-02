@@ -189,9 +189,6 @@ def upload_manifest():
             f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
         )
 
-    # Publish that this trial's metadata has been updated
-    gcloud_client.publish_patient_sample_update(trial_id)
-
     xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         trial_id, "manifest", schema_hint, xlsx_file, upload_moment
@@ -216,6 +213,9 @@ def upload_manifest():
         gcs_xlsx_uri=gcs_blob.name,
         session=session,
     )
+
+    # Publish that this trial's metadata has been updated
+    gcloud_client.publish_patient_sample_update(trial_id)
 
     return jsonify({"metadata_json_patch": md_patch})
 
