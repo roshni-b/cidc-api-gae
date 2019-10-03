@@ -255,6 +255,18 @@ class Permissions(CommonColumns):
         """Find all Permissions granted to the given user."""
         return session.query(Permissions).filter_by(granted_to_user=user.id).all()
 
+    @staticmethod
+    @with_default_session
+    def find_for_user_trial_type(
+        user: Users, trial_id: str, type_: str, session: Session
+    ):
+        """Check if a Permissions record exists for the given user, trial, and type."""
+        return (
+            session.query(Permissions)
+            .filter_by(granted_to_user=user.id, trial_id=trial_id, assay_type=type_)
+            .first()
+        )
+
 
 class TrialMetadata(CommonColumns):
     # TODO: split up metadata_json into separate `manifest`, `assays`, and `trial_info` fields on this table.
