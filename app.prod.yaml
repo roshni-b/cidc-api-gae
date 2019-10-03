@@ -2,6 +2,9 @@ runtime: python37
 env: standard
 entrypoint: gunicorn -b :$PORT --chdir cidc_api --log-level DEBUG app:app --timeout 60
 
+automatic_scaling:
+  min_instances: 1
+
 env_variables:
   ENV: 'prod'
   AUTH0_DOMAIN: 'cidc.auth0.com'
