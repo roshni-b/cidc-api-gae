@@ -220,9 +220,25 @@ def test_create_downloadable_file_from_blob(db, monkeypatch):
     )
 
     # Check that the file was created
+    assert 1 == db.query(DownloadableFiles).count()
     df_lookup = DownloadableFiles.find_by_id(df.id)
     assert df_lookup.object_url == fake_blob.name
     assert df_lookup.data_format == "Shipping Manifest"
+    assert df_lookup.file_size_bytes == 5
+    assert df_lookup.md5_hash == "12345"
+
+    # uploading second time to check non duplicating entries
+    fake_blob.size = 6
+    fake_blob.md5_hash = "6"
+    df = DownloadableFiles.create_from_blob(
+        "id", "pbmc", "Shipping Manifest", fake_blob
+    )
+
+    # Check that the file was created
+    assert 1 == db.query(DownloadableFiles).count()
+    df_lookup = DownloadableFiles.find_by_id(df.id)
+    assert df_lookup.file_size_bytes == 6
+    assert df_lookup.md5_hash == "6"
 
 
 def test_with_default_session(app_no_auth):

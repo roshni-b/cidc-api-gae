@@ -15,7 +15,13 @@ from cidc_schemas import prism
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.services.ingestion import extract_schema_and_xlsx
-from cidc_api.models import TrialMetadata, Users, AssayUploadStatus, Permissions
+from cidc_api.models import (
+    TrialMetadata,
+    Users,
+    AssayUploadStatus,
+    Permissions,
+    DownloadableFiles,
+)
 
 from . import open_data_file
 from ..test_models import db_test
@@ -229,6 +235,40 @@ def test_upload_manifest(
 
     # Check that we tried to upload the excel file
     mocks.make_all_assertions()
+
+
+def test_upload_manifest_twice(
+    app_no_auth, some_file, test_user, db_with_trial_and_user, db, monkeypatch
+):
+    """Ensure that doing upload_manifest twice will produce only one DownloadableFiles"""
+
+    mocks = UploadMocks(monkeypatch)
+
+    client = app_no_auth.test_client()
+
+    give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
+
+    res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
+    assert res.status_code == 200
+
+    # Check that we tried to publish a patient/sample update
+    mocks.publish_patient_sample_update.assert_called_once()
+
+    # Check that we tried to upload the excel file
+    mocks.upload_xlsx.assert_called_once()
+
+    assert 1 == db.query(DownloadableFiles).count()
+
+    # uploading second time
+    res = client.post(
+        MANIFEST_UPLOAD,
+        data=form_data("pbmc.xlsx", open_data_file(some_file.name), "pbmc"),
+    )
+    assert res.status_code == 200
+
+    assert mocks.upload_xlsx.call_count == 2
+
+    assert 1 == db.query(DownloadableFiles).count()
 
 
 class UploadMocks:
