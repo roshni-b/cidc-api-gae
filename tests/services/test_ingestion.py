@@ -15,7 +15,13 @@ from cidc_schemas import prism
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.services.ingestion import extract_schema_and_xlsx
-from cidc_api.models import TrialMetadata, Users, AssayUploadStatus, Permissions, DownloadableFiles
+from cidc_api.models import (
+    TrialMetadata,
+    Users,
+    AssayUploadStatus,
+    Permissions,
+    DownloadableFiles,
+)
 
 from . import open_data_file
 from ..test_models import db_test
@@ -248,7 +254,7 @@ def test_upload_manifest_twice(
 
     # Check that we tried to upload the excel file
     mocks.upload_xlsx.assert_called_once()
-    
+
     assert 1 == db.query(DownloadableFiles).count()
 
     # uploading second time
