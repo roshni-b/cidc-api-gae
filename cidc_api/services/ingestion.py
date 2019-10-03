@@ -4,7 +4,7 @@ Endpoints for validating and ingesting metadata and data.
 import os
 import json
 import datetime
-from typing import BinaryIO, Tuple, List
+from typing import BinaryIO, Tuple, List, NamedTuple
 
 from werkzeug.exceptions import (
     BadRequest,
@@ -27,7 +27,9 @@ from models import (
     TrialMetadata,
     DownloadableFiles,
     ManifestUploads,
+    Permissions,
     CIDCRole,
+    Users,
 )
 from auth import requires_auth
 from config.settings import GOOGLE_UPLOAD_BUCKET
@@ -97,19 +99,17 @@ def validate_endpoint():
     Separated from `validate` function so that RBAC from requires_auth doesn't affect
     internal invocations of `validate` (in, e.g., the /ingestion/upload_assay endpoint).
     """
-    return validate()
+    template_type, _, template_file = extract_schema_and_xlsx()
+    return validate(template_type, template_file)
 
 
-def validate():
+def validate(template_type, template_file):
     """
     Validate a .xlsx manifest or assay metadata template.
 
     TODO: add this endpoint to the OpenAPI docs
     """
     print(f"validate started")
-    # Extract info from the request context
-    template_type, _, template_file = extract_schema_and_xlsx()
-
     # Validate the .xlsx file with respect to the schema
     try:
         error_list = validate_xlsx(
@@ -137,14 +137,65 @@ def validate():
         return jsonify(json)
 
 
-def validate_excel_payload(f):
+def check_permissions(user, trial_id, template_type):
+    """
+    Check that the given user has permissions to access the given trial / template type.
+
+    If no trial exists with this ID, raise a 404.
+    If no permission exists for this user-trial-template_type trio, raise a 401.
+    """
+    perm = Permissions.find_for_user_trial_type(user, trial_id, template_type)
+    if not perm and user.role != CIDCRole.ADMIN.value:
+        if not TrialMetadata.find_by_trial_id(trial_id):
+            raise BadRequest(
+                f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
+            )
+        raise Unauthorized(
+            f"{user.email} is not authorized to upload {template_type} data to {trial_id}. "
+            f"Please contact a CIDC administrator if you believe this is a mistake."
+        )
+
+
+def upload_handler(f):
+    """
+    Extracts and validates the xlsx file from the request form body,
+    prismifies the xlsx file, checks that the current user has
+    permission to complete this upload, then passes relevant data
+    along to `f` as positional arguments.
+
+    This decorator factors out common code from `upload_manifest` and `upload_assay`.
+    """
+
     def wrapped(*args, **kwargs):
-        print(f"validate_excel_payload started")
+        print(f"upload_handler started")
+        template_type, schema_path, xlsx_file = extract_schema_and_xlsx()
+
         # Run basic validations on the provided Excel file
-        validations = validate()
+        validations = validate(template_type, xlsx_file)
         if len(validations.json["errors"]) > 0:
             raise BadRequest(validations.json)
-        return f(*args, **kwargs)
+
+        md_patch, file_infos = prism.prismify(xlsx_file, schema_path, template_type)
+
+        try:
+            trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
+        except KeyError:
+            raise BadRequest(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
+
+        user = _request_ctx_stack.top.current_user
+
+        check_permissions(user, trial_id, template_type)
+
+        return f(
+            user,
+            trial_id,
+            template_type,
+            xlsx_file,
+            md_patch,
+            file_infos,
+            *args,
+            **kwargs,
+        )
 
     wrapped.__name__ = f.__name__
     return wrapped
@@ -154,8 +205,15 @@ def validate_excel_payload(f):
 @requires_auth(
     "ingestion/upload_manifest", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
 )
-@validate_excel_payload
-def upload_manifest():
+@upload_handler
+def upload_manifest(
+    user: Users,
+    trial_id: str,
+    template_type: str,
+    xlsx_file: BinaryIO,
+    md_patch: dict,
+    file_infos: List[prism.LocalFileUploadEntry],
+):
     """
     Ingest manifest data from an excel spreadsheet.
 
@@ -173,15 +231,6 @@ def upload_manifest():
     """
     upload_moment = datetime.datetime.now().isoformat()
 
-    schema_hint, schema_path, xlsx_file = extract_schema_and_xlsx()
-
-    md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
-
-    try:
-        trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
-    except KeyError:
-        raise BadRequest(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
-
     try:
         trial = TrialMetadata.patch_manifest(trial_id, md_patch, commit=False)
     except NoResultFound as e:
@@ -191,24 +240,23 @@ def upload_manifest():
 
     xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
-        trial_id, "manifest", schema_hint, xlsx_file, upload_moment
+        trial_id, "manifest", template_type, xlsx_file, upload_moment
     )
     # TODO maybe rely on default session
     session = Session.object_session(trial)
     # TODO move to prism
     DownloadableFiles.create_from_blob(
         trial_id,
-        schema_hint,
+        template_type,
         "Shipping Manifest",
         gcs_blob,
         session=session,
         commit=False,
     )
 
-    user_email = _request_ctx_stack.top.current_user.email
     manifest_upload = ManifestUploads.create(
-        manifest_type=schema_hint,
-        uploader_email=user_email,
+        manifest_type=template_type,
+        uploader_email=user.email,
         metadata=md_patch,
         gcs_xlsx_uri=gcs_blob.name,
         session=session,
@@ -224,8 +272,15 @@ def upload_manifest():
 @requires_auth(
     "ingestion/upload_assay", [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
 )
-@validate_excel_payload
-def upload_assay():
+@upload_handler
+def upload_assay(
+    user: Users,
+    trial_id: str,
+    template_type: str,
+    xlsx_file: BinaryIO,
+    md_patch: dict,
+    file_infos: List[prism.LocalFileUploadEntry],
+):
     """
     Initiate an assay metadata/data ingestion job.
 
@@ -242,25 +297,6 @@ def upload_assay():
     # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
     """
     print(f"upload_assay started")
-    schema_hint, schema_path, xlsx_file = extract_schema_and_xlsx()
-
-    # Extract the clinical trial metadata blob contained in the .xlsx file,
-    # along with information about the files the template references.
-    md_patch, file_infos = prism.prismify(xlsx_file, schema_path, schema_hint)
-
-    try:
-        trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
-    except KeyError:
-        print(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found in patch {md_patch}.")
-        raise BadRequest(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
-
-    trial = TrialMetadata.find_by_trial_id(trial_id)
-    if trial is None:
-        print(f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found.")
-        raise BadRequest(
-            f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
-        )
-
     upload_moment = datetime.datetime.now().isoformat()
     uri2uuid = {}
     url_mapping = {}
@@ -283,17 +319,16 @@ def upload_assay():
     # Upload the xlsx template file to GCS
     xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
-        trial_id, "assays", schema_hint, xlsx_file, upload_moment
+        trial_id, "assays", template_type, xlsx_file, upload_moment
     )
 
     # Save the upload job to the database
-    user_email = _request_ctx_stack.top.current_user.email
     job = AssayUploads.create(
-        schema_hint, user_email, uri2uuid, md_patch, gcs_blob.name
+        template_type, user.email, uri2uuid, md_patch, gcs_blob.name
     )
 
     # Grant the user upload access to the upload bucket
-    gcloud_client.grant_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
+    gcloud_client.grant_upload_access(GOOGLE_UPLOAD_BUCKET, user.email)
 
     response = {
         "job_id": job.id,

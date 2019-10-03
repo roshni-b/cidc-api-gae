@@ -46,7 +46,11 @@ def test_update_file_filters(db, app_no_auth, test_user):
     for t in [t1, t2]:
         for a in ["wes", "olink"]:
             d = DownloadableFiles.create_from_metadata(
-                trial_id=t, assay_type=a, file_metadata=fake_metadata
+                trial_id=t,
+                assay_type=a,
+                file_metadata=dict(
+                    fake_metadata, object_url=f"{t}/{a}"  # so they're unique
+                ),
             )
 
     # Make sure we actually inserted files before running tests
