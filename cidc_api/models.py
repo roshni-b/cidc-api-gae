@@ -43,6 +43,16 @@ class CIDCRole(EnumBaseClass):
 
 ROLES = [role.value for role in CIDCRole]
 
+
+class ExtraDataTypes(EnumBaseClass):
+    """Classes of downloadable files, in addition to manifest / assay data"""
+
+    PARTICIPANTS_INFO = "participants info"
+    SAMPLES_INFO = "samples info"
+
+
+EXTRA_DATA_TYPES = [typ.value for typ in ExtraDataTypes]
+
 # See: https://github.com/CIMAC-CIDC/cidc-schemas/blob/master/cidc_schemas/schemas/artifacts/artifact_core.json
 FILE_TYPES = [
     "FASTA",
