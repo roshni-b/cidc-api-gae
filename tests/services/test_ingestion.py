@@ -5,6 +5,7 @@ from collections import namedtuple
 from unittest.mock import MagicMock
 
 import pytest
+from flask import _request_ctx_stack
 from werkzeug.exceptions import (
     HTTPException,
     InternalServerError,
@@ -202,6 +203,32 @@ def give_upload_permission(user, trial, type_, db):
         )
     )
     db.commit()
+
+
+def test_admin_upload(app, test_user, db_with_trial_and_user, monkeypatch):
+    """Ensure an admin can upload assays and manifests without specific permissions."""
+    mocks = UploadMocks(monkeypatch)
+
+    # Mock an admin user
+    test_user.role = CIDCRole.ADMIN.value
+
+    def fake_auth(*args):
+        _request_ctx_stack.top.current_user = test_user
+        return True
+
+    monkeypatch.setattr(app.auth, "authorized", fake_auth)
+
+    client = app.test_client()
+
+    res = client.post(
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
+    )
+    assert res.status_code == 200
+
+    res = client.post(
+        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes")
+    )
+    assert res.status_code == 200
 
 
 def test_upload_manifest(
