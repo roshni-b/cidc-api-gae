@@ -246,6 +246,8 @@ def test_upload_manifest_twice(
 
     client = app_no_auth.test_client()
 
+    give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
+
     res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 200
 
