@@ -205,7 +205,7 @@ def test_upload_manifest(
 def test_upload_manifest_twice(
     app_no_auth, some_file, test_user, db_with_trial_and_user, db, monkeypatch
 ):
-    """Ensure the upload_manifest endpoint follows the expected execution flow"""
+    """Ensure that doing upload_manifest twice will produce only one DownloadableFiles"""
 
     mocks = UploadMocks(monkeypatch)
 
@@ -219,6 +219,8 @@ def test_upload_manifest_twice(
 
     # Check that we tried to upload the excel file
     mocks.upload_xlsx.assert_called_once()
+    
+    assert 1 == db.query(DownloadableFiles).count()
 
     # uploading second time
     res = client.post(
