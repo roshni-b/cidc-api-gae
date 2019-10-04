@@ -18,6 +18,7 @@ from eve import Eve
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
+
 from cidc_schemas import constants, validate_xlsx, prism, template, template_reader
 
 import gcloud_client
@@ -293,6 +294,7 @@ def upload_assay(
         gcs_bucket: the bucket to upload objects to.
         job_id: the unique identifier for this upload job in the database
         job_etag: the job record's etag, required by Eve for safe updates
+        extra_metadata: files with extra metadata information only applicable to few assays
     
     # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
     """
@@ -300,6 +302,7 @@ def upload_assay(
     upload_moment = datetime.datetime.now().isoformat()
     uri2uuid = {}
     url_mapping = {}
+    files_with_extra_md = {}
     for file_info in file_infos:
         uuid = file_info.upload_placeholder
 
@@ -315,6 +318,9 @@ def upload_assay(
                 f"File {file_info.local_path} came twice.\nEach local file should be used only once."
             )
         url_mapping[file_info.local_path] = gcs_uri
+
+        if file_info.metadata_availability:
+            files_with_extra_md[file_info.local_path] = file_info.upload_placeholder
 
     # Upload the xlsx template file to GCS
     xlsx_file.seek(0)
@@ -336,6 +342,9 @@ def upload_assay(
         "url_mapping": url_mapping,
         "gcs_bucket": GOOGLE_UPLOAD_BUCKET,
     }
+    if bool(files_with_extra_md):
+        response["extra_metadata"] = files_with_extra_md
+
     return jsonify(response)
 
 
@@ -475,3 +484,49 @@ def signed_upload_urls():
         object_urls[object_name] = object_url
 
     return jsonify(object_urls)
+
+
+@ingestion_api.route("/extra-assay-metadata", methods=["POST"])
+def extra_assay_metadata():
+    """
+
+    Extracts:
+        job_id, and extra_metadata_file from request body
+    Raises:
+        BadRequest: if the request requirements aren't satisfied
+
+    request.form = {
+        'job_id': the job_id to update the patch for,
+    }
+
+    request.files = {
+        [artifact_uuid_1]: [open extra metadata file 1],
+        [artifact_uuid_2]: [open extra metadata file 2]
+    }
+    """
+
+    if not request.form:
+        raise BadRequest(
+            "Expected form content in request body, or failed to parse form content"
+        )
+
+    if "job_id" not in request.form:
+        raise BadRequest("Expected job_id in form")
+
+    if not request.files:
+        raise BadRequest(
+            "Expected files in request (mapping from artifact uuids to open files)"
+        )
+
+    job_id = request.form["job_id"]
+
+    files = request.files.to_dict()
+
+    try:
+        AssayUploads.merge_extra_metadata(job_id, files)
+    except Exception as e:
+        raise (e)
+        raise BadRequest(str(e))
+
+    # TODO: return something here?
+    return jsonify({})

@@ -13,6 +13,11 @@ from werkzeug.exceptions import (
     NotImplemented,
 )
 from cidc_schemas import prism
+from cidc_schemas.prism import (
+    merge_artifact_extra_metadata,
+    PROTOCOL_ID_FIELD_NAME,
+    LocalFileUploadEntry,
+)
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.services.ingestion import extract_schema_and_xlsx
@@ -24,11 +29,6 @@ from cidc_api.models import (
     DownloadableFiles,
 )
 
-from . import open_data_file
-from ..test_models import db_test
-from ..util import assert_same_elements
-from ..conftest import TEST_EMAIL
-
 from cidc_api.models import (
     Users,
     AssayUploads,
@@ -36,6 +36,11 @@ from cidc_api.models import (
     TrialMetadata,
     CIDCRole,
 )
+
+from . import open_data_file
+from ..test_models import db_test
+from ..util import assert_same_elements
+from ..conftest import TEST_EMAIL
 
 
 @pytest.fixture
@@ -52,7 +57,7 @@ TEST_TRIAL = "test_trial"
 def db_with_trial_and_user(db, test_user):
     # Create the target trial and the uploader
     TrialMetadata.create(
-        "test_trial", {prism.PROTOCOL_ID_FIELD_NAME: TEST_TRIAL, "participants": []}
+        "test_trial", {PROTOCOL_ID_FIELD_NAME: TEST_TRIAL, "participants": []}
     )
     Users.create(profile={"email": test_user.email})
 
@@ -131,6 +136,7 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
     with app.test_request_context(url, data=data):
         with pytest.raises(error, match=message):
             extract_schema_and_xlsx()
+            extract_schema_and_extra_metadata_xlsx()
 
 
 def test_upload_manifest_non_existing_trial_id(
@@ -342,8 +348,7 @@ class UploadMocks:
         monkeypatch.setattr("cidc_schemas.prism.prismify", self.prismify)
         self.prismify.return_value = (
             dict(
-                **{prism.PROTOCOL_ID_FIELD_NAME: prismify_trial_id},
-                **(prismify_extra or {}),
+                **{PROTOCOL_ID_FIELD_NAME: prismify_trial_id}, **(prismify_extra or {})
             ),
             prismify_file_entries or [],
         )
@@ -359,7 +364,7 @@ class UploadMocks:
                 attr.reset_mock()
 
 
-finfo = namedtuple("finfo", ["gs_key", "local_path", "upload_placeholder"])
+finfo = LocalFileUploadEntry
 
 
 def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypatch):
@@ -369,7 +374,7 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
     mocks = UploadMocks(
         monkeypatch,
         prismify_file_entries=[
-            finfo("test_trial/url/file.ext", "localfile.ext", "uuid-1")
+            finfo("localfile.ext", "test_trial/url/file.ext", "uuid-1", None)
         ],
     )
 
@@ -458,7 +463,7 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
     mocks = UploadMocks(
         monkeypatch,
         prismify_file_entries=[
-            finfo(url, lp, "uuid" + str(i))
+            finfo(lp, url, "uuid" + str(i), "npx" in url)
             for i, (lp, url) in enumerate(OLINK_TESTDATA)
         ],
     )
@@ -480,6 +485,10 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
     )
     assert res.status_code == 200
     assert "url_mapping" in res.json
+    assert "extra_metadata" in res.json
+
+    extra_metadata = res.json["extra_metadata"]
+    assert type(extra_metadata) == dict
 
     url_mapping = res.json["url_mapping"]
 
@@ -542,7 +551,7 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
     Check pull_upload_merge_status endpoint behavior
     """
     trial_id = "test-12345"
-    metadata = {prism.PROTOCOL_ID_FIELD_NAME: trial_id}
+    metadata = {PROTOCOL_ID_FIELD_NAME: trial_id}
 
     with app.app_context():
         user = Users.create({"email": test_user.email})
@@ -618,3 +627,75 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
         assert (
             "status_details" in res.json and res.json["status_details"] == test_details
         )
+
+
+fake_form = {
+    "job_id": 123,
+    "uuid-1": (io.BytesIO(b"fake file 1"), "fname1"),
+    "uuid-2": (io.BytesIO(b"fake file 2"), "fname2"),
+}
+
+
+def test_extra_metadata(app_no_auth, monkeypatch):
+    """Ensure the extra assay metadata endpoint follows the expected execution flow"""
+
+    client = app_no_auth.test_client()
+    res = client.post("/ingestion/extra-assay-metadata")
+    assert res.status_code == 400
+    assert "Expected form" in res.json["_error"]["message"]
+
+    res = client.post("/ingestion/extra-assay-metadata", data={"foo": "bar"})
+    assert res.status_code == 400
+    assert "job_id" in res.json["_error"]["message"]
+
+    res = client.post("/ingestion/extra-assay-metadata", data={"job_id": 123})
+    assert res.status_code == 400
+    assert "files" in res.json["_error"]["message"]
+
+    from cidc_api.services.ingestion import AssayUploads as _AssayUploads
+
+    merge_extra_metadata = MagicMock()
+    monkeypatch.setattr(_AssayUploads, "merge_extra_metadata", merge_extra_metadata)
+
+    res = client.post("/ingestion/extra-assay-metadata", data=fake_form)
+    assert res.status_code == 200
+    merge_extra_metadata.assert_called()
+
+
+fake_form_2 = {
+    "job_id": 123,
+    "uuid-1": (io.BytesIO(b"fake file 1"), "fname1"),
+    "uuid-2": (io.BytesIO(b"fake file 2"), "fname2"),
+}
+
+
+def test_merge_extra_metadata(
+    app_no_auth, monkeypatch, db, test_user, db_with_trial_and_user
+):
+    """Ensure merging of extra metadata follows the expected execution flow"""
+    with app_no_auth.app_context():
+        assay_upload = AssayUploads.create(
+            assay_type="wes",
+            uploader_email=test_user.email,
+            gcs_file_map={},
+            metadata={PROTOCOL_ID_FIELD_NAME: TEST_TRIAL, "participants": []},
+            gcs_xlsx_uri="",
+            commit=False,
+        )
+        assay_upload.id = 123
+        db.commit()
+
+        merge = MagicMock()
+        merge.return_value = ({"dict1": "dict1"}, {"dict2": "dict2"})
+
+        monkeypatch.setattr(prism, "merge_artifact_extra_metadata", merge)
+
+        client = app_no_auth.test_client()
+        res = client.post("/ingestion/extra-assay-metadata", data=fake_form_2)
+        assert res.status_code == 200
+        assert merge.call_count == 2
+
+        print(db.query(AssayUploads))
+        assert 1 == db.query(AssayUploads).count()
+        au = db.query(AssayUploads).first()
+        assert au.assay_patch == merge.return_value[0]
