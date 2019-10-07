@@ -206,7 +206,7 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
     del file_metadata["foo"]
     for k in file_metadata.keys():
         assert getattr(new_file, k) == file_metadata[k]
-    assert new_file.file_specific_metadata == additional_metadata
+    assert new_file.additional_metadata == additional_metadata
 
 
 @db_test

@@ -621,7 +621,7 @@ class DownloadableFiles(CommonColumns):
     file_size_bytes = Column(Integer, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
     data_format = Column(String, nullable=False)
-    file_specific_metadata = Column(JSONB, nullable=True)
+    additional_metadata = Column(JSONB, nullable=True)
     # TODO rename assay_type, because we store manifests in there too.
     assay_type = Column(String, nullable=False)
     md5_hash = Column(String, nullable=False)
@@ -649,7 +649,7 @@ class DownloadableFiles(CommonColumns):
         filtered_metadata = {
             "trial_id": trial_id,
             "assay_type": assay_type,
-            "file_specific_metadata": additional_metadata,
+            "additional_metadata": additional_metadata,
         }
         for key, value in file_metadata.items():
             if key in supported_columns:
