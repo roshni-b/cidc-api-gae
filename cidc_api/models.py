@@ -43,6 +43,16 @@ class CIDCRole(EnumBaseClass):
 
 ROLES = [role.value for role in CIDCRole]
 
+
+class ExtraDataTypes(EnumBaseClass):
+    """Classes of downloadable files, in addition to manifest / assay data"""
+
+    PARTICIPANTS_INFO = "participants info"
+    SAMPLES_INFO = "samples info"
+
+
+EXTRA_DATA_TYPES = [typ.value for typ in ExtraDataTypes]
+
 # See: https://github.com/CIMAC-CIDC/cidc-schemas/blob/master/cidc_schemas/schemas/artifacts/artifact_core.json
 FILE_TYPES = [
     "FASTA",
@@ -572,6 +582,23 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
             session.commit()
 
         return job
+
+    @staticmethod
+    @with_default_session
+    def merge_extra_metadata(job_id, files, session):
+
+        job = AssayUploads.find_by_id(job_id, session=session)
+
+        for f in files.items():
+            artifact_uuid = f[0]
+            file = f[1]
+            updated_patch, _ = prism.merge_artifact_extra_metadata(
+                job.assay_patch, artifact_uuid, job.assay_type, file
+            )
+            job.assay_patch = updated_patch
+
+        session.add(job)
+        session.commit()
 
     @classmethod
     @with_default_session
