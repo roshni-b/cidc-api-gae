@@ -592,7 +592,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
         for f in files.items():
             artifact_uuid = f[0]
             file = f[1]
-            updated_patch, _ = prism.merge_artifact_extra_metadata(
+            updated_patch, _, _ = prism.merge_artifact_extra_metadata(
                 job.assay_patch, artifact_uuid, job.assay_type, file
             )
             job.assay_patch = updated_patch
@@ -621,6 +621,7 @@ class DownloadableFiles(CommonColumns):
     file_size_bytes = Column(Integer, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
     data_format = Column(String, nullable=False)
+    file_specific_metadata = Column(JSONB, nullable=True)
     # TODO rename assay_type, because we store manifests in there too.
     assay_type = Column(String, nullable=False)
     md5_hash = Column(String, nullable=False)
