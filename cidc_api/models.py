@@ -637,7 +637,7 @@ class DownloadableFiles(CommonColumns):
         assay_type: str,
         file_metadata: dict,
         session: Session,
-        additional_metadata: dict = {},
+        additional_metadata: Optional[dict] = None,
         commit: bool = True,
     ):
         """
