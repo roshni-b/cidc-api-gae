@@ -637,6 +637,7 @@ class DownloadableFiles(CommonColumns):
         assay_type: str,
         file_metadata: dict,
         session: Session,
+        additional_metadata: dict = {},
         commit: bool = True,
     ):
         """
@@ -645,7 +646,11 @@ class DownloadableFiles(CommonColumns):
 
         # Filter out keys that aren't columns
         supported_columns = DownloadableFiles.__table__.columns.keys()
-        filtered_metadata = {"trial_id": trial_id, "assay_type": assay_type}
+        filtered_metadata = {
+            "trial_id": trial_id,
+            "assay_type": assay_type,
+            "file_specific_metadata": additional_metadata,
+        }
         for key, value in file_metadata.items():
             if key in supported_columns:
                 filtered_metadata[key] = value
