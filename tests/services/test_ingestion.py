@@ -691,7 +691,11 @@ def test_merge_extra_metadata(
         db.commit()
 
         merge = MagicMock()
-        merge.return_value = ({"dict1": "dict1"}, {"dict2": "dict2"})
+        merge.return_value = (
+            {"dict1": "dict1"},
+            {"dict2": "dict2"},
+            {"dict3": "dict3"},
+        )
 
         monkeypatch.setattr(prism, "merge_artifact_extra_metadata", merge)
 

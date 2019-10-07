@@ -187,11 +187,14 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
         "foo": "bar",  # unsupported column - should be filtered
         "data_format": "FASTQ",
     }
+    additional_metadata = {"more": "info"}
 
     # Create the trial (to avoid violating foreign-key constraint)
     TrialMetadata.create(TRIAL_ID, METADATA)
     # Create the file
-    DownloadableFiles.create_from_metadata(TRIAL_ID, "wes", file_metadata)
+    DownloadableFiles.create_from_metadata(
+        TRIAL_ID, "wes", file_metadata, additional_metadata=additional_metadata
+    )
 
     # Check that we created the file
     new_file = (
@@ -203,6 +206,7 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
     del file_metadata["foo"]
     for k in file_metadata.keys():
         assert getattr(new_file, k) == file_metadata[k]
+    assert new_file.additional_metadata == additional_metadata
 
 
 @db_test
