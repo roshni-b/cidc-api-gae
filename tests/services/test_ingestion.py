@@ -368,7 +368,9 @@ class UploadMocks:
             if isinstance(attr, MagicMock):
                 attr.reset_mock()
 
+
 finfo = LocalFileUploadEntry
+
 
 def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypatch):
     """Ensure the upload endpoint follows the expected execution flow"""
