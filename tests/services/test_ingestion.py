@@ -634,13 +634,6 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
         )
 
 
-fake_form = {
-    "job_id": 123,
-    "uuid-1": (io.BytesIO(b"fake file 1"), "fname1"),
-    "uuid-2": (io.BytesIO(b"fake file 2"), "fname2"),
-}
-
-
 def test_extra_metadata(app_no_auth, monkeypatch):
     """Ensure the extra assay metadata endpoint follows the expected execution flow"""
 
@@ -662,16 +655,16 @@ def test_extra_metadata(app_no_auth, monkeypatch):
     merge_extra_metadata = MagicMock()
     monkeypatch.setattr(_AssayUploads, "merge_extra_metadata", merge_extra_metadata)
 
-    res = client.post("/ingestion/extra-assay-metadata", data=fake_form)
+    res = client.post(
+        "/ingestion/extra-assay-metadata",
+        data={
+            "job_id": 123,
+            "uuid-1": (io.BytesIO(b"fake file 1"), "fname1"),
+            "uuid-2": (io.BytesIO(b"fake file 2"), "fname2"),
+        },
+    )
     assert res.status_code == 200
     merge_extra_metadata.assert_called()
-
-
-fake_form_2 = {
-    "job_id": 123,
-    "uuid-1": (io.BytesIO(b"fake file 1"), "fname1"),
-    "uuid-2": (io.BytesIO(b"fake file 2"), "fname2"),
-}
 
 
 def test_merge_extra_metadata(
@@ -680,31 +673,44 @@ def test_merge_extra_metadata(
     """Ensure merging of extra metadata follows the expected execution flow"""
     with app_no_auth.app_context():
         assay_upload = AssayUploads.create(
-            assay_type="wes",
+            assay_type="assay_with_extra_md",
             uploader_email=test_user.email,
             gcs_file_map={},
-            metadata={PROTOCOL_ID_FIELD_NAME: TEST_TRIAL, "participants": []},
+            metadata={
+                PROTOCOL_ID_FIELD_NAME: TEST_TRIAL,
+                "whatever": {
+                    "hierarchy": [
+                        {"we just need a": "uuid-1", "to be able": "to merge"},
+                        {"and": "uuid-2"},
+                    ]
+                },
+            },
             gcs_xlsx_uri="",
             commit=False,
         )
-        assay_upload.id = 123
+        assay_upload.id = 137
         db.commit()
 
-        merge = MagicMock()
-        merge.return_value = (
-            {"dict1": "dict1"},
-            {"dict2": "dict2"},
-            {"dict3": "dict3"},
+        custom_extra_md_parse = MagicMock()
+        custom_extra_md_parse.side_effect = lambda f: {"extra_md": f.read().decode()}
+        monkeypatch.setattr(
+            prism,
+            "_EXTRA_METADATA_PARSERS",
+            {"assay_with_extra_md": custom_extra_md_parse},
         )
 
-        monkeypatch.setattr(prism, "merge_artifact_extra_metadata", merge)
+        form_data = {
+            "job_id": 137,
+            "uuid-1": (io.BytesIO(b"fake file 1"), "fname1"),
+            "uuid-2": (io.BytesIO(b"fake file 2"), "fname2"),
+        }
 
         client = app_no_auth.test_client()
-        res = client.post("/ingestion/extra-assay-metadata", data=fake_form_2)
+        res = client.post("/ingestion/extra-assay-metadata", data=form_data)
         assert res.status_code == 200
-        assert merge.call_count == 2
+        assert custom_extra_md_parse.call_count == 2
 
-        print(db.query(AssayUploads))
         assert 1 == db.query(AssayUploads).count()
         au = db.query(AssayUploads).first()
-        assert au.assay_patch == merge.return_value[0]
+        assert "extra_md" in au.assay_patch["whatever"]["hierarchy"][0]
+        assert "extra_md" in au.assay_patch["whatever"]["hierarchy"][1]
