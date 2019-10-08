@@ -16,6 +16,7 @@ from werkzeug.exceptions import (
 
 from eve import Eve
 from sqlalchemy.orm.exc import NoResultFound
+from jsonschema.exceptions import ValidationError
 from sqlalchemy.orm.session import Session
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
 
@@ -238,6 +239,8 @@ def upload_manifest(
         raise BadRequest(
             f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
         )
+    except ValidationError as e:
+        raise BadRequest(f"{e.message} in {e.instance}")
 
     xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
