@@ -19,6 +19,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY, BYTEA
@@ -510,8 +511,9 @@ class AssayUploadStatus(EnumBaseClass):
         if c != t:
             if t == cls.STARTED:
                 return False
-            if c in upload_statuses and t not in merge_statuses:
-                return False
+            if c in upload_statuses:
+                if t not in merge_statuses:
+                    return False
             if c in merge_statuses:
                 return False
         return True
@@ -589,15 +591,21 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
 
         job = AssayUploads.find_by_id(job_id, session=session)
 
-        for f in files.items():
-            artifact_uuid = f[0]
-            file = f[1]
-            updated_patch, _ = prism.merge_artifact_extra_metadata(
-                job.assay_patch, artifact_uuid, job.assay_type, file
-            )
-            job.assay_patch = updated_patch
+        print(f"About to merge extra md to {job.id}/{job.status}")
 
-        session.add(job)
+        for uuid, file in files.items():
+            print(f"About to parse/merge extra md on {uuid}")
+            job.assay_patch, updated_artifact, _ = prism.merge_artifact_extra_metadata(
+                job.assay_patch, uuid, job.assay_type, file
+            )
+            print(f"Updated md for {uuid}: {updated_artifact.keys()}")
+
+        # A workaround fix for assay_patch modifications not being tracked
+        # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
+        # in the model doesn't seem to help.
+        flag_modified(job, "assay_patch")
+
+        print(f"Updated {job.id}/{job.status} patch: {job.assay_patch}")
         session.commit()
 
     @classmethod
@@ -621,6 +629,7 @@ class DownloadableFiles(CommonColumns):
     file_size_bytes = Column(Integer, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
     data_format = Column(String, nullable=False)
+    additional_metadata = Column(JSONB, nullable=True)
     # TODO rename assay_type, because we store manifests in there too.
     assay_type = Column(String, nullable=False)
     md5_hash = Column(String, nullable=False)
@@ -636,6 +645,7 @@ class DownloadableFiles(CommonColumns):
         assay_type: str,
         file_metadata: dict,
         session: Session,
+        additional_metadata: Optional[dict] = None,
         commit: bool = True,
     ):
         """
@@ -644,7 +654,11 @@ class DownloadableFiles(CommonColumns):
 
         # Filter out keys that aren't columns
         supported_columns = DownloadableFiles.__table__.columns.keys()
-        filtered_metadata = {"trial_id": trial_id, "assay_type": assay_type}
+        filtered_metadata = {
+            "trial_id": trial_id,
+            "assay_type": assay_type,
+            "additional_metadata": additional_metadata,
+        }
         for key, value in file_metadata.items():
             if key in supported_columns:
                 filtered_metadata[key] = value

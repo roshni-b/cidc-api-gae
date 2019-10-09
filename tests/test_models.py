@@ -1,3 +1,4 @@
+import io
 from functools import wraps
 from datetime import datetime
 from unittest.mock import MagicMock
@@ -17,6 +18,7 @@ from cidc_api.models import (
     AssayUploadStatus,
 )
 from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
+from cidc_schemas import prism
 
 from .util import assert_same_elements
 
@@ -175,6 +177,53 @@ def test_create_assay_upload(db):
 
 
 @db_test
+def test_assay_upload_merge_extra_metadata(db, monkeypatch):
+    """Try to create an assay upload"""
+    new_user = Users.create(PROFILE)
+
+    TrialMetadata.create(TRIAL_ID, METADATA)
+
+    assay_upload = AssayUploads.create(
+        assay_type="assay_with_extra_md",
+        uploader_email=EMAIL,
+        gcs_file_map={},
+        metadata={
+            PROTOCOL_ID_FIELD_NAME: TRIAL_ID,
+            "whatever": {
+                "hierarchy": [
+                    {"we just need a": "uuid-1", "to be able": "to merge"},
+                    {"and": "uuid-2"},
+                ]
+            },
+        },
+        gcs_xlsx_uri="",
+        commit=False,
+    )
+    assay_upload.id = 111
+    db.commit()
+
+    custom_extra_md_parse = MagicMock()
+    custom_extra_md_parse.side_effect = lambda f: {"extra": f.read().decode()}
+    monkeypatch.setattr(
+        prism, "_EXTRA_METADATA_PARSERS", {"assay_with_extra_md": custom_extra_md_parse}
+    )
+
+    AssayUploads.merge_extra_metadata(
+        111,
+        {
+            "uuid-1": io.BytesIO(b"within extra md file 1"),
+            "uuid-2": io.BytesIO(b"within extra md file 2"),
+        },
+        session=db,
+    )
+
+    assert 1 == db.query(AssayUploads).count()
+    au = db.query(AssayUploads).first()
+    assert "extra" in au.assay_patch["whatever"]["hierarchy"][0]
+    assert "extra" in au.assay_patch["whatever"]["hierarchy"][1]
+
+
+@db_test
 def test_create_downloadable_file_from_metadata(db, monkeypatch):
     """Try to create a downloadable file from artifact_core metadata"""
     # fake file metadata
@@ -187,11 +236,14 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
         "foo": "bar",  # unsupported column - should be filtered
         "data_format": "FASTQ",
     }
+    additional_metadata = {"more": "info"}
 
     # Create the trial (to avoid violating foreign-key constraint)
     TrialMetadata.create(TRIAL_ID, METADATA)
     # Create the file
-    DownloadableFiles.create_from_metadata(TRIAL_ID, "wes", file_metadata)
+    DownloadableFiles.create_from_metadata(
+        TRIAL_ID, "wes", file_metadata, additional_metadata=additional_metadata
+    )
 
     # Check that we created the file
     new_file = (
@@ -203,6 +255,7 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
     del file_metadata["foo"]
     for k in file_metadata.keys():
         assert getattr(new_file, k) == file_metadata[k]
+    assert new_file.additional_metadata == additional_metadata
 
 
 @db_test

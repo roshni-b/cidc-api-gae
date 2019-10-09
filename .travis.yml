@@ -13,6 +13,9 @@ env:
     - PYTHONPATH=$PYTHONPATH:$(pwd)/cidc_api
     - GOOGLE_APPLICATION_CREDENTIALS=$HOME/credentials.json
     - CLOUDSDK_CORE_DISABLE_PROMPTS=1
+  matrix:
+    - DEPLOY=pypi
+    - DEPLOY=gae
 install:
   - pip install -r requirements.dev.txt
 before_script:
@@ -33,11 +36,12 @@ before_deploy:
 deploy:
   - provider: script
     # we need `beta` for the `--no-cache` flag, which disables dependency caching
-    script: gcloud beta app deploy app.staging.yaml --project cidc-dfci-staging --no-cache -v "travis-$TRAVIS_BRANCH-$TRAVIS_COMMIT-$TRAVIS_BUILD_NUMBER"
+    script: gcloud beta app deploy app.staging.yaml --project cidc-dfci-staging --no-cache -v "travis-$TRAVIS_BRANCH-${TRAVIS_COMMIT:0:7}-$TRAVIS_BUILD_NUMBER"
     on:
       branch: master
+      condition: $DEPLOY = gae
   - provider: script
-    script: gcloud beta app deploy app.prod.yaml --project cidc-dfci --no-cache
+    script: gcloud beta app deploy app.prod.yaml --project cidc-dfci --no-cache -v "travis-$TRAVIS_BRANCH-${TRAVIS_COMMIT:0:7}-$TRAVIS_BUILD_NUMBER"
     on:
       branch: production
   # We deploy data model code to PyPI for use in, e.g., cidc-cloud-functions
@@ -47,3 +51,4 @@ deploy:
     skip_existing: true
     on:
       branch: master
+      condition: $DEPLOY = pypi
