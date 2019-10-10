@@ -89,12 +89,16 @@ ASSAY_UPLOAD = "/ingestion/upload_assay"
 MANIFEST_UPLOAD = "/ingestion/upload_manifest"
 
 
-def test_validate_valid_template(app_no_auth, some_file, monkeypatch):
+def test_validate_valid_template(
+    app_no_auth, some_file, monkeypatch, test_user, db, db_with_trial_and_user
+):
     """Ensure that the validation endpoint returns no errors for a known-valid .xlsx file"""
     client = app_no_auth.test_client()
     data = form_data("pbmc.xlsx", some_file, "pbmc")
 
     mocks = UploadMocks(monkeypatch)
+
+    give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
 
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 200
@@ -105,12 +109,12 @@ def test_validate_valid_template(app_no_auth, some_file, monkeypatch):
 def test_validate_invalid_template(app_no_auth, some_file, monkeypatch):
     """Ensure that the validation endpoint returns errors for a known-invalid .xlsx file"""
     mocks = UploadMocks(monkeypatch)
-    mocks.validate_excel.return_value = ["error-1"]
+    mocks.validate_excel.return_value = ["test error"]
     client = app_no_auth.test_client()
     data = form_data("pbmc.xlsx", some_file, "pbmc")
     res = client.post(VALIDATE, data=data)
-    assert res.status_code == 200
-    assert len(res.json["errors"]) > 0
+    assert res.status_code == 400
+    assert len(res.json["_error"]["message"]) > 0
 
 
 @pytest.mark.parametrize(
@@ -129,7 +133,7 @@ def test_validate_invalid_template(app_no_auth, some_file, monkeypatch):
             VALIDATE,
             form_data("test.xlsx", schema="foo/bar"),
             BadRequest,
-            "Unknown template type foo/bar",
+            "Unknown template type.*foo/bar",
         ],
     ],
 )
