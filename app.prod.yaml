@@ -5,6 +5,13 @@ entrypoint: gunicorn -b :$PORT --chdir cidc_api --log-level DEBUG app:app --time
 automatic_scaling:
   min_instances: 1
 
+handlers:
+# Force HTTPS on all requests
+- url: /.*
+  script: auto
+  secure: always
+  redirect_http_response_code: 301
+
 env_variables:
   ENV: 'prod'
   AUTH0_DOMAIN: 'cidc.auth0.com'
