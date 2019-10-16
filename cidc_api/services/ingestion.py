@@ -7,12 +7,7 @@ import datetime
 from typing import BinaryIO, Tuple, List, NamedTuple
 from functools import wraps
 
-from werkzeug.exceptions import (
-    BadRequest,
-    InternalServerError,
-    NotFound,
-    Unauthorized,
-)
+from werkzeug.exceptions import BadRequest, InternalServerError, NotFound, Unauthorized
 
 from eve import Eve
 from sqlalchemy.orm.exc import NoResultFound
@@ -158,7 +153,6 @@ def upload_handler(f):
         print(f"upload_handler({f.__name__}) started")
         template_type, schema_path, xlsx_file = extract_schema_and_xlsx()
 
-
         # Run basic validations on the provided Excel file
         validations = validate(template_type, xlsx_file)
         if len(validations.json["errors"]) > 0:
@@ -181,30 +175,24 @@ def upload_handler(f):
                 f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
             )
 
-
         # Try to merge assay metadata into the existing clinical trial metadata
         # Ignoring result as we inly want to check there's no validation errors
         try:
-            merged_md = prism.merge_clinical_trial_metadata(md_patch, trial.metadata_json)
+            merged_md = prism.merge_clinical_trial_metadata(
+                md_patch, trial.metadata_json
+            )
         except ValidationError as e:
             raise BadRequest(f"{e.message} in {e.instance}")
         except prism.InvalidMergeTargetException:
-            raise BadRequest(f"Internal error with {trial_id!r}. Please contact CIDC Administrator.")
-
+            raise BadRequest(
+                f"Internal error with {trial_id!r}. Please contact CIDC Administrator."
+            )
 
         return f(
-            user,
-            trial,
-            template_type,
-            xlsx_file,
-            md_patch,
-            file_infos,
-            *args,
-            **kwargs,
+            user, trial, template_type, xlsx_file, md_patch, file_infos, *args, **kwargs
         )
 
     return wrapped
-
 
 
 @ingestion_api.route("/validate", methods=["POST"])
