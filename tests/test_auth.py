@@ -223,6 +223,27 @@ def test_role_auth(bearer_auth, app, db):
         # If the resource has no role restrictions, they should be authorized
         assert bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
 
+    # Disable user
+    db.query(Users).filter_by(email=EMAIL).update(dict(disabled=True))
+    db.commit()
+
+    with app.test_request_context():
+        # If user has an allowed role but is disabled, they should be unauthorized
+        with pytest.raises(Unauthorized, match="disabled"):
+            bearer_auth.role_auth(
+                profile,
+                [CIDCRole.CIMAC_USER.value],
+                "some-resource",
+                "some-http-method",
+            )
+
+        # Ensure unapproved user can access their own data
+        assert bearer_auth.role_auth(profile, [], "self", "GET")
+
+        # If the resource has no role restrictions, they should be still unauthorized
+        with pytest.raises(Unauthorized, match="disabled"):
+            bearer_auth.role_auth(profile, [], "some-resource", "some-http-method")
+
 
 def test_rbac(monkeypatch, app, db):
     """
