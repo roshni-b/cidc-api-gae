@@ -231,12 +231,14 @@ def test_role_auth(bearer_auth, app, db):
         # If user has an allowed role but is disabled, they should be unauthorized
         with pytest.raises(Unauthorized, match="disabled"):
             bearer_auth.role_auth(
-                profile, [CIDCRole.CIMAC_USER.value], "some-resource", "some-http-method"
+                profile,
+                [CIDCRole.CIMAC_USER.value],
+                "some-resource",
+                "some-http-method",
             )
 
-       # Ensure unapproved user can access their own data
+        # Ensure unapproved user can access their own data
         assert bearer_auth.role_auth(profile, [], "self", "GET")
-
 
         # If the resource has no role restrictions, they should be still unauthorized
         with pytest.raises(Unauthorized, match="disabled"):

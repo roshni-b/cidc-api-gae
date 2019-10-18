@@ -94,7 +94,6 @@ class BearerAuth(TokenAuth):
 
             raise Unauthorized(f'{profile["email"]} is not registered.')
 
-        
         # User is registered but disabled.
         if user.disabled:
             # Disabled users are not authorized to do anything but access their
@@ -102,10 +101,7 @@ class BearerAuth(TokenAuth):
             if resource == "self" and method == "GET":
                 return True
 
-            raise Unauthorized(
-                f'{profile["email"]}\'s account is disabled.'
-            )
-
+            raise Unauthorized(f'{profile["email"]}\'s account is disabled.')
 
         # User is registered but not yet approved.
         if not user.approval_date:
