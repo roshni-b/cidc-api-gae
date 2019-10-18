@@ -103,13 +103,13 @@ def test_validate_valid_template(
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 200
     assert res.json["errors"] == []
-    mocks.validate_excel.assert_called_once()
+    mocks.iter_errors.assert_called_once()
 
 
 def test_validate_invalid_template(app_no_auth, some_file, monkeypatch):
     """Ensure that the validation endpoint returns errors for a known-invalid .xlsx file"""
     mocks = UploadMocks(monkeypatch)
-    mocks.validate_excel.return_value = ["test error"]
+    mocks.iter_errors.return_value = ["test error"]
     client = app_no_auth.test_client()
     data = form_data("pbmc.xlsx", some_file, "pbmc")
     res = client.post(VALIDATE, data=data)
@@ -145,7 +145,6 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
     with app.test_request_context(url, data=data):
         with pytest.raises(error, match=message):
             extract_schema_and_xlsx()
-            extract_schema_and_extra_metadata_xlsx()
 
 
 def test_upload_manifest_non_existing_trial_id(
@@ -163,7 +162,7 @@ def test_upload_manifest_non_existing_trial_id(
 
     # Check that we tried to upload the excel file
     mocks.upload_xlsx.assert_not_called()
-    mocks.validate_excel.assert_called_once()
+    mocks.iter_errors.assert_called_once()
     mocks.prismify.assert_called_once()
 
 
@@ -174,7 +173,7 @@ def test_upload_invalid_manifest(
 
     mocks = UploadMocks(monkeypatch)
 
-    mocks.validate_excel.return_value = ["bad, bad error"]
+    mocks.iter_errors.return_value = ["bad, bad error"]
 
     client = app_no_auth.test_client()
 
@@ -243,6 +242,50 @@ def test_admin_upload(app, test_user, db_with_trial_and_user, monkeypatch):
     res = client.post(
         ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes")
     )
+    assert res.status_code == 200
+
+
+def test_simple_upload_manifest(
+    app_no_auth, test_user, db_with_trial_and_user, db, monkeypatch
+):
+    """Ensure the upload_manifest endpoint follows the expected execution flow"""
+
+    client = app_no_auth.test_client()
+
+    give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
+
+    open_xlsx = MagicMock(name="open_xlsx")
+    open_xlsx.return_value = MagicMock(name="open_xlsx.return_value")
+    monkeypatch.setattr("openpyxl.load_workbook", open_xlsx)
+    row = []
+    for rv in ["#p", PROTOCOL_ID_FIELD_NAME, TEST_TRIAL]:
+        row.append(MagicMock(name=rv))
+        row[-1].value = rv
+    ws = MagicMock(name="ws:Shipment")
+    ws.iter_rows = lambda: [row]
+    open_xlsx.return_value.sheetnames = {"Shipment"}
+    open_xlsx.return_value.__getitem__ = lambda _, k: {"Shipment": ws}[k]
+
+    iter_errors = MagicMock(name="iter_errors")
+    iter_errors.return_value = (_ for _ in range(0))
+    monkeypatch.setattr(
+        "cidc_schemas.template_reader.XlTemplateReader.iter_errors", iter_errors
+    )
+
+    keylookup = MagicMock(name="keylookup")
+    keylookup.return_value = {
+        PROTOCOL_ID_FIELD_NAME: {
+            "type": "string",
+            "coerce": str,
+            "merge_pointer": "2/" + PROTOCOL_ID_FIELD_NAME.lower(),
+        }
+    }
+    monkeypatch.setattr("cidc_schemas.template.Template._load_keylookup", keylookup)
+
+    res = client.post(
+        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b""), "pbmc")
+    )
+    rj = res.json
     assert res.status_code == 200
 
 
@@ -320,6 +363,7 @@ class UploadMocks:
         prismify_trial_id="test_trial",
         prismify_file_entries=None,
         prismify_extra=None,
+        prismify_errors=None,
     ):
         self.grant_write = MagicMock()
         monkeypatch.setattr("gcloud_client.grant_upload_access", self.grant_write)
@@ -347,11 +391,16 @@ class UploadMocks:
             self.publish_patient_sample_update,
         )
 
-        self.validate_excel = MagicMock(name="validate_excel")
+        self.open_xlsx = MagicMock(name="open_xlsx")
+        self.open_xlsx.return_value = MagicMock(name="open_xlsx.return_value")
+        monkeypatch.setattr("openpyxl.load_workbook", self.open_xlsx)
+
+        self.iter_errors = MagicMock(name="iter_errors")
+        self.iter_errors.return_value = (_ for _ in range(0))
         monkeypatch.setattr(
-            "cidc_schemas.template.Template.validate_excel", self.validate_excel
+            "cidc_schemas.template_reader.XlTemplateReader.iter_errors",
+            self.iter_errors,
         )
-        self.validate_excel.return_value = True
 
         self.prismify = MagicMock(name="prismify")
         monkeypatch.setattr("cidc_schemas.prism.prismify", self.prismify)
@@ -360,12 +409,14 @@ class UploadMocks:
                 **{PROTOCOL_ID_FIELD_NAME: prismify_trial_id}, **(prismify_extra or {})
             ),
             prismify_file_entries or [],
+            prismify_errors or [],
         )
 
     def make_all_assertions(self):
         self.upload_xlsx.assert_called_once()
         self.prismify.assert_called_once()
-        self.validate_excel.assert_called_once()
+        self.open_xlsx.assert_called_once()
+        self.iter_errors.assert_called_once()
 
     def clear_all(self):
         for attr in self.__dict__.values():
