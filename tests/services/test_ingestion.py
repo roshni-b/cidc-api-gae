@@ -245,50 +245,6 @@ def test_admin_upload(app, test_user, db_with_trial_and_user, monkeypatch):
     assert res.status_code == 200
 
 
-def test_simple_upload_manifest(
-    app_no_auth, test_user, db_with_trial_and_user, db, monkeypatch
-):
-    """Ensure the upload_manifest endpoint follows the expected execution flow"""
-
-    client = app_no_auth.test_client()
-
-    give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
-
-    open_xlsx = MagicMock(name="open_xlsx")
-    open_xlsx.return_value = MagicMock(name="open_xlsx.return_value")
-    monkeypatch.setattr("openpyxl.load_workbook", open_xlsx)
-    row = []
-    for rv in ["#p", PROTOCOL_ID_FIELD_NAME, TEST_TRIAL]:
-        row.append(MagicMock(name=rv))
-        row[-1].value = rv
-    ws = MagicMock(name="ws:Shipment")
-    ws.iter_rows = lambda: [row]
-    open_xlsx.return_value.sheetnames = {"Shipment"}
-    open_xlsx.return_value.__getitem__ = lambda _, k: {"Shipment": ws}[k]
-
-    iter_errors = MagicMock(name="iter_errors")
-    iter_errors.return_value = (_ for _ in range(0))
-    monkeypatch.setattr(
-        "cidc_schemas.template_reader.XlTemplateReader.iter_errors", iter_errors
-    )
-
-    keylookup = MagicMock(name="keylookup")
-    keylookup.return_value = {
-        PROTOCOL_ID_FIELD_NAME: {
-            "type": "string",
-            "coerce": str,
-            "merge_pointer": "2/" + PROTOCOL_ID_FIELD_NAME.lower(),
-        }
-    }
-    monkeypatch.setattr("cidc_schemas.template.Template._load_keylookup", keylookup)
-
-    res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b""), "pbmc")
-    )
-    rj = res.json
-    assert res.status_code == 200
-
-
 def test_upload_manifest(
     app_no_auth, test_user, db_with_trial_and_user, db, monkeypatch
 ):

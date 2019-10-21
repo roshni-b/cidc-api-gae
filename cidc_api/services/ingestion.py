@@ -58,7 +58,7 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
         BadRequest: if the above requirements aren't satisfied
 
     Returns:
-        Tuple[str, str, dict]: the schema identifier (aka template type), the schema path, and the open xlsx file
+        Tuple[Template, BinaryIO]: template, and the open xlsx file
     """
     # If there is no form attribute on the request object,
     # then either one wasn't supplied, or it was malformed
@@ -82,7 +82,12 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
         raise BadRequest("Expected a form entry for 'schema'")
     schema_id = schema_id.lower()
 
-    return schema_id, xlsx_file
+    try:
+        template = Template.from_type(schema_id)
+    except Exception:
+        raise BadRequest(f"Unknown template type {schema_id!r}")
+    
+    return template, xlsx_file
 
 
 def validate(template, xlsx):
@@ -137,13 +142,8 @@ def upload_handler(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
         print(f"upload_handler({f.__name__}) started")
-        schema_id, xlsx_file = extract_schema_and_xlsx()
+        template, xlsx_file = extract_schema_and_xlsx()
 
-        try:
-            template = Template.from_type(schema_id)
-        except Exception:
-            raise BadRequest(f"Unknown template type {schema_id!r}")
-        
         xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
         if errors: 
             raise BadRequest({"errors": errors})
