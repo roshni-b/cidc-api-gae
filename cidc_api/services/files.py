@@ -5,17 +5,52 @@ from multiprocessing.pool import ThreadPool
 
 from eve import Eve
 from eve_sqlalchemy import parse
-from flask import Request, _request_ctx_stack
-from werkzeug.exceptions import BadRequest
+from flask import Request, request, _request_ctx_stack, Blueprint, jsonify
+from werkzeug.exceptions import BadRequest, NotFound
 from werkzeug.datastructures import ImmutableMultiDict
 
 import gcloud_client
-from models import Users, Permissions, CIDCRole
+from auth import requires_auth
+from models import Users, Permissions, CIDCRole, DownloadableFiles
+
+files_api = Blueprint("files", __name__, url_prefix="/downloadable_files")
+
+
+@files_api.route("/download_url", methods=["GET"])
+@requires_auth("download_url")
+def get_download_url():
+    """
+    Get a signed GCS download URL for a given file.
+    """
+    # Extract file ID from route
+    file_id = request.args.get("id")
+    if not file_id:
+        raise BadRequest("Missing expected URL parameter `id`")
+
+    # Check that file exists
+    file_record = DownloadableFiles.find_by_id(file_id)
+    if not file_record:
+        raise NotFound(f"No file with id {file_id}.")
+
+    user = _request_ctx_stack.top.current_user
+
+    # Ensure user has permission to access this file
+    perms = Permissions.find_for_user(user)
+    if user.role != CIDCRole.ADMIN.value:
+        # Check for a permission matching this file's trial and assay
+        if not any(
+            perm.assay_type == file_record.assay_type
+            and perm.trial_id == file_record.trial_id
+            for perm in perms
+        ):
+            raise NotFound(f"No file with id {file_id}.")
+
+    # Generate the signed URL and return it.
+    download_url = gcloud_client.get_signed_url(file_record.object_url)
+    return jsonify(download_url)
 
 
 def register_files_hooks(app: Eve):
-    #     app.on_fetched_resource_downloadable_files += insert_download_urls
-    app.on_fetched_item_downloadable_files += insert_download_url
     app.on_pre_GET_downloadable_files = update_file_filters
 
 
@@ -78,29 +113,3 @@ def update_file_filters(request: Request, _):
     lookup = request.args.copy()
     lookup["where"] = where_query
     request.args = ImmutableMultiDict(lookup)
-
-
-def insert_download_url(payload: dict):
-    """
-    Get a signed GCS download URL for the requested file.
-
-    TODO: evaluate ways of caching signed URLs for files that haven't yet
-    expired, so that we aren't re-generating them on every request.
-    """
-    object_url = payload["object_url"]
-    download_url = gcloud_client.get_signed_url(object_url)
-    payload["download_link"] = download_url
-
-
-def insert_download_urls(payload: dict):
-    """
-    Get a signed GCS download URL for each of the requested files.
-
-    NOTE: this hook is currently disabled.
-    """
-    # Each call to insert_download_url generates a request
-    # to the GCS API, so we get a speed-up from multithreading:
-    # although Python dispatches the requests synchronously,
-    # the OS handles the network requests in parallel.
-    with ThreadPool() as pool:
-        pool.map(insert_download_url, payload["_items"])

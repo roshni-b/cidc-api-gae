@@ -13,16 +13,66 @@ from cidc_api.models import (
     DownloadableFiles,
     CIDCRole,
 )
-from cidc_api.services.files import (
-    update_file_filters,
-    insert_download_url,
-    insert_download_urls,
-)
+from cidc_api.services.files import update_file_filters, gcloud_client
 
 from ..test_models import db_test
 
 FILE = {"object_url": "1"}
 URL = "foo"
+
+
+def test_get_download_url(db, app_no_auth, test_user, monkeypatch):
+    """Test the /downloadable_files/download_url endpoint"""
+    tid = "test_trial"
+    assay = "wes"
+    with app_no_auth.app_context():
+        trial = TrialMetadata.create(trial_id=tid, metadata_json={})
+        user_record = Users.find_by_email(test_user.email)
+        test_user.id = user_record.id
+        user_record.approval_date = datetime.now()
+        user_record.role = CIDCRole.CIMAC_USER.value
+        db.commit()
+
+    client = app_no_auth.test_client()
+
+    # Malformed query
+    res = client.get("/downloadable_files/download_url")
+    assert res.status_code == 400
+    assert "expected URL parameter" in res.json["_error"]["message"]
+
+    # Missing file
+    res = client.get("/downloadable_files/download_url?id=123")
+    assert res.status_code == 404
+
+    with app_no_auth.app_context():
+        fake_metadata = {
+            "artifact_category": "Assay Artifact from CIMAC",
+            "object_url": "",
+            "file_name": "",
+            "file_size_bytes": 0,
+            "md5_hash": "",
+            "data_format": "TEXT",
+            "uploaded_timestamp": datetime.now(),
+        }
+        f = DownloadableFiles.create_from_metadata(tid, assay, fake_metadata)
+        file_id = f.id
+        db.commit()
+
+    # No permission to view file
+    res = client.get(f"/downloadable_files/download_url?id={file_id}")
+    assert res.status_code == 404
+
+    with app_no_auth.app_context():
+        perm = Permissions(trial_id=tid, assay_type=assay, granted_to_user=test_user.id)
+        db.add(perm)
+        db.commit()
+
+    test_url = "foo"
+    monkeypatch.setattr(gcloud_client, "get_signed_url", lambda *args: test_url)
+
+    res = client.get(f"/downloadable_files/download_url?id={file_id}")
+    assert res.status_code == 200
+    assert res.json == test_url
 
 
 @db_test
@@ -124,38 +174,3 @@ def test_update_file_filters(db, app_no_auth, test_user):
     res = client.get(f"/downloadable_files?where={disallowed_filter}")
     assert res.status_code == 200
     assert len(res.json["_items"]) == 1
-
-
-def test_insert_download_url(monkeypatch):
-    """
-    Test that we try to generate a signed download URL for the file in the payload.
-    """
-    get_signed_url = lambda url: URL
-    monkeypatch.setattr("gcloud_client.get_signed_url", get_signed_url)
-
-    f = FILE.copy()
-
-    insert_download_url(f)
-    assert f["download_link"] == URL
-
-
-def test_insert_download_urls(monkeypatch):
-    """
-    Test that we try to generate a signed download URL for every file in the payload.
-    """
-
-    def insert_signed_url(f):
-        f["download_link"] = URL
-
-    monkeypatch.setattr(
-        "cidc_api.services.files.insert_download_url", insert_signed_url
-    )
-
-    f1 = FILE.copy()
-    f2 = FILE.copy()
-    f2["object_url"] = "2"
-    payload = {"_items": [f1, f2]}
-
-    insert_download_urls(payload)
-    for f in payload["_items"]:
-        assert f["download_link"] == URL
