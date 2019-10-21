@@ -279,6 +279,10 @@ class Permissions(CommonColumns):
         )
 
 
+class ValidationMultiError(Exception):
+    """Holds multiple jsonschema.ValidationErros"""
+    pass
+
 class TrialMetadata(CommonColumns):
     # TODO: split up metadata_json into separate `manifest`, `assays`, and `trial_info` fields on this table.
 
@@ -363,7 +367,7 @@ class TrialMetadata(CommonColumns):
             json_patch, trial.metadata_json
         )
         if errs:
-            raise Exception(errs)
+            raise ValidationMultiError(errs)
         # Save updates to trial record
         trial.metadata_json = updated_metadata
         trial._etag = make_etag(trial.trial_id, updated_metadata)

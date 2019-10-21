@@ -158,7 +158,7 @@ def test_upload_manifest_non_existing_trial_id(
 
     res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 400
-    assert "test-non-existing-trial-id" in res.json["_error"]["message"]
+    assert "test-non-existing-trial-id" in str(res.json["_error"]["message"])
 
     # Check that we tried to upload the excel file
     mocks.upload_xlsx.assert_not_called()
@@ -174,6 +174,8 @@ def test_upload_invalid_manifest(
     mocks = UploadMocks(monkeypatch)
 
     mocks.iter_errors.return_value = ["bad, bad error"]
+
+    give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
 
     client = app_no_auth.test_client()
 
@@ -259,7 +261,7 @@ def test_upload_manifest(
         MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
     )
     assert res.status_code == 401
-    assert "not authorized to upload pbmc data" in res.json["_error"]["message"]
+    assert "not authorized to upload pbmc data" in str(res.json["_error"]["message"])
 
     # Add permission and retry the upload
     give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
@@ -399,7 +401,7 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
         ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes")
     )
     assert res.status_code == 401
-    assert "not authorized to upload wes data" in res.json["_error"]["message"]
+    assert "not authorized to upload wes data" in str(res.json["_error"]["message"])
 
     mocks.clear_all()
 
@@ -489,7 +491,7 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
         ASSAY_UPLOAD, data=form_data("olink.xlsx", io.BytesIO(b"1234"), "olink")
     )
     assert res.status_code == 401
-    assert "not authorized to upload olink data" in res.json["_error"]["message"]
+    assert "not authorized to upload olink data" in str(res.json["_error"]["message"])
 
     mocks.clear_all()
 

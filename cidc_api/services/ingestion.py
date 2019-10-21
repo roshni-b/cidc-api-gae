@@ -119,10 +119,7 @@ def check_permissions(user, trial_id, template_type):
     """
     perm = Permissions.find_for_user_trial_type(user, trial_id, template_type)
     if not perm and user.role != CIDCRole.ADMIN.value:
-        if not TrialMetadata.find_by_trial_id(trial_id):
-            raise BadRequest(
-                f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
-            )
+        print(f"Unauthorized attempt to access trial {trial_id} by {user.email!r}")
         raise Unauthorized(
             f"{user.email} is not authorized to upload {template_type} data to {trial_id}. "
             f"Please contact a CIDC administrator if you believe this is a mistake."
@@ -144,34 +141,52 @@ def upload_handler(f):
         print(f"upload_handler({f.__name__}) started")
         template, xlsx_file = extract_schema_and_xlsx()
 
+        errors_so_far = []
+
         xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
+        print(f"xlsx parsed: {len(errors)} errors")
         if errors: 
-            raise BadRequest({"errors": errors})
+            errors_so_far.extend(errors)
 
         # Run basic validations on the provided Excel file
         validations = validate(template, xlsx)
         if len(validations.json["errors"]) > 0:
-            raise BadRequest(validations.json)
+            errors_so_far.extend(validations.json["errors"])
+        print(f"xlsx validated: {len(validations.json['errors'])} errors")
 
         # md_patch, file_infos, errors = prism.prismify(xlsx, template, verb=True)
         md_patch, file_infos, errors = prism.prismify(xlsx, template)
         if errors: 
-            raise BadRequest({"errors": errors})
+            errors_so_far.extend(errors)
+        print(f"prismified: {len(errors)} errors, {len(file_infos)} file_infos")
 
         try:
             trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
         except KeyError:
-            raise BadRequest(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
+            errors_so_far.append(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
 
-        user = _request_ctx_stack.top.current_user
-
-        check_permissions(user, trial_id, template.type)
 
         trial = TrialMetadata.find_by_trial_id(trial_id)
         if not trial:
-            raise BadRequest(
-                f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
-            )
+            errors_so_far.insert(0, f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found.")
+            # we can't find trial so we can't proceed trying to check_perm or merge
+            # so we stop here
+            raise BadRequest({"errors": 
+                [str(e) for e in errors_so_far]
+            })
+
+
+        user = _request_ctx_stack.top.current_user
+        try:
+            check_permissions(user, trial_id, template.type)
+        except Unauthorized as e:
+            errors_so_far.insert(0, e.description)
+            # unauthorized to pull trial so we can't proceed trying to merge
+            # so we stop here
+            raise Unauthorized({"errors": 
+                [str(e) for e in errors_so_far]
+            })
+
 
         # Try to merge assay metadata into the existing clinical trial metadata
         # Ignoring result as we inly want to check there's no validation errors
@@ -180,13 +195,20 @@ def upload_handler(f):
                 md_patch, trial.metadata_json
             )
         except ValidationError as e:
-            raise BadRequest(f"{e.message} in {e.instance}")
+            errors_so_far.append(f"{e.message} in {e.instance}")
         except prism.InvalidMergeTargetException:
-            raise BadRequest(
+            # we have an invalid MD stored in db - users can't do anything about it 
+            raise Exception(
                 f"Internal error with {trial_id!r}. Please contact CIDC Administrator."
             )
+        print(f"merged: {len(errors)} errors")
         if errors:
-            raise BadRequest({"errors": [f"{e.message} in {e.instance}" for e in errors]})
+            errors_so_far.extend(errors)
+
+        if errors_so_far:
+            raise BadRequest({"errors": 
+                [str(e) for e in errors_so_far]
+            })
 
         return f(
             user, trial, template.type, xlsx_file, md_patch, file_infos, *args, **kwargs
@@ -247,6 +269,9 @@ def upload_manifest(
         trial = TrialMetadata.patch_manifest(trial.trial_id, md_patch, commit=False)
     except ValidationError as e:
         raise BadRequest(f"{e.message} in {e.instance}")
+    except ValidationMultiError as e:
+        raise BadRequest({"errors": e.args[0]})
+
 
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         trial.trial_id, "manifest", template_type, xlsx_file, upload_moment
