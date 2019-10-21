@@ -59,19 +59,26 @@ class BearerAuth(TokenAuth):
         """
         profile = self.token_auth(id_token)
 
-        def log_authorization(authorized):
-            """Track access attempts by authenticated users"""
-            print(
-                f"{'' if authorized else 'UN'}AUTHORIZED: {profile['email']} {method} /{resource or ''}"
-            )
+        def log_user_and_request_details(is_authorized: bool):
+            """Log user and request info before every request"""
+            log_msg = f"{'' if is_authorized else 'UN'}AUTHORIZED "
+
+            # log user details
+            user = _request_ctx_stack.top.current_user
+            log_msg += f"(user.id={user.id}) (user.email={user.email}) "
+
+            # log request details
+            log_msg += f"(request.url={request.url}) (request={request.__dict__}) "
+
+            print(log_msg)
 
         try:
             is_authorized = self.role_auth(profile, allowed_roles, resource, method)
         except Unauthorized:
-            log_authorization(False)
+            log_user_and_request_details(False)
             raise
 
-        log_authorization(is_authorized)
+        log_user_and_request_details(is_authorized)
 
         return is_authorized
 
@@ -93,6 +100,15 @@ class BearerAuth(TokenAuth):
                 return True
 
             raise Unauthorized(f'{profile["email"]} is not registered.')
+
+        # User is registered but disabled.
+        if user.disabled:
+            # Disabled users are not authorized to do anything but access their
+            # account info.
+            if resource == "self" and method == "GET":
+                return True
+
+            raise Unauthorized(f'{profile["email"]}\'s account is disabled.')
 
         # User is registered but not yet approved.
         if not user.approval_date:
