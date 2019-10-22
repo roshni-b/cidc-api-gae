@@ -154,7 +154,6 @@ def upload_handler(f):
             errors_so_far.extend(validations.json["errors"])
         print(f"xlsx validated: {len(validations.json['errors'])} errors")
 
-        # md_patch, file_infos, errors = prism.prismify(xlsx, template, verb=True)
         md_patch, file_infos, errors = prism.prismify(xlsx, template)
         if errors:
             errors_so_far.extend(errors)
@@ -164,6 +163,8 @@ def upload_handler(f):
             trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
         except KeyError:
             errors_so_far.append(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
+            # we can't find trial id so we can't proceed
+            raise BadRequest({"errors": [str(e) for e in errors_so_far]})
 
         trial = TrialMetadata.find_by_trial_id(trial_id)
         if not trial:
@@ -171,7 +172,6 @@ def upload_handler(f):
                 0, f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
             )
             # we can't find trial so we can't proceed trying to check_perm or merge
-            # so we stop here
             raise BadRequest({"errors": [str(e) for e in errors_so_far]})
 
         user = _request_ctx_stack.top.current_user
@@ -180,7 +180,6 @@ def upload_handler(f):
         except Unauthorized as e:
             errors_so_far.insert(0, e.description)
             # unauthorized to pull trial so we can't proceed trying to merge
-            # so we stop here
             raise Unauthorized({"errors": [str(e) for e in errors_so_far]})
 
         # Try to merge assay metadata into the existing clinical trial metadata
@@ -194,7 +193,7 @@ def upload_handler(f):
         except prism.InvalidMergeTargetException:
             # we have an invalid MD stored in db - users can't do anything about it
             raise Exception(
-                f"Internal error with {trial_id!r}. Please contact CIDC Administrator."
+                f"Internal error with {trial_id!r}. Please contact a CIDC Administrator."
             )
         print(f"merged: {len(errors)} errors")
         if errors:
@@ -215,14 +214,7 @@ def upload_handler(f):
     "ingestion/validate", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
 )
 @upload_handler
-def validate_endpoint(
-    user: Users,
-    trial: TrialMetadata,
-    template_type: str,
-    xlsx_file: BinaryIO,
-    md_patch: dict,
-    file_infos: List[prism.LocalFileUploadEntry],
-):
+def validate_endpoint(*args, **kwargs):
     # Validation is done within `upload_handler`
     # so we just return ok here
     return jsonify({"errors": []})
@@ -270,7 +262,7 @@ def upload_manifest(
     )
     # TODO maybe rely on default session
     session = Session.object_session(trial)
-    # TODO move to prism
+
     DownloadableFiles.create_from_blob(
         trial.trial_id,
         template_type,
