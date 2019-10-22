@@ -86,7 +86,7 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
         template = Template.from_type(schema_id)
     except Exception:
         raise BadRequest(f"Unknown template type {schema_id!r}")
-    
+
     return template, xlsx_file
 
 
@@ -145,7 +145,7 @@ def upload_handler(f):
 
         xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
         print(f"xlsx parsed: {len(errors)} errors")
-        if errors: 
+        if errors:
             errors_so_far.extend(errors)
 
         # Run basic validations on the provided Excel file
@@ -156,7 +156,7 @@ def upload_handler(f):
 
         # md_patch, file_infos, errors = prism.prismify(xlsx, template, verb=True)
         md_patch, file_infos, errors = prism.prismify(xlsx, template)
-        if errors: 
+        if errors:
             errors_so_far.extend(errors)
         print(f"prismified: {len(errors)} errors, {len(file_infos)} file_infos")
 
@@ -165,16 +165,14 @@ def upload_handler(f):
         except KeyError:
             errors_so_far.append(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
 
-
         trial = TrialMetadata.find_by_trial_id(trial_id)
         if not trial:
-            errors_so_far.insert(0, f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found.")
+            errors_so_far.insert(
+                0, f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
+            )
             # we can't find trial so we can't proceed trying to check_perm or merge
             # so we stop here
-            raise BadRequest({"errors": 
-                [str(e) for e in errors_so_far]
-            })
-
+            raise BadRequest({"errors": [str(e) for e in errors_so_far]})
 
         user = _request_ctx_stack.top.current_user
         try:
@@ -183,10 +181,7 @@ def upload_handler(f):
             errors_so_far.insert(0, e.description)
             # unauthorized to pull trial so we can't proceed trying to merge
             # so we stop here
-            raise Unauthorized({"errors": 
-                [str(e) for e in errors_so_far]
-            })
-
+            raise Unauthorized({"errors": [str(e) for e in errors_so_far]})
 
         # Try to merge assay metadata into the existing clinical trial metadata
         # Ignoring result as we inly want to check there's no validation errors
@@ -197,7 +192,7 @@ def upload_handler(f):
         except ValidationError as e:
             errors_so_far.append(f"{e.message} in {e.instance}")
         except prism.InvalidMergeTargetException:
-            # we have an invalid MD stored in db - users can't do anything about it 
+            # we have an invalid MD stored in db - users can't do anything about it
             raise Exception(
                 f"Internal error with {trial_id!r}. Please contact CIDC Administrator."
             )
@@ -206,9 +201,7 @@ def upload_handler(f):
             errors_so_far.extend(errors)
 
         if errors_so_far:
-            raise BadRequest({"errors": 
-                [str(e) for e in errors_so_far]
-            })
+            raise BadRequest({"errors": [str(e) for e in errors_so_far]})
 
         return f(
             user, trial, template.type, xlsx_file, md_patch, file_infos, *args, **kwargs
@@ -271,7 +264,6 @@ def upload_manifest(
         raise BadRequest(f"{e.message} in {e.instance}")
     except ValidationMultiError as e:
         raise BadRequest({"errors": e.args[0]})
-
 
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         trial.trial_id, "manifest", template_type, xlsx_file, upload_moment

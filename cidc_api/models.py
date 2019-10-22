@@ -281,7 +281,9 @@ class Permissions(CommonColumns):
 
 class ValidationMultiError(Exception):
     """Holds multiple jsonschema.ValidationErros"""
+
     pass
+
 
 class TrialMetadata(CommonColumns):
     # TODO: split up metadata_json into separate `manifest`, `assays`, and `trial_info` fields on this table.
