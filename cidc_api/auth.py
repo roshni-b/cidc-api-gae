@@ -64,7 +64,9 @@ class BearerAuth(TokenAuth):
             log_msg = f"{'' if is_authorized else 'UN'}AUTHORIZED"
 
             # log request details
-            log_msg += f" {request.environ['REQUEST_METHOD']} {request.environ['RAW_URI']}"
+            log_msg += (
+                f" {request.environ['REQUEST_METHOD']} {request.environ['RAW_URI']}"
+            )
 
             # log user details
             user = _request_ctx_stack.top.current_user
