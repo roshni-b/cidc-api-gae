@@ -63,6 +63,8 @@ def upload_xlsx_to_gcs(
 
     upload_bucket: storage.Bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
     blob = upload_bucket.blob(blob_name)
+
+    filebytes.seek(0)
     blob.upload_from_file(filebytes)
 
     data_bucket = _get_bucket(GOOGLE_DATA_BUCKET)
