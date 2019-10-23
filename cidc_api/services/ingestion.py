@@ -1,18 +1,13 @@
 """
 Endpoints for validating and ingesting metadata and data.
 """
-import os
+import os, sys
 import json
 import datetime
 from typing import BinaryIO, Tuple, List, NamedTuple
+from functools import wraps
 
-from werkzeug.exceptions import (
-    BadRequest,
-    InternalServerError,
-    NotFound,
-    NotImplemented,
-    Unauthorized,
-)
+from werkzeug.exceptions import BadRequest, InternalServerError, NotFound, Unauthorized
 
 from eve import Eve
 from sqlalchemy.orm.exc import NoResultFound
@@ -20,7 +15,9 @@ from jsonschema.exceptions import ValidationError
 from sqlalchemy.orm.session import Session
 from flask import Blueprint, request, Request, Response, jsonify, _request_ctx_stack
 
-from cidc_schemas import constants, validate_xlsx, prism, template, template_reader
+from cidc_schemas import constants, prism
+from cidc_schemas.template import Template
+from cidc_schemas.template_reader import XlTemplateReader
 
 import gcloud_client
 from models import (
@@ -61,7 +58,7 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
         BadRequest: if the above requirements aren't satisfied
 
     Returns:
-        Tuple[str, str, dict]: the schema identifier (aka template type), the schema path, and the open xlsx file
+        Tuple[Template, BinaryIO]: template, and the open xlsx file
     """
     # If there is no form attribute on the request object,
     # then either one wasn't supplied, or it was malformed
@@ -85,27 +82,15 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
         raise BadRequest("Expected a form entry for 'schema'")
     schema_id = schema_id.lower()
 
-    if not schema_id in template._TEMPLATE_PATH_MAP:
-        raise BadRequest(f"Unknown template type {schema_id}")
-    schema_path = template._TEMPLATE_PATH_MAP[schema_id]
+    try:
+        template = Template.from_type(schema_id)
+    except Exception:
+        raise BadRequest(f"Unknown template type {schema_id!r}")
 
-    return schema_id, schema_path, xlsx_file
-
-
-@ingestion_api.route("/validate", methods=["POST"])
-@requires_auth(
-    "ingestion/validate", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
-)
-def validate_endpoint():
-    """
-    Separated from `validate` function so that RBAC from requires_auth doesn't affect
-    internal invocations of `validate` (in, e.g., the /ingestion/upload_assay endpoint).
-    """
-    template_type, _, template_file = extract_schema_and_xlsx()
-    return validate(template_type, template_file)
+    return template, xlsx_file
 
 
-def validate(template_type, template_file):
+def validate(template, xlsx):
     """
     Validate a .xlsx manifest or assay metadata template.
 
@@ -113,24 +98,10 @@ def validate(template_type, template_file):
     """
     print(f"validate started")
     # Validate the .xlsx file with respect to the schema
-    try:
-        error_list = validate_xlsx(
-            template_file, template_type, raise_validation_errors=False
-        )
-    except template_reader.ValidationError as e:
-        # In case raise_validation_errors=False isn't respected by validate_xlsx,
-        # capture the validation error and return its message.
-        # TODO: fix this in cidc_schemas, not here.
-        error_list = [str(e)]
-    except Exception as e:
-        if "unknown template type" in str(e):
-            raise BadRequest(str(e))
-        raise InternalServerError(str(e))
-
+    error_list = list(xlsx.iter_errors(template))
     json = {"errors": []}
-    if type(error_list) == bool and error_list is True:
+    if not error_list:
         print(f"validate passed")
-        # The spreadsheet is valid
         return jsonify(json)
     else:
         print(f"{len(error_list)} validation errors: [{error_list[0]!r}, ...]")
@@ -148,10 +119,7 @@ def check_permissions(user, trial_id, template_type):
     """
     perm = Permissions.find_for_user_trial_type(user, trial_id, template_type)
     if not perm and user.role != CIDCRole.ADMIN.value:
-        if not TrialMetadata.find_by_trial_id(trial_id):
-            raise BadRequest(
-                f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
-            )
+        print(f"Unauthorized attempt to access trial {trial_id} by {user.email!r}")
         raise Unauthorized(
             f"{user.email} is not authorized to upload {template_type} data to {trial_id}. "
             f"Please contact a CIDC administrator if you believe this is a mistake."
@@ -168,39 +136,93 @@ def upload_handler(f):
     This decorator factors out common code from `upload_manifest` and `upload_assay`.
     """
 
+    @wraps(f)
     def wrapped(*args, **kwargs):
-        print(f"upload_handler started")
-        template_type, schema_path, xlsx_file = extract_schema_and_xlsx()
+        print(f"upload_handler({f.__name__}) started")
+        template, xlsx_file = extract_schema_and_xlsx()
+
+        errors_so_far = []
+
+        xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
+        print(f"xlsx parsed: {len(errors)} errors")
+        if errors:
+            errors_so_far.extend(errors)
 
         # Run basic validations on the provided Excel file
-        validations = validate(template_type, xlsx_file)
+        validations = validate(template, xlsx)
         if len(validations.json["errors"]) > 0:
-            raise BadRequest(validations.json)
+            errors_so_far.extend(validations.json["errors"])
+        print(f"xlsx validated: {len(validations.json['errors'])} errors")
 
-        md_patch, file_infos = prism.prismify(xlsx_file, schema_path, template_type)
+        md_patch, file_infos, errors = prism.prismify(xlsx, template)
+        if errors:
+            errors_so_far.extend(errors)
+        print(f"prismified: {len(errors)} errors, {len(file_infos)} file_infos")
 
         try:
             trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
         except KeyError:
-            raise BadRequest(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
+            errors_so_far.append(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
+            # we can't find trial id so we can't proceed
+            raise BadRequest({"errors": [str(e) for e in errors_so_far]})
+
+        trial = TrialMetadata.find_by_trial_id(trial_id)
+        if not trial:
+            errors_so_far.insert(
+                0, f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
+            )
+            # we can't find trial so we can't proceed trying to check_perm or merge
+            raise BadRequest({"errors": [str(e) for e in errors_so_far]})
 
         user = _request_ctx_stack.top.current_user
+        try:
+            check_permissions(user, trial_id, template.type)
+        except Unauthorized as e:
+            errors_so_far.insert(0, e.description)
+            # unauthorized to pull trial so we can't proceed trying to merge
+            raise Unauthorized({"errors": [str(e) for e in errors_so_far]})
 
-        check_permissions(user, trial_id, template_type)
+        # Try to merge assay metadata into the existing clinical trial metadata
+        # Ignoring result as we inly want to check there's no validation errors
+        try:
+            merged_md, errors = prism.merge_clinical_trial_metadata(
+                md_patch, trial.metadata_json
+            )
+        except ValidationError as e:
+            errors_so_far.append(f"{e.message} in {e.instance}")
+        except prism.InvalidMergeTargetException as e:
+            # we have an invalid MD stored in db - users can't do anything about it.
+            # So we log it
+            print(f"Internal error with trial {trial_id!r}", file=sys.stderr)
+            print(e, file=sys.stderr)
+            # and return an error. Though it's not BadRequest but rather an
+            # Internal Server error we report it like that, so it will be displayed
+            raise BadRequest(
+                f"Internal error with {trial_id!r}. Please contact a CIDC Administrator."
+            ) from e
+        print(f"merged: {len(errors)} errors")
+        if errors:
+            errors_so_far.extend(errors)
+
+        if errors_so_far:
+            raise BadRequest({"errors": [str(e) for e in errors_so_far]})
 
         return f(
-            user,
-            trial_id,
-            template_type,
-            xlsx_file,
-            md_patch,
-            file_infos,
-            *args,
-            **kwargs,
+            user, trial, template.type, xlsx_file, md_patch, file_infos, *args, **kwargs
         )
 
-    wrapped.__name__ = f.__name__
     return wrapped
+
+
+@ingestion_api.route("/validate", methods=["POST"])
+@requires_auth(
+    "ingestion/validate", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
+)
+@upload_handler
+def validate_endpoint(*args, **kwargs):
+    # Validation is done within `upload_handler`
+    # so we just return ok here
+    return jsonify({"errors": []})
 
 
 @ingestion_api.route("/upload_manifest", methods=["POST"])
@@ -210,7 +232,7 @@ def upload_handler(f):
 @upload_handler
 def upload_manifest(
     user: Users,
-    trial_id: str,
+    trial: TrialMetadata,
     template_type: str,
     xlsx_file: BinaryIO,
     md_patch: dict,
@@ -234,23 +256,20 @@ def upload_manifest(
     upload_moment = datetime.datetime.now().isoformat()
 
     try:
-        trial = TrialMetadata.patch_manifest(trial_id, md_patch, commit=False)
-    except NoResultFound as e:
-        raise BadRequest(
-            f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
-        )
+        trial = TrialMetadata.patch_manifest(trial.trial_id, md_patch, commit=False)
     except ValidationError as e:
         raise BadRequest(f"{e.message} in {e.instance}")
+    except ValidationMultiError as e:
+        raise BadRequest({"errors": e.args[0]})
 
-    xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
-        trial_id, "manifest", template_type, xlsx_file, upload_moment
+        trial.trial_id, "manifest", template_type, xlsx_file, upload_moment
     )
     # TODO maybe rely on default session
     session = Session.object_session(trial)
-    # TODO move to prism
+
     DownloadableFiles.create_from_blob(
-        trial_id,
+        trial.trial_id,
         template_type,
         "Shipping Manifest",
         gcs_blob,
@@ -267,7 +286,7 @@ def upload_manifest(
     )
 
     # Publish that this trial's metadata has been updated
-    gcloud_client.publish_patient_sample_update(trial_id)
+    gcloud_client.publish_patient_sample_update(trial.trial_id)
 
     return jsonify({"metadata_json_patch": md_patch})
 
@@ -279,7 +298,7 @@ def upload_manifest(
 @upload_handler
 def upload_assay(
     user: Users,
-    trial_id: str,
+    trial: TrialMetadata,
     template_type: str,
     xlsx_file: BinaryIO,
     md_patch: dict,
@@ -325,10 +344,8 @@ def upload_assay(
         if file_info.metadata_availability:
             files_with_extra_md[file_info.local_path] = file_info.upload_placeholder
 
-    # Upload the xlsx template file to GCS
-    xlsx_file.seek(0)
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
-        trial_id, "assays", template_type, xlsx_file, upload_moment
+        trial.trial_id, "assays", template_type, xlsx_file, upload_moment
     )
 
     # Save the upload job to the database

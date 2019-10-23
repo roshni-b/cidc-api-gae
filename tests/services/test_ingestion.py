@@ -89,28 +89,32 @@ ASSAY_UPLOAD = "/ingestion/upload_assay"
 MANIFEST_UPLOAD = "/ingestion/upload_manifest"
 
 
-def test_validate_valid_template(app_no_auth, some_file, monkeypatch):
+def test_validate_valid_template(
+    app_no_auth, some_file, monkeypatch, test_user, db, db_with_trial_and_user
+):
     """Ensure that the validation endpoint returns no errors for a known-valid .xlsx file"""
     client = app_no_auth.test_client()
     data = form_data("pbmc.xlsx", some_file, "pbmc")
 
     mocks = UploadMocks(monkeypatch)
 
+    give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
+
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 200
     assert res.json["errors"] == []
-    mocks.validate_excel.assert_called_once()
+    mocks.iter_errors.assert_called_once()
 
 
 def test_validate_invalid_template(app_no_auth, some_file, monkeypatch):
     """Ensure that the validation endpoint returns errors for a known-invalid .xlsx file"""
     mocks = UploadMocks(monkeypatch)
-    mocks.validate_excel.return_value = ["error-1"]
+    mocks.iter_errors.return_value = ["test error"]
     client = app_no_auth.test_client()
     data = form_data("pbmc.xlsx", some_file, "pbmc")
     res = client.post(VALIDATE, data=data)
-    assert res.status_code == 200
-    assert len(res.json["errors"]) > 0
+    assert res.status_code == 400
+    assert len(res.json["_error"]["message"]) > 0
 
 
 @pytest.mark.parametrize(
@@ -129,7 +133,7 @@ def test_validate_invalid_template(app_no_auth, some_file, monkeypatch):
             VALIDATE,
             form_data("test.xlsx", schema="foo/bar"),
             BadRequest,
-            "Unknown template type foo/bar",
+            "Unknown template type.*foo/bar",
         ],
     ],
 )
@@ -141,7 +145,6 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
     with app.test_request_context(url, data=data):
         with pytest.raises(error, match=message):
             extract_schema_and_xlsx()
-            extract_schema_and_extra_metadata_xlsx()
 
 
 def test_upload_manifest_non_existing_trial_id(
@@ -155,11 +158,11 @@ def test_upload_manifest_non_existing_trial_id(
 
     res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 400
-    assert "test-non-existing-trial-id" in res.json["_error"]["message"]
+    assert "test-non-existing-trial-id" in str(res.json["_error"]["message"])
 
     # Check that we tried to upload the excel file
     mocks.upload_xlsx.assert_not_called()
-    mocks.validate_excel.assert_called_once()
+    mocks.iter_errors.assert_called_once()
     mocks.prismify.assert_called_once()
 
 
@@ -170,7 +173,9 @@ def test_upload_invalid_manifest(
 
     mocks = UploadMocks(monkeypatch)
 
-    mocks.validate_excel.return_value = ["bad, bad error"]
+    mocks.iter_errors.return_value = ["bad, bad error"]
+
+    give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
 
     client = app_no_auth.test_client()
 
@@ -256,7 +261,7 @@ def test_upload_manifest(
         MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
     )
     assert res.status_code == 401
-    assert "not authorized to upload pbmc data" in res.json["_error"]["message"]
+    assert "not authorized to upload pbmc data" in str(res.json["_error"]["message"])
 
     # Add permission and retry the upload
     give_upload_permission(test_user, TEST_TRIAL, "pbmc", db)
@@ -316,6 +321,7 @@ class UploadMocks:
         prismify_trial_id="test_trial",
         prismify_file_entries=None,
         prismify_extra=None,
+        prismify_errors=None,
     ):
         self.grant_write = MagicMock()
         monkeypatch.setattr("gcloud_client.grant_upload_access", self.grant_write)
@@ -343,11 +349,16 @@ class UploadMocks:
             self.publish_patient_sample_update,
         )
 
-        self.validate_excel = MagicMock(name="validate_excel")
+        self.open_xlsx = MagicMock(name="open_xlsx")
+        self.open_xlsx.return_value = MagicMock(name="open_xlsx.return_value")
+        monkeypatch.setattr("openpyxl.load_workbook", self.open_xlsx)
+
+        self.iter_errors = MagicMock(name="iter_errors")
+        self.iter_errors.return_value = (_ for _ in range(0))
         monkeypatch.setattr(
-            "cidc_schemas.template.Template.validate_excel", self.validate_excel
+            "cidc_schemas.template_reader.XlTemplateReader.iter_errors",
+            self.iter_errors,
         )
-        self.validate_excel.return_value = True
 
         self.prismify = MagicMock(name="prismify")
         monkeypatch.setattr("cidc_schemas.prism.prismify", self.prismify)
@@ -356,12 +367,14 @@ class UploadMocks:
                 **{PROTOCOL_ID_FIELD_NAME: prismify_trial_id}, **(prismify_extra or {})
             ),
             prismify_file_entries or [],
+            prismify_errors or [],
         )
 
     def make_all_assertions(self):
         self.upload_xlsx.assert_called_once()
         self.prismify.assert_called_once()
-        self.validate_excel.assert_called_once()
+        self.open_xlsx.assert_called_once()
+        self.iter_errors.assert_called_once()
 
     def clear_all(self):
         for attr in self.__dict__.values():
@@ -388,7 +401,7 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
         ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes")
     )
     assert res.status_code == 401
-    assert "not authorized to upload wes data" in res.json["_error"]["message"]
+    assert "not authorized to upload wes data" in str(res.json["_error"]["message"])
 
     mocks.clear_all()
 
@@ -478,7 +491,7 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
         ASSAY_UPLOAD, data=form_data("olink.xlsx", io.BytesIO(b"1234"), "olink")
     )
     assert res.status_code == 401
-    assert "not authorized to upload olink data" in res.json["_error"]["message"]
+    assert "not authorized to upload olink data" in str(res.json["_error"]["message"])
 
     mocks.clear_all()
 
