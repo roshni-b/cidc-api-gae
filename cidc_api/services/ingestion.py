@@ -1,7 +1,7 @@
 """
 Endpoints for validating and ingesting metadata and data.
 """
-import os
+import os, sys
 import json
 import datetime
 from typing import BinaryIO, Tuple, List, NamedTuple
@@ -190,11 +190,16 @@ def upload_handler(f):
             )
         except ValidationError as e:
             errors_so_far.append(f"{e.message} in {e.instance}")
-        except prism.InvalidMergeTargetException:
-            # we have an invalid MD stored in db - users can't do anything about it
-            raise Exception(
+        except prism.InvalidMergeTargetException as e:
+            # we have an invalid MD stored in db - users can't do anything about it.
+            # So we log it
+            print(f"Internal error with trial {trial_id!r}", file=sys.stderr)
+            print(e, file=sys.stderr)
+            # and return an error. Though it's not BadRequest but rather an
+            # Internal Server error we report it like that, so it will be displayed
+            raise BadRequest(
                 f"Internal error with {trial_id!r}. Please contact a CIDC Administrator."
-            )
+            ) from e
         print(f"merged: {len(errors)} errors")
         if errors:
             errors_so_far.extend(errors)
