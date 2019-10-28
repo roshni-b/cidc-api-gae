@@ -1,0 +1,22 @@
+name: Create Prod release PR
+
+on:
+  schedule:
+  - cron: "0 8 * * 1-5"
+
+jobs:
+  build:
+    name: Create Prod release PR
+    runs-on: ubuntu-latest
+    steps:
+      #- name: Checkout master
+      #  uses: actions/checkout@master
+      - name: create PR
+        uses: dawidd6/action-create-pull-request@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          head_branch: master
+          base_branch: production
+          # defaults to commit message if empty
+          title: "Prod release"
+ 
