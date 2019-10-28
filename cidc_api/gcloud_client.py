@@ -1,9 +1,12 @@
 """Utilities for interacting with the Google Cloud Platform APIs."""
 import json
 import datetime
+from collections import namedtuple
 from concurrent.futures import Future
 from typing import List
 from typing.io import BinaryIO
+
+import requests
 
 from google.cloud import storage
 from google.cloud import pubsub
@@ -18,6 +21,7 @@ from config.settings import (
     GOOGLE_PATIENT_SAMPLE_TOPIC,
     TESTING,
     ENV,
+    CFNS_HTTP
 )
 
 
@@ -37,6 +41,8 @@ _xlsx_gcs_uri_format = (
     "{trial_id}/xlsx/{template_category}/{template_type}/{upload_moment}.xlsx"
 )
 
+
+_pseudo_blob = namedtuple("_pseudo_blob", ["name", "size", "md5_hash", "time_created"])
 
 def upload_xlsx_to_gcs(
     trial_id: str,
@@ -60,6 +66,11 @@ def upload_xlsx_to_gcs(
         template_type=template_type,
         upload_moment=upload_moment,
     )
+
+    if ENV == "dev":
+        size = filebytes.seek(0,2) or 0
+        print(f"Would've saved (size:{size}) {blob_name} to {GOOGLE_UPLOAD_BUCKET} and {GOOGLE_DATA_BUCKET}")
+        return _pseudo_blob(blob_name, size, "_pseudo_md5_hash", upload_moment)
 
     upload_bucket: storage.Bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
     blob = upload_bucket.blob(blob_name)
@@ -137,7 +148,19 @@ def _encode_and_publish(content: str, topic: str) -> Future:
 
     # Don't actually publish to Pub/Sub if running locally
     if ENV == "dev":
-        print(f"Would publish message {content} to topic {topic}")
+        if CFNS_HTTP:
+            print(f"Publishing message {content} to topic {CFNS_HTTP}/{topic}")
+            import base64
+            bdata = base64.b64encode(content.encode("utf-8"))
+            try:
+                res = requests.post(f"{CFNS_HTTP}/{topic}", data={'data': bdata})
+            except Exception as e:
+                print(f"Cant publish message {content} to topic {CFNS_HTTP}/{topic}")
+                print(e)
+            else:
+                print(f"Got {res}")
+        else:
+            print(f"Would've published message {content} to topic {topic}")
         return
 
     # The Pub/Sub publisher client returns a concurrent.futures.Future
