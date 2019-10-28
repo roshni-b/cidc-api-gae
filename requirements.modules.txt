@@ -3,4 +3,4 @@ flask-sqlalchemy~=2.4.0
 eve-sqlalchemy~=0.7.0
 eve-swagger~=0.0.11
 google-cloud-storage~=1.18.0
-cidc-schemas~=0.9.0
+cidc-schemas~=0.9.1
