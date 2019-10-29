@@ -257,7 +257,7 @@ class BearerAuth(TokenAuth):
                 options={"verify_at_hash": False},
             )
         except jwt.ExpiredSignatureError as e:
-            raise Unauthorized(str(e))
+            raise Unauthorized(f"{e}. Try log in again with cidc login.")
         except jwt.JWTClaimsError as e:
             raise Unauthorized(str(e))
         except jwt.JWTError as e:
