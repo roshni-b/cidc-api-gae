@@ -3,7 +3,7 @@ from datetime import datetime
 from jose import jwt
 from unittest.mock import MagicMock
 from flask import _request_ctx_stack
-from werkzeug.exceptions import Unauthorized, BadRequest
+from werkzeug.exceptions import Unauthorized, BadRequest, PreconditionFailed
 
 from cidc_api.auth import BearerAuth
 from cidc_api.models import Users, CIDCRole
@@ -73,16 +73,18 @@ def test_enforce_cli_version(bearer_auth, app_no_auth):
         ):
             bearer_auth.enforce_cli_version()
 
+    test_with_user_agent("asdlfj", "")
+
     match = "upgrade to the most recent version"
 
     # Reject python-requests requests
-    with pytest.raises(BadRequest, match=match):
+    with pytest.raises(Unauthorized, match=match):
         test_with_user_agent("python-requests", "")
 
     # Reject too-low cidc-cli clients
     too_low = ["0.1.2", "0.1.0"]
     for v in too_low:
-        with pytest.raises(BadRequest, match=match):
+        with pytest.raises(PreconditionFailed, match=match):
             test_with_user_agent("cidc-cli", v)
 
     # Accept high-enough CLI clients
@@ -91,7 +93,14 @@ def test_enforce_cli_version(bearer_auth, app_no_auth):
         test_with_user_agent("cidc-cli", v)
 
     # Accept non-CLI clients
-    test_with_user_agent("foobar", "")
+    test_with_user_agent("Mozilla/2.0 Firefox", "")
+
+    # Reject weird user-agent strings
+    with app_no_auth.test_request_context(
+        "/", headers={"User-Agent": f"not a valid user agent"}
+    ):
+        with pytest.raises(BadRequest, match="could not parse User-Agent string"):
+            bearer_auth.enforce_cli_version()
 
 
 def test_token_auth(monkeypatch, bearer_auth):

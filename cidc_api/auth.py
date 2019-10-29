@@ -7,7 +7,7 @@ import requests
 from eve.auth import TokenAuth
 from jose import jwt
 from flask import _request_ctx_stack, request, current_app as app
-from werkzeug.exceptions import Unauthorized, BadRequest
+from werkzeug.exceptions import Unauthorized, BadRequest, PreconditionFailed
 
 from models import Users
 from config.settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID, TESTING
@@ -98,7 +98,11 @@ class BearerAuth(TokenAuth):
         if not user_agent:
             return
 
-        client, client_version = user_agent.split("/")
+        try:
+            client, client_version = user_agent.split("/", 1)
+        except ValueError:
+            print(f"Unrecognized user-agent string format: {user_agent}")
+            raise BadRequest("could not parse User-Agent string")
 
         # Old CLI versions don't update the User-Agent header, so we (perhaps dangerously)
         # assume any request coming from the python requests library is from a "very" old
@@ -113,11 +117,17 @@ class BearerAuth(TokenAuth):
 
         if is_very_old_cli or is_old_cli:
             print("cancelling request: detected outdated CLI")
-            raise BadRequest(
+            message = (
                 "You appear to be using an out-of-date version of the CIDC CLI. "
                 "Please upgrade to the most recent version:\n"
                 "    pip3 install --upgrade cidc-cli"
             )
+            if is_very_old_cli:
+                # This is semantically incorrect, but there is no other way
+                # to get the error message to show up for the oldest versions of the CLI
+                raise Unauthorized(message)
+            else:
+                raise PreconditionFailed(message)
 
     def role_auth(
         self, profile: dict, allowed_roles: List[str], resource: str, method: str
