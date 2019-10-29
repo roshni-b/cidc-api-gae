@@ -336,7 +336,7 @@ def upload_assay(
         uri2uuid[gcs_uri] = uuid
 
         if file_info.local_path in url_mapping:
-            raise RuntimeError(
+            raise BadRequest(
                 f"File {file_info.local_path} came twice.\nEach local file should be used only once."
             )
         url_mapping[file_info.local_path] = gcs_uri
