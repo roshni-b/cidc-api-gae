@@ -257,7 +257,9 @@ class BearerAuth(TokenAuth):
                 options={"verify_at_hash": False},
             )
         except jwt.ExpiredSignatureError as e:
-            raise Unauthorized(f"{e} Obtain a new login token from the CIDC Portal, then try logging in again.")
+            raise Unauthorized(
+                f"{e} Obtain a new login token from the CIDC Portal, then try logging in again."
+            )
         except jwt.JWTClaimsError as e:
             raise Unauthorized(str(e))
         except jwt.JWTError as e:
