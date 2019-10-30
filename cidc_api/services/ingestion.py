@@ -190,6 +190,8 @@ def upload_handler(f):
             )
         except ValidationError as e:
             errors_so_far.append(f"{e.message} in {e.instance}")
+        except prism.MergeCollisionException as e:
+            errors_so_far.append(str(e))
         except prism.InvalidMergeTargetException as e:
             # we have an invalid MD stored in db - users can't do anything about it.
             # So we log it
@@ -336,7 +338,7 @@ def upload_assay(
         uri2uuid[gcs_uri] = uuid
 
         if file_info.local_path in url_mapping:
-            raise RuntimeError(
+            raise BadRequest(
                 f"File {file_info.local_path} came twice.\nEach local file should be used only once."
             )
         url_mapping[file_info.local_path] = gcs_uri

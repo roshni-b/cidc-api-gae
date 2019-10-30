@@ -16,6 +16,7 @@ ENV = environ.get("ENV", "staging")
 assert ENV in ("dev", "staging", "prod")
 DEBUG = ENV == "dev" and environ.get("DEBUG")
 TESTING = environ.get("TESTING") == "True"
+MIN_CLI_VERSION = "0.5.3"
 ## End application environment config
 
 secrets = get_secret_manager(TESTING)
