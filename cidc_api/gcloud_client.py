@@ -22,7 +22,7 @@ from config.settings import (
     GOOGLE_PATIENT_SAMPLE_TOPIC,
     TESTING,
     ENV,
-    CFNS_HTTP,
+    DEV_CFUNCTIONS_SERVER,
 )
 
 
@@ -152,21 +152,21 @@ def _encode_and_publish(content: str, topic: str) -> Future:
 
     # Don't actually publish to Pub/Sub if running locally
     if ENV == "dev":
-        if CFNS_HTTP:
-            print(f"Publishing message {content!r} to topic {CFNS_HTTP}/{topic}")
+        if DEV_CFUNCTIONS_SERVER:
+            print(f"Publishing message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}")
             import base64
 
             bdata = base64.b64encode(content.encode("utf-8"))
             try:
-                res = requests.post(f"{CFNS_HTTP}/{topic}", data={"data": bdata})
+                res = requests.post(f"{DEV_CFUNCTIONS_SERVER}/{topic}", data={"data": bdata})
             except Exception as e:
-                print(f"Can't publish message {content!r} to topic {CFNS_HTTP}/{topic}")
+                print(f"Can't publish message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}")
                 raise e
             else:
                 print(f"Got {res}")
                 if res.status_code != 200:
                     raise Exception(
-                        f"Cant publish message {content!r} to {CFNS_HTTP}/{topic}: {res}"
+                        f"Cant publish message {content!r} to {DEV_CFUNCTIONS_SERVER}/{topic}: {res}"
                     )
         else:
             print(f"Would've published message {content} to topic {topic}")
