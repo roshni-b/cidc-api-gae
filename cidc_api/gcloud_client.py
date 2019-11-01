@@ -160,13 +160,12 @@ def _encode_and_publish(content: str, topic: str) -> Future:
             try:
                 res = requests.post(f"{DEV_CFUNCTIONS_SERVER}/{topic}", data={"data": bdata})
             except Exception as e:
-                print(f"Can't publish message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}")
-                raise e
+                raise Exceptions(f"Couldn't publish message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}") from e
             else:
                 print(f"Got {res}")
                 if res.status_code != 200:
                     raise Exception(
-                        f"Cant publish message {content!r} to {DEV_CFUNCTIONS_SERVER}/{topic}: {res}"
+                        f"Couldn't publish message {content!r} to {DEV_CFUNCTIONS_SERVER}/{topic}: {res!r}"
                     )
         else:
             print(f"Would've published message {content} to topic {topic}")
