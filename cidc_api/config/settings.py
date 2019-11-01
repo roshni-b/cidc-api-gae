@@ -21,7 +21,7 @@ TEMPLATES_DIR = path.join("/tmp", "templates")
 ## End application environment config
 
 ## Configure Dev CFn
-CFNS_HTTP = environ.get("CFNS_HTTP")
+DEV_CFUNCTIONS_SERVER = environ.get("DEV_CFUNCTIONS_SERVER")
 ## End Dev CFn Config
 
 secrets = get_secret_manager(TESTING)
