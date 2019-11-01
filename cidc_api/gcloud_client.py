@@ -153,14 +153,20 @@ def _encode_and_publish(content: str, topic: str) -> Future:
     # Don't actually publish to Pub/Sub if running locally
     if ENV == "dev":
         if DEV_CFUNCTIONS_SERVER:
-            print(f"Publishing message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}")
+            print(
+                f"Publishing message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}"
+            )
             import base64
 
             bdata = base64.b64encode(content.encode("utf-8"))
             try:
-                res = requests.post(f"{DEV_CFUNCTIONS_SERVER}/{topic}", data={"data": bdata})
+                res = requests.post(
+                    f"{DEV_CFUNCTIONS_SERVER}/{topic}", data={"data": bdata}
+                )
             except Exception as e:
-                raise Exceptions(f"Couldn't publish message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}") from e
+                raise Exceptions(
+                    f"Couldn't publish message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}"
+                ) from e
             else:
                 print(f"Got {res}")
                 if res.status_code != 200:
