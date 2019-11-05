@@ -14,6 +14,12 @@ def assays():
     return jsonify(prism.SUPPORTED_ASSAYS)
 
 
+@info_api.route("analyses", methods=["GET"])
+def assays():
+    """List all supported analyses"""
+    return jsonify(prism.SUPPORTED_ANALYSES)
+
+
 @info_api.route("manifests", methods=["GET"])
 def manifests():
     """List all supported manifests"""
