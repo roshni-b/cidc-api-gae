@@ -11,6 +11,8 @@ from flask import jsonify
 from flask_migrate import Migrate, upgrade
 from flask_cors import CORS
 
+import cidc_schemas
+
 from models import BaseModel
 from auth import BearerAuth
 from services import register_services
@@ -60,6 +62,12 @@ db.Model = BaseModel
 Migrate(app, db, MIGRATIONS)
 with app.app_context():
     upgrade(MIGRATIONS)
+
+# Generate empty manifest/assay templates on startup
+print(
+    f"Writing empty templates to {app.config['TEMPLATES_DIR']} (cidc_schemas=={cidc_schemas.__version__})"
+)
+cidc_schemas.template.generate_all_templates(app.config["TEMPLATES_DIR"])
 
 # Configure the swagger site
 # TODO: flesh this out
