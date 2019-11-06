@@ -1,5 +1,5 @@
 import tempfile
-from os import environ
+from os import environ, path
 from copy import deepcopy
 
 from dotenv import load_dotenv
@@ -17,6 +17,7 @@ assert ENV in ("dev", "staging", "prod")
 DEBUG = ENV == "dev" and environ.get("DEBUG")
 TESTING = environ.get("TESTING") == "True"
 MIN_CLI_VERSION = "0.5.3"
+TEMPLATES_DIR = path.join("/tmp", "templates")
 ## End application environment config
 
 secrets = get_secret_manager(TESTING)
