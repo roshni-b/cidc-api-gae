@@ -48,9 +48,8 @@ def templates(template_family, template_type):
     elif not template_type.isalpha():
         raise BadRequest(f"Invalid template type: {template_type}")
 
-    path = os.path.join(
-        app.config["TEMPLATES_DIR"], template_family, f"{template_type}_template.xlsx"
-    )
+    filename = f"{template_type}_template.xlsx"
+    path = os.path.join(app.config["TEMPLATES_DIR"], template_family, filename)
 
     # Check that the template exists
     if not os.path.exists(path):
@@ -58,4 +57,4 @@ def templates(template_family, template_type):
             f"No template found for the given template family and template type"
         )
 
-    return send_file(path)
+    return send_file(path, as_attachment=True, attachment_filename=filename)
