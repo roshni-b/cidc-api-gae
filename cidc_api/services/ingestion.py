@@ -318,7 +318,7 @@ def upload_assay(
         gcs_bucket: the bucket to upload objects to.
         job_id: the unique identifier for this upload job in the database
         job_etag: the job record's etag, required by Eve for safe updates
-        extra_metadata: files with extra metadata information only applicable to few assays
+        extra_metadata: files with extra metadata information (only applicable to few assays), else None
     
     # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
     """
@@ -363,6 +363,7 @@ def upload_assay(
         "job_etag": job._etag,
         "url_mapping": url_mapping,
         "gcs_bucket": GOOGLE_UPLOAD_BUCKET,
+        "extra_metadata": None,
     }
     if bool(files_with_extra_md):
         response["extra_metadata"] = files_with_extra_md
