@@ -413,8 +413,13 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
     )
     assert res.json
     assert "url_mapping" in res.json
-
     url_mapping = res.json["url_mapping"]
+
+    # WES assay does not have any extra_metadata files, but its (and every assay's) response
+    # should have an extra_metadata field.
+    assert "extra_metadata" in res.json
+    extra_metadata = res.json["extra_metadata"]
+    assert extra_metadata is None
 
     # We expect local_path to map to a gcs object name with gcs_prefix
     local_path = "localfile.ext"
@@ -502,13 +507,14 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
         ASSAY_UPLOAD, data=form_data("olink.xlsx", io.BytesIO(b"1234"), "olink")
     )
     assert res.status_code == 200
-    assert "url_mapping" in res.json
-    assert "extra_metadata" in res.json
 
+    assert "url_mapping" in res.json
+    url_mapping = res.json["url_mapping"]
+
+    # Olink assay has extra_metadata files
+    assert "extra_metadata" in res.json
     extra_metadata = res.json["extra_metadata"]
     assert type(extra_metadata) == dict
-
-    url_mapping = res.json["url_mapping"]
 
     # We expect local_path to map to a gcs object name with gcs_prefix.
     for local_path, gcs_prefix in OLINK_TESTDATA:
