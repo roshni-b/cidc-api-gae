@@ -455,6 +455,14 @@ class UploadForeignKeys:
     # The object URI for the raw excel form associated with this upload
     gcs_xlsx_uri = Column(String, nullable=False)
 
+    def alert_upload_success(self):
+        """Send an email notification that an upload has succeeded."""
+        # (import these here to avoid a circular import error)
+        from cidc_api import emails
+
+        # Send admin notification email
+        emails.new_upload_alert(self, send_email=True)
+
 
 class ManifestUploads(CommonColumns, UploadForeignKeys):
     __tablename__ = "manifest_uploads"
@@ -474,6 +482,7 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         gcs_xlsx_uri: str,
         session: Session,
         commit: bool = True,
+        send_email: bool = False,
     ):
         """Create a new ManifestUpload for the given trial manifest patch."""
         assert (
@@ -492,6 +501,9 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         session.add(upload)
         if commit:
             session.commit()
+
+        if send_email:
+            upload.alert_upload_success()
 
         return upload
 
@@ -523,6 +535,8 @@ class AssayUploadStatus(EnumBaseClass):
                 if t not in merge_statuses:
                     return False
             if c in merge_statuses:
+                return False
+            if c == cls.STARTED and t in merge_statuses:
                 return False
         return True
 
@@ -582,9 +596,13 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
             assay_patch=metadata,
             uploader_email=uploader_email,
             gcs_xlsx_uri=gcs_xlsx_uri,
-            status="started",
+            status=AssayUploadStatus.STARTED.value,
             _etag=make_etag(
-                assay_type, gcs_file_map, metadata, uploader_email, "started"
+                assay_type,
+                gcs_file_map,
+                metadata,
+                uploader_email,
+                AssayUploadStatus.STARTED.value,
             ),
         )
         session.add(job)
@@ -623,6 +641,26 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
         if upload and upload.uploader_email != email:
             return None
         return upload
+
+    @with_default_session
+    def ingestion_success(
+        self, session: Session, commit: bool = False, send_email: bool = False
+    ):
+        """Set own status to reflect successful merge and trigger email notifying CIDC admins."""
+        # Do status update if the transition is valid
+        if not AssayUploadStatus.is_valid_transition(
+            self.status, AssayUploadStatus.MERGE_COMPLETED.value
+        ):
+            raise Exception(
+                f"Cannot declare ingestion success given current status: {self.status}"
+            )
+        self.status = AssayUploadStatus.MERGE_COMPLETED.value
+
+        if commit:
+            session.commit()
+
+        if send_email:
+            self.alert_upload_success()
 
 
 class DownloadableFiles(CommonColumns):

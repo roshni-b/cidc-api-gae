@@ -248,7 +248,7 @@ def test_admin_upload(app, test_user, db_with_trial_and_user, monkeypatch):
 
 
 def test_upload_manifest(
-    app_no_auth, test_user, db_with_trial_and_user, db, monkeypatch
+    app_no_auth, test_user, db_with_trial_and_user, db, monkeypatch, capsys
 ):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
 
@@ -272,6 +272,9 @@ def test_upload_manifest(
         MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
     )
     assert res.status_code == 200
+
+    # Check that upload alert email was "sent"
+    assert "Would send email with subject '[UPLOAD SUCCESS]" in capsys.readouterr()[0]
 
     # Check that we tried to publish a patient/sample update
     mocks.publish_patient_sample_update.assert_called_once()

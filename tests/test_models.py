@@ -1,4 +1,5 @@
 import io
+import sys
 from functools import wraps
 from datetime import datetime
 from unittest.mock import MagicMock
@@ -224,6 +225,42 @@ def test_assay_upload_merge_extra_metadata(db, monkeypatch):
 
 
 @db_test
+def test_assay_upload_ingestion_success(db, monkeypatch, capsys):
+    """Check that the ingestion success method works as expected"""
+    new_user = Users.create(PROFILE)
+    TrialMetadata.create(TRIAL_ID, METADATA)
+    assay_upload = AssayUploads.create(
+        assay_type="cytof",
+        uploader_email=EMAIL,
+        gcs_file_map={},
+        metadata={PROTOCOL_ID_FIELD_NAME: TRIAL_ID},
+        gcs_xlsx_uri="",
+        commit=False,
+    )
+
+    db.commit()
+
+    # Ensure that success can't be declared from a starting state
+    with pytest.raises(Exception):
+        assay_upload.ingestion_success()
+
+    # Update assay_upload status to simulate a completed but not ingested upload
+    assay_upload.status = AssayUploadStatus.UPLOAD_COMPLETED.value
+    assay_upload.ingestion_success()
+
+    # Check that status was updated and email wasn't sent by default
+    db_record = AssayUploads.find_by_id(assay_upload.id)
+    assert db_record.status == AssayUploadStatus.MERGE_COMPLETED.value
+    assert (
+        "Would send email with subject '[UPLOAD SUCCESS]" not in capsys.readouterr()[0]
+    )
+
+    # Check that email gets sent when specified
+    assay_upload.ingestion_success(send_email=True)
+    assert "Would send email with subject '[UPLOAD SUCCESS]" in capsys.readouterr()[0]
+
+
+@db_test
 def test_create_downloadable_file_from_metadata(db, monkeypatch):
     """Try to create a downloadable file from artifact_core metadata"""
     # fake file metadata
@@ -318,11 +355,12 @@ def test_assay_upload_status():
         AssayUploadStatus.MERGE_FAILED.value,
     ]
     for upload in upload_statuses:
+        assert AssayUploadStatus.is_valid_transition(AssayUploadStatus.STARTED, upload)
         for merge in merge_statuses:
+            assert not AssayUploadStatus.is_valid_transition(
+                AssayUploadStatus.STARTED, merge
+            )
             for status in [upload, merge]:
-                assert AssayUploadStatus.is_valid_transition(
-                    AssayUploadStatus.STARTED, status
-                )
                 assert not AssayUploadStatus.is_valid_transition(
                     status, AssayUploadStatus.STARTED
                 )

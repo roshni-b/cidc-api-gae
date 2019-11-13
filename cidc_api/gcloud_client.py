@@ -12,7 +12,7 @@ from requests.exceptions import Timeout
 from google.cloud import storage
 from google.cloud import pubsub
 
-from config.settings import (
+from cidc_api.config.settings import (
     GOOGLE_UPLOAD_ROLE,
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_UPLOAD_TOPIC,

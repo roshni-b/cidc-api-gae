@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from . import db
 from . import get_secret_manager
-from models import get_DOMAIN
+from cidc_api.models import get_DOMAIN
 
 load_dotenv()
 
