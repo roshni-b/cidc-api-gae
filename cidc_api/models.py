@@ -771,3 +771,12 @@ class DownloadableFiles(CommonColumns):
             session.commit()
 
         return df
+
+    @staticmethod
+    @with_default_session
+    def get_by_object_url(object_url: str, session: Session):
+        """
+        Look up the downloadable file record associated with 
+        the given GCS object url.
+        """
+        return session.query(DownloadableFiles).filter_by(object_url=object_url).one()

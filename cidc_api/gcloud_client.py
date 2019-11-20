@@ -164,7 +164,7 @@ def _encode_and_publish(content: str, topic: str) -> Future:
                     f"{DEV_CFUNCTIONS_SERVER}/{topic}", data={"data": bdata}
                 )
             except Exception as e:
-                raise Exceptions(
+                raise Exception(
                     f"Couldn't publish message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}"
                 ) from e
             else:
