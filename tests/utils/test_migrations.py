@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 from cidc_schemas.migrations import MigrationResult
@@ -16,6 +16,7 @@ from cidc_api.models import (
     TrialMetadata,
     DownloadableFiles,
 )
+from cidc_api.config.settings import GOOGLE_DATA_BUCKET
 
 
 def test_rollbackable_queue():
@@ -127,3 +128,14 @@ def test_migrations_rollback(monkeypatch):
     mock_session.close.assert_called_once()
     # Ensure no GCS operations were carried out
     rename_gcs_obj.assert_not_called()
+
+    reset_mocks()
+
+    # No failures
+    select_assay_uploads.side_effect = None
+    run_metadata_migration(mock_migration)
+    # Ensure we renamed the right objects
+    assert rename_gcs_obj.call_args_list == [
+        call(GOOGLE_DATA_BUCKET, "a_old_url", "a_new_url"),
+        call(GOOGLE_DATA_BUCKET, "b_old_url", "b_new_url"),
+    ]

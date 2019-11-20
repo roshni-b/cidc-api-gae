@@ -1,6 +1,7 @@
 import os
 from contextlib import contextmanager
-from typing import Callable, List, NamedTuple
+from functools import partial
+from typing import Callable, List, NamedTuple, Any, Tuple
 
 from alembic import op
 import sqlalchemy as sa
@@ -146,11 +147,11 @@ def _run_metadata_migration(
                     f"Encountered GCS data bucket artifact URI to update: {old_gcs_uri}"
                 )
                 renamer = PieceOfWork(
-                    lambda: rename_gcs_blob(
-                        GOOGLE_DATA_BUCKET, old_gcs_uri, new_gcs_uri
+                    partial(
+                        rename_gcs_blob, GOOGLE_DATA_BUCKET, old_gcs_uri, new_gcs_uri
                     ),
-                    lambda: rename_gcs_blob(
-                        GOOGLE_DATA_BUCKET, new_gcs_uri, old_gcs_uri
+                    partial(
+                        rename_gcs_blob, GOOGLE_DATA_BUCKET, new_gcs_uri, old_gcs_uri
                     ),
                 )
                 gcs_tasks.schedule(renamer)
@@ -181,11 +182,17 @@ def _run_metadata_migration(
                     )
                     new_upload_uri = "/".join([new_target_uri, upload_timestamp])
                     renamer = PieceOfWork(
-                        lambda: rename_gcs_blob(
-                            GOOGLE_UPLOAD_BUCKET, old_upload_uri, new_upload_uri
+                        partial(
+                            rename_gcs_blob,
+                            GOOGLE_UPLOAD_BUCKET,
+                            old_upload_uri,
+                            new_upload_uri,
                         ),
-                        lambda: rename_gcs_blob(
-                            GOOGLE_UPLOAD_BUCKET, new_upload_uri, old_upload_uri
+                        partial(
+                            rename_gcs_blob,
+                            GOOGLE_UPLOAD_BUCKET,
+                            new_upload_uri,
+                            old_upload_uri,
                         ),
                     )
                     gcs_tasks.schedule(renamer)
