@@ -285,6 +285,7 @@ def upload_manifest(
         metadata=md_patch,
         gcs_xlsx_uri=gcs_blob.name,
         session=session,
+        send_email=True,
     )
 
     # Publish that this trial's metadata has been updated

@@ -67,9 +67,8 @@ def alert_new_user_registered(items: list):
     assert len(items) == 1
 
     new_user = items[0]
-    email = new_user_registration(new_user["email"])
-
-    gcloud_client.send_email(**email)
+    # Send new user registration email
+    new_user_registration(new_user["email"], send_email=True)
 
 
 def add_approval_date(request: Request, lookup: dict):
@@ -93,5 +92,4 @@ def alert_new_user_approved(updates: dict, original: dict):
         # The user was just approved, so ping them.
         if updates["approval_date"] and not original.get("approval_date"):
             user = Users(**original)
-            email = confirm_account_approval(user)
-            gcloud_client.send_email(**email)
+            confirm_account_approval(user, send_email=True)
