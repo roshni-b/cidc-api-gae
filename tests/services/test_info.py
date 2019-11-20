@@ -49,7 +49,10 @@ def test_templates(app_no_auth):
 
     res = client.get(f"{INFO_ENDPOINT}/templates/manifests/pbmc123")
     assert res.status_code == 404
-    assert res.json["_error"]["message"] == "No template found for the given template family and template type"
+    assert (
+        res.json["_error"]["message"]
+        == "No template found for the given template family and template type"
+    )
 
     res = client.get(f"{INFO_ENDPOINT}/templates/manifests/pbmc123!")
     assert res.status_code == 400

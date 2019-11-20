@@ -36,7 +36,8 @@ def extra_data_types():
     return jsonify(EXTRA_DATA_TYPES)
 
 
-_al_under = re.compile("^\w+$") #alpha or underscore
+_al_under = re.compile("^\w+$")  # alpha or underscore
+
 
 @info_api.route("templates/<template_family>/<template_type>", methods=["GET"])
 def templates(template_family, template_type):
