@@ -6,6 +6,7 @@ from typing import Callable, List, NamedTuple, Any, Tuple
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.orm.session import Session
+from sqlalchemy.orm.attributes import flag_modified
 from google.cloud import storage
 
 from cidc_api.models import (
@@ -122,6 +123,11 @@ def _run_metadata_migration(
         # Update the trial metadata object
         trial.metadata_json = migration.result
 
+        # A workaround fix for JSON field modifications not being tracked
+        # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
+        # in the model doesn't seem to help.
+        flag_modified(trial, "metadata_json")
+
         # Update the relevant downloadable files and GCS objects
         for old_gcs_uri, artifact in migration.file_updates.items():
             print(f"Updating GCS and artifact info for {old_gcs_uri}: {artifact}")
@@ -164,6 +170,11 @@ def _run_metadata_migration(
 
         # Update the metadata patch
         upload.assay_patch = migration.result
+
+        # A workaround fix for JSON field modifications not being tracked
+        # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
+        # in the model doesn't seem to help.
+        flag_modified(upload, "assay_patch")
 
         # Update the GCS URIs of files that were part of this upload
         old_file_map = upload.gcs_file_map
@@ -209,6 +220,12 @@ def _run_metadata_migration(
 
         # Update the metadata patch
         upload.metadata_patch = migration.result
+
+        # A workaround fix for JSON field modifications not being tracked
+        # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
+        # in the model doesn't seem to help.
+        flag_modified(upload, "metadata_patch")
+
 
     # Attempt to make GCS updates
     print(f"Running all GCS tasks...")
