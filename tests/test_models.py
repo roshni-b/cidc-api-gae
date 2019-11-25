@@ -59,7 +59,12 @@ def test_duplicate_user(db):
 
 
 TRIAL_ID = "cimac-12345"
-METADATA = {PROTOCOL_ID_FIELD_NAME: TRIAL_ID, "participants": []}
+METADATA = {
+    PROTOCOL_ID_FIELD_NAME: TRIAL_ID, 
+    "participants": [],
+    "allowed_cohort_names": ["Arm_Z"],
+    "allowed_collection_event_names": []
+}
 
 
 @db_test
