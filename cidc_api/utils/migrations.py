@@ -16,6 +16,7 @@ from cidc_api.models import (
     AssayUploadStatus,
     ManifestUploads,
 )
+from cidc_api.gcloud_client import publish_artifact_upload
 from cidc_api.config.settings import GOOGLE_DATA_BUCKET, GOOGLE_UPLOAD_BUCKET
 from cidc_schemas.migrations import MigrationResult
 from cidc_schemas.prism import _get_uuid_info
@@ -226,7 +227,6 @@ def _run_metadata_migration(
         # in the model doesn't seem to help.
         flag_modified(upload, "metadata_patch")
 
-
     # Attempt to make GCS updates
     print(f"Running all GCS tasks...")
     gcs_tasks.run_all()
@@ -251,3 +251,22 @@ def rename_gcs_blob(bucket, old_name, new_name):
     old_blob = bucket.blob(old_name)
     new_blob = bucket.rename_blob(old_blob, new_name)
     return new_blob
+
+
+def republish_artifact_uploads():
+    """
+    Publish all downloadable_file IDs to the `artifact_upload` Pub/Sub topic,
+    triggering downstream file post-processing (e.g., pre-computation for visualization
+    purposes).
+    """
+    if is_testing:
+        print("Skipping 'republish_artifact_uploads' because this is a test")
+        pass
+
+    with migration_session() as (session, _):
+        files = session.query(DownloadableFiles).all()
+        for f in files:
+            print(
+                f"Publishing to 'artifact_upload' topic for downloadable file with id {f.id}"
+            )
+            publish_artifact_upload(f.id)

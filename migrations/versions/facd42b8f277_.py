@@ -14,8 +14,8 @@ from cidc_api.utils.migrations import run_metadata_migration
 
 
 # revision identifiers, used by Alembic.
-revision = 'facd42b8f277'
-down_revision = 'ff3141aecdd4'
+revision = "facd42b8f277"
+down_revision = "ff3141aecdd4"
 branch_labels = None
 depends_on = None
 

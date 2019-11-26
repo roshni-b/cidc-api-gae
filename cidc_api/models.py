@@ -684,6 +684,9 @@ class DownloadableFiles(CommonColumns):
     object_url = Column(String, nullable=False, index=True, unique=True)
     visible = Column(Boolean, default=True)
 
+    # Visualization data columns (should always be nullable)
+    clustergrammer = Column(JSONB, nullable=True)
+
     @staticmethod
     @with_default_session
     def create_from_metadata(

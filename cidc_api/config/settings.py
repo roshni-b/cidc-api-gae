@@ -40,6 +40,7 @@ GOOGLE_DATA_BUCKET = environ.get("GOOGLE_DATA_BUCKET")
 GOOGLE_UPLOAD_ROLE = "roles/storage.objectCreator"
 GOOGLE_PATIENT_SAMPLE_TOPIC = environ.get("GOOGLE_PATIENT_SAMPLE_TOPIC")
 GOOGLE_EMAILS_TOPIC = environ.get("GOOGLE_EMAILS_TOPIC")
+GOOGLE_ARTIFACT_UPLOAD_TOPIC = environ.get("GOOGLE_ARTIFACT_UPLOAD_TOPIC")
 
 # Download the credentials file to a temporary file,
 # then set the GOOGLE_APPLICATION_CREDENTIALS env variable

@@ -203,6 +203,15 @@ def publish_patient_sample_update(trial_id: int):
         report.result()
 
 
+def publish_artifact_upload(file_id: int):
+    """Publish a downloadable file ID to the artifact_upload topic"""
+    report = _encode_and_publish(str(file_id), GOOGLE_ARTIFACT_UPLOAD_TOPIC)
+
+    # Wait for response from pub/sub
+    if report:
+        report.result()
+
+
 def send_email(to_emails: List[str], subject: str, html_content: str):
     """Publish an email-to-send to the emails topic."""
     # Don't actually send an email if this is a test
