@@ -6,6 +6,7 @@ from typing import Callable, List, NamedTuple, Any, Tuple
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.orm.session import Session
+from sqlalchemy.orm.attributes import flag_modified
 from google.cloud import storage
 
 from cidc_api.models import (
@@ -15,6 +16,7 @@ from cidc_api.models import (
     AssayUploadStatus,
     ManifestUploads,
 )
+from cidc_api.gcloud_client import publish_artifact_upload
 from cidc_api.config.settings import GOOGLE_DATA_BUCKET, GOOGLE_UPLOAD_BUCKET
 from cidc_schemas.migrations import MigrationResult
 from cidc_schemas.prism import _get_uuid_info
@@ -122,6 +124,11 @@ def _run_metadata_migration(
         # Update the trial metadata object
         trial.metadata_json = migration.result
 
+        # A workaround fix for JSON field modifications not being tracked
+        # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
+        # in the model doesn't seem to help.
+        flag_modified(trial, "metadata_json")
+
         # Update the relevant downloadable files and GCS objects
         for old_gcs_uri, artifact in migration.file_updates.items():
             print(f"Updating GCS and artifact info for {old_gcs_uri}: {artifact}")
@@ -164,6 +171,11 @@ def _run_metadata_migration(
 
         # Update the metadata patch
         upload.assay_patch = migration.result
+
+        # A workaround fix for JSON field modifications not being tracked
+        # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
+        # in the model doesn't seem to help.
+        flag_modified(upload, "assay_patch")
 
         # Update the GCS URIs of files that were part of this upload
         old_file_map = upload.gcs_file_map
@@ -210,6 +222,11 @@ def _run_metadata_migration(
         # Update the metadata patch
         upload.metadata_patch = migration.result
 
+        # A workaround fix for JSON field modifications not being tracked
+        # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
+        # in the model doesn't seem to help.
+        flag_modified(upload, "metadata_patch")
+
     # Attempt to make GCS updates
     print(f"Running all GCS tasks...")
     gcs_tasks.run_all()
@@ -234,3 +251,22 @@ def rename_gcs_blob(bucket, old_name, new_name):
     old_blob = bucket.blob(old_name)
     new_blob = bucket.rename_blob(old_blob, new_name)
     return new_blob
+
+
+def republish_artifact_uploads():
+    """
+    Publish all downloadable_file IDs to the `artifact_upload` Pub/Sub topic,
+    triggering downstream file post-processing (e.g., pre-computation for visualization
+    purposes).
+    """
+    if is_testing:
+        print("Skipping 'republish_artifact_uploads' because this is a test")
+        pass
+
+    with migration_session() as (session, _):
+        files = session.query(DownloadableFiles).all()
+        for f in files:
+            print(
+                f"Publishing to 'artifact_upload' topic for downloadable file with id {f.id}"
+            )
+            publish_artifact_upload(f.id)

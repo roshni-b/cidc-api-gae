@@ -626,7 +626,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
             )
             print(f"Updated md for {uuid}: {updated_artifact.keys()}")
 
-        # A workaround fix for assay_patch modifications not being tracked
+        # A workaround fix for JSON field modifications not being tracked
         # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
         # in the model doesn't seem to help.
         flag_modified(job, "assay_patch")
@@ -683,6 +683,9 @@ class DownloadableFiles(CommonColumns):
     trial = relationship(TrialMetadata, foreign_keys=[trial_id])
     object_url = Column(String, nullable=False, index=True, unique=True)
     visible = Column(Boolean, default=True)
+
+    # Visualization data columns (should always be nullable)
+    clustergrammer = Column(JSONB, nullable=True)
 
     @staticmethod
     @with_default_session

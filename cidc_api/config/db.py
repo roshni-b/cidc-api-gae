@@ -10,7 +10,7 @@ def get_sqlachemy_database_uri(testing: bool = False) -> str:
     secrets = get_secrets_manager(testing)
     if testing:
         # Connect to the test database
-        db_uri = environ.get("TEST_POSTGRES_URI")
+        db_uri = environ.get("TEST_POSTGRES_URI", "fake-conn-string")
     elif not db_uri:
         from sqlalchemy.engine.url import URL
 

@@ -20,6 +20,7 @@ from cidc_api.config.settings import (
     GOOGLE_CLOUD_PROJECT,
     GOOGLE_EMAILS_TOPIC,
     GOOGLE_PATIENT_SAMPLE_TOPIC,
+    GOOGLE_ARTIFACT_UPLOAD_TOPIC,
     TESTING,
     ENV,
     DEV_CFUNCTIONS_SERVER,
@@ -197,6 +198,15 @@ def publish_upload_success(job_id: int):
 def publish_patient_sample_update(trial_id: int):
     """Publish to the patient_sample_update topic that patient/sample info for the given trial has been updated."""
     report = _encode_and_publish(str(trial_id), GOOGLE_PATIENT_SAMPLE_TOPIC)
+
+    # Wait for response from pub/sub
+    if report:
+        report.result()
+
+
+def publish_artifact_upload(file_id: int):
+    """Publish a downloadable file ID to the artifact_upload topic"""
+    report = _encode_and_publish(str(file_id), GOOGLE_ARTIFACT_UPLOAD_TOPIC)
 
     # Wait for response from pub/sub
     if report:

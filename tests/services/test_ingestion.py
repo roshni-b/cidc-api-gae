@@ -62,7 +62,13 @@ TEST_TRIAL = "test_trial"
 def db_with_trial_and_user(db, test_user):
     # Create the target trial and the uploader
     TrialMetadata.create(
-        "test_trial", {prism.PROTOCOL_ID_FIELD_NAME: TEST_TRIAL, "participants": []}
+        "test_trial",
+        {
+            prism.PROTOCOL_ID_FIELD_NAME: TEST_TRIAL,
+            "participants": [],
+            "allowed_cohort_names": ["Arm_Z"],
+            "allowed_collection_event_names": [],
+        },
     )
     Users.create(profile={"email": test_user.email})
 
