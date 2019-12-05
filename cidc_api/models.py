@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    BigInteger,
     String,
     VARCHAR,
     Enum,
@@ -672,7 +673,7 @@ class DownloadableFiles(CommonColumns):
     __tablename__ = "downloadable_files"
 
     file_name = Column(String, nullable=False)
-    file_size_bytes = Column(Integer, nullable=False)
+    file_size_bytes = Column(BigInteger, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
     data_format = Column(String, nullable=False)
     additional_metadata = Column(JSONB, nullable=True)
