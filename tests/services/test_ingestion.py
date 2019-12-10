@@ -92,6 +92,7 @@ def form_data(filename=None, fp=None, schema=None):
 
 VALIDATE = "/ingestion/validate"
 ASSAY_UPLOAD = "/ingestion/upload_assay"
+ANALYSIS_UPLOAD = "/ingestion/upload_analysis"
 MANIFEST_UPLOAD = "/ingestion/upload_manifest"
 
 
@@ -139,7 +140,7 @@ def test_validate_invalid_template(app_no_auth, some_file, monkeypatch):
             VALIDATE,
             form_data("test.xlsx", schema="foo/bar"),
             BadRequest,
-            "Unknown template type.*foo/bar",
+            "not supported",
         ],
     ],
 )
@@ -150,7 +151,7 @@ def test_extract_schema_and_xlsx_failures(app, url, data, error, message):
     """
     with app.test_request_context(url, data=data):
         with pytest.raises(error, match=message):
-            extract_schema_and_xlsx()
+            extract_schema_and_xlsx([])
 
 
 def test_upload_manifest_non_existing_trial_id(
@@ -208,7 +209,10 @@ def test_upload_unsupported_manifest(
     )
     assert res.status_code == 400
 
-    assert "Unknown template type" in res.json["_error"]["message"]
+    assert (
+        "'unsupported_' is not supported for this endpoint."
+        in res.json["_error"]["message"]
+    )
     assert "UNSUPPORTED_".lower() in res.json["_error"]["message"]
 
     # Check that we tried to upload the excel file
@@ -392,6 +396,38 @@ class UploadMocks:
 
 
 finfo = LocalFileUploadEntry
+
+
+def test_upload_endpoint_blocking(app_no_auth, test_user, monkeypatch):
+    """Ensure you can't upload an analysis to the upload assay endpoint or vice versa"""
+    client = app_no_auth.test_client()
+
+    mocks = UploadMocks(monkeypatch)
+
+    print(prism.SUPPORTED_ANALYSES)
+
+    assay_form = lambda: form_data("cytof.xlsx", io.BytesIO(b"1234"), "cytof")
+    analysis_form = lambda: form_data(
+        "cytof_analysis.xlsx", io.BytesIO(b"1234"), "cytof_analysis"
+    )
+
+    def ingestion_blocked(res) -> bool:
+        return "not supported" in res.json["_error"]["message"]
+
+    def ingestion_attempted(res) -> bool:
+        return "not authorized" in res.json["_error"]["message"]["errors"][0]
+
+    res = client.post(ASSAY_UPLOAD, data=assay_form())
+    assert ingestion_attempted(res)
+    res = client.post(ASSAY_UPLOAD, data=analysis_form())
+    assert ingestion_blocked(res)
+    assert res.status_code == 400
+
+    res = client.post(ANALYSIS_UPLOAD, data=analysis_form())
+    assert ingestion_attempted(res)
+    res = client.post(ANALYSIS_UPLOAD, data=assay_form())
+    assert ingestion_blocked(res)
+    assert res.status_code == 400
 
 
 def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypatch):

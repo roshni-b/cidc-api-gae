@@ -444,13 +444,30 @@ def test_rbac(monkeypatch, app, db):
             client.get(resource).status_code == 403
 
         # Test assay uploads
-        for resource, method in [
-            ("/ingestion/upload_assay", "post"),
-            ("/ingestion/poll_upload_merge_status", "get"),
+        resource = "/ingestion/upload_assay"
+        res = client.post(resource, headers=HEADER, data={})
+        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIMAC_BIOFX_USER]:
+            assert res.status_code != 401
+        else:
+            assert res.status_code == 401
+        client.get(resource).status_code == 403
+
+        # Test analysis uploads
+        resource = "/ingestion/upload_analysis"
+        res = client.post(resource, headers=HEADER, data={})
+        if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIDC_BIOFX_USER]:
+            assert res.status_code != 401
+        else:
+            assert res.status_code == 401
+        client.get(resource).status_code == 403
+
+        # Test upload polling
+        res = client.get("/ingestion/poll_upload_merge_status", headers=HEADER, data={})
+        if CIDCRole(role) in [
+            CIDCRole.ADMIN,
+            CIDCRole.CIMAC_BIOFX_USER,
+            CIDCRole.CIDC_BIOFX_USER,
         ]:
-            res = getattr(client, method)(resource, headers=HEADER, data={})
-            if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIMAC_BIOFX_USER]:
-                assert res.status_code != 401
-            else:
-                assert res.status_code == 401
-            client.get(resource).status_code == 403
+            assert res.status_code != 401
+        else:
+            assert res.status_code == 401
