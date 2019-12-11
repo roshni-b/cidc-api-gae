@@ -16,7 +16,7 @@ ENV = environ.get("ENV", "staging")
 assert ENV in ("dev", "staging", "prod")
 DEBUG = ENV == "dev" and environ.get("DEBUG")
 TESTING = environ.get("TESTING") == "True"
-MIN_CLI_VERSION = "0.6.1"
+MIN_CLI_VERSION = "0.7.0"
 TEMPLATES_DIR = path.join("/tmp", "templates")
 ## End application environment config
 
