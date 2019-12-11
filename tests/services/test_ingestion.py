@@ -446,7 +446,9 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
         ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes_fastq")
     )
     assert res.status_code == 401
-    assert "not authorized to upload wes_fastq data" in str(res.json["_error"]["message"])
+    assert "not authorized to upload wes_fastq data" in str(
+        res.json["_error"]["message"]
+    )
 
     mocks.clear_all()
 
