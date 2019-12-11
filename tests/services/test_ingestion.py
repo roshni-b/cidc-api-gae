@@ -252,7 +252,7 @@ def test_admin_upload(app, test_user, db_with_trial_and_user, monkeypatch):
     assert res.status_code == 200
 
     res = client.post(
-        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes")
+        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes_fastq")
     )
     assert res.status_code == 200
 
@@ -443,18 +443,20 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
 
     # No permission to upload yet
     res = client.post(
-        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes")
+        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes_fastq")
     )
     assert res.status_code == 401
-    assert "not authorized to upload wes data" in str(res.json["_error"]["message"])
+    assert "not authorized to upload wes_fastq data" in str(
+        res.json["_error"]["message"]
+    )
 
     mocks.clear_all()
 
     # Give permission and retry
-    give_upload_permission(test_user, TEST_TRIAL, "wes", db)
+    give_upload_permission(test_user, TEST_TRIAL, "wes_fastq", db)
 
     res = client.post(
-        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes")
+        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes_fastq")
     )
     assert res.json
     assert "url_mapping" in res.json
