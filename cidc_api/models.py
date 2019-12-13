@@ -400,7 +400,9 @@ class TrialMetadata(CommonColumns):
         return trial
 
     @staticmethod
-    def merge_gcs_artifact(metadata, assay_type, uuid, gcs_object):
+    def merge_gcs_artifact(
+        metadata: dict, assay_type: str, uuid: str, gcs_object: Blob
+    ):
         return prism.merge_artifact(
             ct=metadata,
             assay_type=assay_type,
@@ -409,6 +411,7 @@ class TrialMetadata(CommonColumns):
             file_size_bytes=gcs_object.size,
             uploaded_timestamp=gcs_object.time_created.isoformat(),
             md5_hash=gcs_object.md5_hash,
+            crc32c_hash=gcs_object.crc32c,
         )
 
     @classmethod
@@ -679,7 +682,8 @@ class DownloadableFiles(CommonColumns):
     additional_metadata = Column(JSONB, nullable=True)
     # TODO rename assay_type, because we store manifests in there too.
     assay_type = Column(String, nullable=False)
-    md5_hash = Column(String, nullable=False)
+    md5_hash = Column(String, nullable=True)
+    crc32c_hash = Column(String, nullable=True)
     trial_id = Column(String, ForeignKey("trial_metadata.trial_id"), nullable=False)
     trial = relationship(TrialMetadata, foreign_keys=[trial_id])
     object_url = Column(String, nullable=False, index=True, unique=True)
@@ -767,6 +771,7 @@ class DownloadableFiles(CommonColumns):
         df.file_name = blob.name
         df.file_size_bytes = blob.size
         df.md5_hash = blob.md5_hash
+        df.crc32c_hash = blob.crc32c
         df.uploaded_timestamp = blob.time_created
 
         session.add(df)
