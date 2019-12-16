@@ -85,7 +85,7 @@ def extract_schema_and_xlsx(allowed_types: List[str]) -> Tuple[str, str, BinaryI
     # Check that the schema type is allowed
     if schema_id not in allowed_types:
         raise BadRequest(
-            f"Schema type '{schema_id}' is not supported for this endpoint."
+            f"Schema type '{schema_id}' is not supported for this endpoint. Available options: {allowed_types}"
         )
 
     try:

@@ -262,7 +262,7 @@ def republish_artifact_uploads():
     """
     if is_testing:
         print("Skipping 'republish_artifact_uploads' because this is a test")
-        pass
+        return
 
     with migration_session() as (session, _):
         files = session.query(DownloadableFiles).all()
