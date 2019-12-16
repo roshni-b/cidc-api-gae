@@ -16,7 +16,7 @@ ENV = environ.get("ENV", "staging")
 assert ENV in ("dev", "staging", "prod")
 DEBUG = ENV == "dev" and environ.get("DEBUG")
 TESTING = environ.get("TESTING") == "True"
-MIN_CLI_VERSION = "0.5.3"
+MIN_CLI_VERSION = "0.7.0"
 TEMPLATES_DIR = path.join("/tmp", "templates")
 ## End application environment config
 
@@ -68,6 +68,6 @@ RESOURCE_METHODS = ["GET", "POST"]
 ITEM_METHODS = ["GET", "PATCH"]
 CACHE_CONTROL = "no-cache"
 DOMAIN = get_DOMAIN()
-PAGINATION_DEFAULT = 100
+PAGINATION_DEFAULT = 200
 PAGINATION_LIMIT = 200
 ## End Eve REST API config

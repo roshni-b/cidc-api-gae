@@ -306,6 +306,7 @@ def test_create_downloadable_file_from_blob(db, monkeypatch):
     fake_blob = MagicMock()
     fake_blob.name = "name"
     fake_blob.md5_hash = "12345"
+    fake_blob.crc32c = "54321"
     fake_blob.size = 5
     fake_blob.time_created = datetime.now()
 
@@ -319,8 +320,9 @@ def test_create_downloadable_file_from_blob(db, monkeypatch):
     df_lookup = DownloadableFiles.find_by_id(df.id)
     assert df_lookup.object_url == fake_blob.name
     assert df_lookup.data_format == "Shipping Manifest"
-    assert df_lookup.file_size_bytes == 5
-    assert df_lookup.md5_hash == "12345"
+    assert df_lookup.file_size_bytes == fake_blob.size
+    assert df_lookup.md5_hash == fake_blob.md5_hash
+    assert df_lookup.crc32c_hash == fake_blob.crc32c
 
     # uploading second time to check non duplicating entries
     fake_blob.size = 6

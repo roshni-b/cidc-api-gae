@@ -47,7 +47,7 @@ def is_xlsx(filename: str) -> bool:
     return filename.endswith(".xlsx")
 
 
-def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
+def extract_schema_and_xlsx(allowed_types: List[str]) -> Tuple[str, str, BinaryIO]:
     """
     Validate that a request has the required structure, then extract 
     the schema id and template file from the request. The request must
@@ -81,6 +81,12 @@ def extract_schema_and_xlsx() -> Tuple[str, str, BinaryIO]:
     if not schema_id:
         raise BadRequest("Expected a form entry for 'schema'")
     schema_id = schema_id.lower()
+
+    # Check that the schema type is allowed
+    if schema_id not in allowed_types:
+        raise BadRequest(
+            f"Schema type '{schema_id}' is not supported for this endpoint. Available options: {allowed_types}"
+        )
 
     try:
         template = Template.from_type(schema_id)
@@ -126,101 +132,114 @@ def check_permissions(user, trial_id, template_type):
         )
 
 
-def upload_handler(f):
+def upload_handler(allowed_types: List[str]):
     """
     Extracts and validates the xlsx file from the request form body,
     prismifies the xlsx file, checks that the current user has
     permission to complete this upload, then passes relevant data
     along to `f` as positional arguments.
 
+    If the request's schema type isn't in `allowed_types`, the request is rejected.
+
     This decorator factors out common code from `upload_manifest` and `upload_assay`.
     """
 
-    @wraps(f)
-    def wrapped(*args, **kwargs):
-        print(f"upload_handler({f.__name__}) started")
-        template, xlsx_file = extract_schema_and_xlsx()
+    def inner(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            print(f"upload_handler({f.__name__}) started")
+            template, xlsx_file = extract_schema_and_xlsx(allowed_types)
 
-        errors_so_far = []
+            errors_so_far = []
 
-        xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
-        print(f"xlsx parsed: {len(errors)} errors")
-        if errors:
-            errors_so_far.extend(errors)
+            xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
+            print(f"xlsx parsed: {len(errors)} errors")
+            if errors:
+                errors_so_far.extend(errors)
 
-        # Run basic validations on the provided Excel file
-        validations = validate(template, xlsx)
-        if len(validations.json["errors"]) > 0:
-            errors_so_far.extend(validations.json["errors"])
-        print(f"xlsx validated: {len(validations.json['errors'])} errors")
+            # Run basic validations on the provided Excel file
+            validations = validate(template, xlsx)
+            if len(validations.json["errors"]) > 0:
+                errors_so_far.extend(validations.json["errors"])
+            print(f"xlsx validated: {len(validations.json['errors'])} errors")
 
-        md_patch, file_infos, errors = prism.prismify(xlsx, template)
-        if errors:
-            errors_so_far.extend(errors)
-        print(f"prismified: {len(errors)} errors, {len(file_infos)} file_infos")
+            md_patch, file_infos, errors = prism.prismify(xlsx, template)
+            if errors:
+                errors_so_far.extend(errors)
+            print(f"prismified: {len(errors)} errors, {len(file_infos)} file_infos")
 
-        try:
-            trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
-        except KeyError:
-            errors_so_far.append(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
-            # we can't find trial id so we can't proceed
-            raise BadRequest({"errors": [str(e) for e in errors_so_far]})
+            try:
+                trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
+            except KeyError:
+                errors_so_far.append(f"{prism.PROTOCOL_ID_FIELD_NAME} field not found.")
+                # we can't find trial id so we can't proceed
+                raise BadRequest({"errors": [str(e) for e in errors_so_far]})
 
-        trial = TrialMetadata.find_by_trial_id(trial_id)
-        if not trial:
-            errors_so_far.insert(
-                0, f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found."
+            trial = TrialMetadata.find_by_trial_id(trial_id)
+            if not trial:
+                errors_so_far.insert(
+                    0,
+                    f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found.",
+                )
+                # we can't find trial so we can't proceed trying to check_perm or merge
+                raise BadRequest({"errors": [str(e) for e in errors_so_far]})
+
+            user = _request_ctx_stack.top.current_user
+            try:
+                check_permissions(user, trial_id, template.type)
+            except Unauthorized as e:
+                errors_so_far.insert(0, e.description)
+                # unauthorized to pull trial so we can't proceed trying to merge
+                raise Unauthorized({"errors": [str(e) for e in errors_so_far]})
+
+            # Try to merge assay metadata into the existing clinical trial metadata
+            # Ignoring result as we inly want to check there's no validation errors
+            try:
+                merged_md, errors = prism.merge_clinical_trial_metadata(
+                    md_patch, trial.metadata_json
+                )
+            except ValidationError as e:
+                errors_so_far.append(f"{e.message} in {e.instance}")
+            except prism.MergeCollisionException as e:
+                errors_so_far.append(str(e))
+            except prism.InvalidMergeTargetException as e:
+                # we have an invalid MD stored in db - users can't do anything about it.
+                # So we log it
+                print(f"Internal error with trial {trial_id!r}", file=sys.stderr)
+                print(e, file=sys.stderr)
+                # and return an error. Though it's not BadRequest but rather an
+                # Internal Server error we report it like that, so it will be displayed
+                raise BadRequest(
+                    f"Internal error with {trial_id!r}. Please contact a CIDC Administrator."
+                ) from e
+            print(f"merged: {len(errors)} errors")
+            if errors:
+                errors_so_far.extend(errors)
+
+            if errors_so_far:
+                raise BadRequest({"errors": [str(e) for e in errors_so_far]})
+
+            return f(
+                user,
+                trial,
+                template.type,
+                xlsx_file,
+                md_patch,
+                file_infos,
+                *args,
+                **kwargs,
             )
-            # we can't find trial so we can't proceed trying to check_perm or merge
-            raise BadRequest({"errors": [str(e) for e in errors_so_far]})
 
-        user = _request_ctx_stack.top.current_user
-        try:
-            check_permissions(user, trial_id, template.type)
-        except Unauthorized as e:
-            errors_so_far.insert(0, e.description)
-            # unauthorized to pull trial so we can't proceed trying to merge
-            raise Unauthorized({"errors": [str(e) for e in errors_so_far]})
+        return wrapped
 
-        # Try to merge assay metadata into the existing clinical trial metadata
-        # Ignoring result as we inly want to check there's no validation errors
-        try:
-            merged_md, errors = prism.merge_clinical_trial_metadata(
-                md_patch, trial.metadata_json
-            )
-        except ValidationError as e:
-            errors_so_far.append(f"{e.message} in {e.instance}")
-        except prism.MergeCollisionException as e:
-            errors_so_far.append(str(e))
-        except prism.InvalidMergeTargetException as e:
-            # we have an invalid MD stored in db - users can't do anything about it.
-            # So we log it
-            print(f"Internal error with trial {trial_id!r}", file=sys.stderr)
-            print(e, file=sys.stderr)
-            # and return an error. Though it's not BadRequest but rather an
-            # Internal Server error we report it like that, so it will be displayed
-            raise BadRequest(
-                f"Internal error with {trial_id!r}. Please contact a CIDC Administrator."
-            ) from e
-        print(f"merged: {len(errors)} errors")
-        if errors:
-            errors_so_far.extend(errors)
-
-        if errors_so_far:
-            raise BadRequest({"errors": [str(e) for e in errors_so_far]})
-
-        return f(
-            user, trial, template.type, xlsx_file, md_patch, file_infos, *args, **kwargs
-        )
-
-    return wrapped
+    return inner
 
 
 @ingestion_api.route("/validate", methods=["POST"])
 @requires_auth(
     "ingestion/validate", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
 )
-@upload_handler
+@upload_handler(prism.SUPPORTED_TEMPLATES)
 def validate_endpoint(*args, **kwargs):
     # Validation is done within `upload_handler`
     # so we just return ok here
@@ -231,7 +250,7 @@ def validate_endpoint(*args, **kwargs):
 @requires_auth(
     "ingestion/upload_manifest", [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
 )
-@upload_handler
+@upload_handler(prism.SUPPORTED_MANIFESTS)
 def upload_manifest(
     user: Users,
     trial: TrialMetadata,
@@ -298,8 +317,23 @@ def upload_manifest(
 @requires_auth(
     "ingestion/upload_assay", [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
 )
-@upload_handler
-def upload_assay(
+@upload_handler(prism.SUPPORTED_ASSAYS)
+def upload_assay(*args, **kwargs):
+    """Handle assay metadata / file uploads."""
+    return upload_data_files(*args, **kwargs)
+
+
+@ingestion_api.route("/upload_analysis", methods=["POST"])
+@requires_auth(
+    "ingestion/upload_analysis", [CIDCRole.ADMIN.value, CIDCRole.CIDC_BIOFX_USER.value]
+)
+@upload_handler(prism.SUPPORTED_ANALYSES)
+def upload_analysis(*args, **kwargs):
+    """Handle analysis metadata / file uploads."""
+    return upload_data_files(*args, **kwargs)
+
+
+def upload_data_files(
     user: Users,
     trial: TrialMetadata,
     template_type: str,
@@ -308,7 +342,7 @@ def upload_assay(
     file_infos: List[prism.LocalFileUploadEntry],
 ):
     """
-    Initiate an assay metadata/data ingestion job.
+    Initiate a data ingestion job.
 
     Request: multipart/form
         schema: the schema identifier for this template
@@ -375,7 +409,11 @@ def upload_assay(
 @ingestion_api.route("/poll_upload_merge_status", methods=["GET"])
 @requires_auth(
     "ingestion/poll_upload_merge_status",
-    [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value],
+    [
+        CIDCRole.ADMIN.value,
+        CIDCRole.CIMAC_BIOFX_USER.value,
+        CIDCRole.CIDC_BIOFX_USER.value,
+    ],
 )
 def poll_upload_merge_status():
     """
