@@ -213,7 +213,7 @@ def publish_artifact_upload(file_id: int):
         report.result()
 
 
-def send_email(to_emails: List[str], subject: str, html_content: str):
+def send_email(to_emails: List[str], subject: str, html_content: str, **kw):
     """Publish an email-to-send to the emails topic."""
     # Don't actually send an email if this is a test
     if TESTING or ENV == "dev":
@@ -221,7 +221,7 @@ def send_email(to_emails: List[str], subject: str, html_content: str):
         return
 
     email_json = json.dumps(
-        {"to_emails": to_emails, "subject": subject, "html_content": html_content}
+        dict(to_emails=to_emails, subject=subject, html_content=html_content, **kw)
     )
 
     report = _encode_and_publish(email_json, GOOGLE_EMAILS_TOPIC)

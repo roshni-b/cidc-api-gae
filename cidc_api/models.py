@@ -456,13 +456,13 @@ class UploadForeignKeys:
     # The object URI for the raw excel form associated with this upload
     gcs_xlsx_uri = Column(String, nullable=False)
 
-    def alert_upload_success(self):
+    def alert_upload_success(self, trial: TrialMetadata):
         """Send an email notification that an upload has succeeded."""
         # (import these here to avoid a circular import error)
         from cidc_api import emails
 
         # Send admin notification email
-        emails.new_upload_alert(self, send_email=True)
+        emails.new_upload_alert(self, trial.metadata_json, send_email=True)
 
 
 class ManifestUploads(CommonColumns, UploadForeignKeys):
@@ -481,6 +481,7 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         uploader_email: str,
         metadata: dict,
         gcs_xlsx_uri: str,
+        trial: TrialMetadata,
         session: Session,
         commit: bool = True,
         send_email: bool = False,
@@ -489,10 +490,11 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         assert (
             prism.PROTOCOL_ID_FIELD_NAME in metadata
         ), "metadata patch must have a trial ID"
-        trial_id = metadata[prism.PROTOCOL_ID_FIELD_NAME]
+        
+        assert trial.trial_id == metadata[prism.PROTOCOL_ID_FIELD_NAME]
 
         upload = ManifestUploads(
-            trial_id=trial_id,
+            trial_id=trial.trial_id,
             manifest_type=manifest_type,
             metadata_patch=metadata,
             uploader_email=uploader_email,
@@ -504,7 +506,7 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
             session.commit()
 
         if send_email:
-            upload.alert_upload_success()
+            upload.alert_upload_success(trial)
 
         return upload
 
@@ -645,7 +647,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
 
     @with_default_session
     def ingestion_success(
-        self, session: Session, commit: bool = False, send_email: bool = False
+        self, trial, session: Session, commit: bool = False, send_email: bool = False
     ):
         """Set own status to reflect successful merge and trigger email notifying CIDC admins."""
         # Do status update if the transition is valid
@@ -661,7 +663,7 @@ class AssayUploads(CommonColumns, UploadForeignKeys):
             session.commit()
 
         if send_email:
-            self.alert_upload_success()
+            self.alert_upload_success(trial)
 
 
 class DownloadableFiles(CommonColumns):

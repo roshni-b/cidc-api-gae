@@ -1,10 +1,12 @@
 """Template functions for CIDC email bodies."""
+import base64
 from functools import wraps
 from typing import Union
 
 from cidc_api import gcloud_client
 from cidc_api.models import Users, AssayUploads, ManifestUploads
-from cidc_api.config.settings import ENV
+from cidc_api.config.settings import ENV, GOOGLE_DATA_BUCKET
+from cidc_schemas.prism import generate_analysis_configs_from_upload_patch
 
 CIDC_MAILING_LIST = "cidc@jimmy.harvard.edu"
 
@@ -71,12 +73,21 @@ def new_user_registration(email: str) -> dict:
 
 
 @sendable
-def new_upload_alert(upload: Union[AssayUploads, ManifestUploads]) -> dict:
+def new_upload_alert(upload: Union[AssayUploads, ManifestUploads], full_metadata: dict) -> dict:
     """Alert the CIDC administrators that an upload succeeded."""
+
+
+    patch = (
+        upload.assay_patch if hasattr(upload, "assay_patch") else upload.metadata_patch
+    )
+
 
     upload_type = (
         upload.assay_type if hasattr(upload, "assay_type") else upload.manifest_type
     )
+
+    pipeline_configs = generate_analysis_configs_from_upload_patch(
+        full_metadata, patch, upload_type, GOOGLE_DATA_BUCKET)
 
     subject = f"[UPLOAD SUCCESS]({ENV}) {upload_type} uploaded to {upload.trial_id}"
 
@@ -86,13 +97,19 @@ def new_upload_alert(upload: Union[AssayUploads, ManifestUploads]) -> dict:
         <li><strong>trial id:</strong> {upload.trial_id}</li>
         <li><strong>type:</strong> {upload_type}</li>
         <li><strong>uploader:</strong> {upload.uploader_email}</li>
-    </ul
+    </ul>
     """
 
     email = {
         "to_emails": [CIDC_MAILING_LIST],
         "subject": subject,
         "html_content": html_content,
+        "attachments": [{
+            "content": base64.b64encode(conf.encode()).decode(),
+            "type": "application/yaml",
+            "filename": conf_name
+        }
+            for conf_name, conf in pipeline_configs.items()]
     }
 
     return email

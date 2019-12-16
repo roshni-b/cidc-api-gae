@@ -303,6 +303,7 @@ def upload_manifest(
         uploader_email=user.email,
         metadata=md_patch,
         gcs_xlsx_uri=gcs_blob.name,
+        trial=trial,
         session=session,
         send_email=True,
     )
