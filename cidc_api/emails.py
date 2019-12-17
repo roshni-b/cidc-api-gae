@@ -107,6 +107,7 @@ def new_upload_alert(
         "html_content": html_content,
         "attachments": [
             {
+                # converting to base64 email attachment format (en/decode due to b64 expecting bytes)
                 "content": base64.b64encode(conf.encode()).decode(),
                 "type": "application/yaml",
                 "filename": conf_name,
