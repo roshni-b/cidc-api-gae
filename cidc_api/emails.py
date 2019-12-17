@@ -73,21 +73,22 @@ def new_user_registration(email: str) -> dict:
 
 
 @sendable
-def new_upload_alert(upload: Union[AssayUploads, ManifestUploads], full_metadata: dict) -> dict:
+def new_upload_alert(
+    upload: Union[AssayUploads, ManifestUploads], full_metadata: dict
+) -> dict:
     """Alert the CIDC administrators that an upload succeeded."""
-
 
     patch = (
         upload.assay_patch if hasattr(upload, "assay_patch") else upload.metadata_patch
     )
-
 
     upload_type = (
         upload.assay_type if hasattr(upload, "assay_type") else upload.manifest_type
     )
 
     pipeline_configs = generate_analysis_configs_from_upload_patch(
-        full_metadata, patch, upload_type, GOOGLE_DATA_BUCKET)
+        full_metadata, patch, upload_type, GOOGLE_DATA_BUCKET
+    )
 
     subject = f"[UPLOAD SUCCESS]({ENV}) {upload_type} uploaded to {upload.trial_id}"
 
@@ -104,12 +105,14 @@ def new_upload_alert(upload: Union[AssayUploads, ManifestUploads], full_metadata
         "to_emails": [CIDC_MAILING_LIST],
         "subject": subject,
         "html_content": html_content,
-        "attachments": [{
-            "content": base64.b64encode(conf.encode()).decode(),
-            "type": "application/yaml",
-            "filename": conf_name
-        }
-            for conf_name, conf in pipeline_configs.items()]
+        "attachments": [
+            {
+                "content": base64.b64encode(conf.encode()).decode(),
+                "type": "application/yaml",
+                "filename": conf_name,
+            }
+            for conf_name, conf in pipeline_configs.items()
+        ],
     }
 
     return email

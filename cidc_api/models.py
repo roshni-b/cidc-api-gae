@@ -493,7 +493,7 @@ class ManifestUploads(CommonColumns, UploadForeignKeys):
         assert (
             prism.PROTOCOL_ID_FIELD_NAME in metadata
         ), "metadata patch must have a trial ID"
-        
+
         assert trial.trial_id == metadata[prism.PROTOCOL_ID_FIELD_NAME]
 
         upload = ManifestUploads(
