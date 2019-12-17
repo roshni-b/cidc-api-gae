@@ -71,7 +71,7 @@ def upload_xlsx_to_gcs(
     )
 
     if ENV == "dev":
-        size = filebytes.seek(0, 2) or 0 # 2 means seek relative to the file's end.
+        size = filebytes.seek(0, 2) or 0  # 2 means seek relative to the file's end.
         print(
             f"Would've saved (size:{size}) {blob_name} to {GOOGLE_UPLOAD_BUCKET} and {GOOGLE_DATA_BUCKET}"
         )
