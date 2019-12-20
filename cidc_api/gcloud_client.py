@@ -71,7 +71,7 @@ def upload_xlsx_to_gcs(
     )
 
     if ENV == "dev":
-        size = filebytes.seek(0, 2) or 0
+        size = filebytes.seek(0, 2) or 0  # 2 means seek relative to the file's end.
         print(
             f"Would've saved (size:{size}) {blob_name} to {GOOGLE_UPLOAD_BUCKET} and {GOOGLE_DATA_BUCKET}"
         )
@@ -213,15 +213,19 @@ def publish_artifact_upload(file_id: int):
         report.result()
 
 
-def send_email(to_emails: List[str], subject: str, html_content: str):
-    """Publish an email-to-send to the emails topic."""
+def send_email(to_emails: List[str], subject: str, html_content: str, **kw):
+    """
+    Publish an email-to-send to the emails topic.
+    `kw` are expected to be sendgrid json api style additional email parameters. 
+    """
+
     # Don't actually send an email if this is a test
     if TESTING or ENV == "dev":
         print(f"Would send email with subject '{subject}' to {to_emails}")
         return
 
     email_json = json.dumps(
-        {"to_emails": to_emails, "subject": subject, "html_content": html_content}
+        dict(to_emails=to_emails, subject=subject, html_content=html_content, **kw)
     )
 
     report = _encode_and_publish(email_json, GOOGLE_EMAILS_TOPIC)
