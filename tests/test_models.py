@@ -299,6 +299,14 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
         assert getattr(new_file, k) == file_metadata[k]
     assert new_file.additional_metadata == additional_metadata
 
+    # Throw in an additional capitalization test
+    assert (
+        new_file
+        == db.query(DownloadableFiles)
+        .filter_by(data_format="fAsTq", assay_type="WeS")
+        .one()
+    )
+
 
 @db_test
 def test_create_downloadable_file_from_blob(db, monkeypatch):

@@ -680,9 +680,11 @@ class DownloadableFiles(CommonColumns):
     file_name = Column(String, nullable=False)
     file_size_bytes = Column(BigInteger, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
+    # NOTE: this column actually has type CITEXT.
     data_format = Column(String, nullable=False)
     additional_metadata = Column(JSONB, nullable=True)
     # TODO rename assay_type, because we store manifests in there too.
+    # NOTE: this column actually has type CITEXT.
     assay_type = Column(String, nullable=False)
     md5_hash = Column(String, nullable=True)
     crc32c_hash = Column(String, nullable=True)
