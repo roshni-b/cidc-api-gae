@@ -4,6 +4,6 @@ eve-sqlalchemy~=0.7.0
 eve-swagger~=0.0.11
 google-cloud-storage~=1.18.0
 google-cloud-pubsub==0.42.1
-cidc-schemas~=0.13.1
+cidc-schemas~=0.13.2
 python-dotenv==0.10.3
 requests==2.22.0
