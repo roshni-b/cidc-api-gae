@@ -5,7 +5,6 @@ import datetime
 from cidc_api.gcloud_client import (
     grant_upload_access,
     revoke_upload_access,
-    _iam_id,
     publish_upload_success,
     send_email,
     _xlsx_gcs_uri_format,
@@ -21,27 +20,39 @@ class FakeBlob:
 
 
 def test_grant_upload_access(monkeypatch):
-    class GrantBlob(FakeBlob):
-        def get_iam_policy(self):
-            return {GOOGLE_UPLOAD_ROLE: set()}
+    api_request = MagicMock()
+    api_request.return_value = {
+        "bindings": [{"role": GOOGLE_UPLOAD_ROLE, "members": ["rando"]}]
+    }
+    monkeypatch.setattr("google.cloud._http.JSONConnection.api_request", api_request)
 
-        def set_iam_policy(self, policy):
-            assert _iam_id(EMAIL) in policy[GOOGLE_UPLOAD_ROLE]
+    def set_iam_policy(self, policy):
+        assert f"user:{EMAIL}" in policy[GOOGLE_UPLOAD_ROLE]
+        assert "rando" in policy[GOOGLE_UPLOAD_ROLE]
 
-    monkeypatch.setattr("cidc_api.gcloud_client._get_bucket", GrantBlob)
-    grant_upload_access("foo", EMAIL)
+    monkeypatch.setattr(
+        "google.cloud.storage.bucket.Bucket.set_iam_policy", set_iam_policy
+    )
+
+    grant_upload_access(EMAIL)
 
 
 def test_revoke_upload_access(monkeypatch):
-    class RevokeBlob(FakeBlob):
-        def get_iam_policy(self):
-            return {GOOGLE_UPLOAD_ROLE: set(EMAIL)}
+    api_request = MagicMock()
+    api_request.return_value = {
+        "bindings": [{"role": GOOGLE_UPLOAD_ROLE, "members": [EMAIL, "rando"]}]
+    }
+    monkeypatch.setattr("google.cloud._http.JSONConnection.api_request", api_request)
 
-        def set_iam_policy(self, policy):
-            assert _iam_id(EMAIL) not in policy[GOOGLE_UPLOAD_ROLE]
+    def set_iam_policy(self, policy):
+        assert f"user:{EMAIL}" not in policy[GOOGLE_UPLOAD_ROLE]
+        assert "rando" in policy[GOOGLE_UPLOAD_ROLE]
 
-    monkeypatch.setattr("cidc_api.gcloud_client._get_bucket", RevokeBlob)
-    revoke_upload_access("foo", EMAIL)
+    monkeypatch.setattr(
+        "google.cloud.storage.bucket.Bucket.set_iam_policy", set_iam_policy
+    )
+
+    revoke_upload_access(EMAIL)
 
 
 def test_xlsx_gcs_uri_format(monkeypatch):
