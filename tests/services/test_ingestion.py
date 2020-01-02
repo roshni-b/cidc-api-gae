@@ -478,7 +478,7 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
     ), "PHI from local_path shouldn't end up in gcs urls"
 
     # Check that we tried to grant IAM upload access to gcs_object_name
-    mocks.grant_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
+    mocks.grant_write.assert_called_with(test_user.email)
 
     # Check that we tried to upload the assay metadata excel file
     mocks.upload_xlsx.assert_called_once()
@@ -493,7 +493,7 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
-    mocks.revoke_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
+    mocks.revoke_write.assert_called_with(test_user.email)
     # This was an upload failure, so success shouldn't have been published
     mocks.publish_success.assert_not_called()
 
@@ -572,7 +572,7 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
         ), "PHI from local_path shouldn't end up in gcs urls"
 
     # Check that we tried to grant IAM upload access to gcs_object_name
-    mocks.grant_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
+    mocks.grant_write.assert_called_with(test_user.email)
 
     # Check that we tried to upload the assay metadata excel file
     mocks.upload_xlsx.assert_called_once()
@@ -587,7 +587,7 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
-    mocks.revoke_write.assert_called_with(GOOGLE_UPLOAD_BUCKET, test_user.email)
+    mocks.revoke_write.assert_called_with(test_user.email)
     # This was an upload failure, so success shouldn't have been published
     mocks.publish_success.assert_not_called()
 
