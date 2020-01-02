@@ -39,7 +39,9 @@ _xlsx_gcs_uri_format = (
 )
 
 
-_pseudo_blob = namedtuple("_pseudo_blob", ["name", "size", "md5_hash", "crc32c", "time_created"])
+_pseudo_blob = namedtuple(
+    "_pseudo_blob", ["name", "size", "md5_hash", "crc32c", "time_created"]
+)
 
 
 def upload_xlsx_to_gcs(
@@ -69,7 +71,9 @@ def upload_xlsx_to_gcs(
         print(
             f"Would've saved {blob_name} to {GOOGLE_UPLOAD_BUCKET} and {GOOGLE_DATA_BUCKET}"
         )
-        return _pseudo_blob(blob_name, 0, "_pseudo_md5_hash", "_pseudo_crc32c", upload_moment)
+        return _pseudo_blob(
+            blob_name, 0, "_pseudo_md5_hash", "_pseudo_crc32c", upload_moment
+        )
 
     upload_bucket: storage.Bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
     blob = upload_bucket.blob(blob_name)
