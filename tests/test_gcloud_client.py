@@ -14,44 +14,43 @@ from cidc_api.config.settings import GOOGLE_UPLOAD_ROLE
 EMAIL = "test@email.com"
 
 
-class FakeBlob:
-    def __init__(self, *args):
-        pass
-
-
-def test_grant_upload_access(monkeypatch):
+def _mock_gcloud_storage(members, set_iam_policy_fn, monkeypatch):
     api_request = MagicMock()
     api_request.return_value = {
-        "bindings": [{"role": GOOGLE_UPLOAD_ROLE, "members": ["rando"]}]
+        "bindings": [{"role": GOOGLE_UPLOAD_ROLE, "members": ["rando"]+members}]
     }
     monkeypatch.setattr("google.cloud._http.JSONConnection.api_request", api_request)
 
+
     def set_iam_policy(self, policy):
-        assert f"user:{EMAIL}" in policy[GOOGLE_UPLOAD_ROLE]
         assert "rando" in policy[GOOGLE_UPLOAD_ROLE]
+        set_iam_policy_fn(self, policy)
 
     monkeypatch.setattr(
-        "google.cloud.storage.bucket.Bucket.set_iam_policy", set_iam_policy
+        "google.cloud.storage.bucket.Bucket.set_iam_policy", set_iam_policy_fn
     )
+
+    # mocking `google.cloud.storage.Client()` to not actually create a client
+    monkeypatch.setattr(
+        "google.cloud.client.ClientWithProject.__init__", lambda *a, **kw: None
+    )
+
+
+def test_grant_upload_access(monkeypatch):
+    def set_iam_policy(self, policy):
+        assert f"user:{EMAIL}" in policy[GOOGLE_UPLOAD_ROLE]
+
+    _mock_gcloud_storage([], set_iam_policy, monkeypatch)
 
     grant_upload_access(EMAIL)
 
 
 def test_revoke_upload_access(monkeypatch):
-    api_request = MagicMock()
-    api_request.return_value = {
-        "bindings": [{"role": GOOGLE_UPLOAD_ROLE, "members": [EMAIL, "rando"]}]
-    }
-    monkeypatch.setattr("google.cloud._http.JSONConnection.api_request", api_request)
-
     def set_iam_policy(self, policy):
         assert f"user:{EMAIL}" not in policy[GOOGLE_UPLOAD_ROLE]
-        assert "rando" in policy[GOOGLE_UPLOAD_ROLE]
-
-    monkeypatch.setattr(
-        "google.cloud.storage.bucket.Bucket.set_iam_policy", set_iam_policy
-    )
-
+    
+    _mock_gcloud_storage([f"user:{EMAIL}"], set_iam_policy, monkeypatch)
+    
     revoke_upload_access(EMAIL)
 
 
