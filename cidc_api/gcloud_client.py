@@ -34,17 +34,14 @@ def _get_bucket(bucket_name: str) -> storage.Bucket:
     return bucket
 
 
-def _iam_id(user_email: str) -> str:
-    """Append the appropriate IAM account type to a user's email"""
-    return f"user:{user_email}"
-
-
 _xlsx_gcs_uri_format = (
     "{trial_id}/xlsx/{template_category}/{template_type}/{upload_moment}.xlsx"
 )
 
 
-_pseudo_blob = namedtuple("_pseudo_blob", ["name", "size", "md5_hash", "time_created"])
+_pseudo_blob = namedtuple(
+    "_pseudo_blob", ["name", "size", "md5_hash", "crc32c", "time_created"]
+)
 
 
 def upload_xlsx_to_gcs(
@@ -71,11 +68,12 @@ def upload_xlsx_to_gcs(
     )
 
     if ENV == "dev":
-        size = filebytes.seek(0, 2) or 0  # 2 means seek relative to the file's end.
         print(
-            f"Would've saved (size:{size}) {blob_name} to {GOOGLE_UPLOAD_BUCKET} and {GOOGLE_DATA_BUCKET}"
+            f"Would've saved {blob_name} to {GOOGLE_UPLOAD_BUCKET} and {GOOGLE_DATA_BUCKET}"
         )
-        return _pseudo_blob(blob_name, size, "_pseudo_md5_hash", upload_moment)
+        return _pseudo_blob(
+            blob_name, 0, "_pseudo_md5_hash", "_pseudo_crc32c", upload_moment
+        )
 
     upload_bucket: storage.Bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
     blob = upload_bucket.blob(blob_name)
@@ -89,29 +87,31 @@ def upload_xlsx_to_gcs(
     return final_object
 
 
-def grant_upload_access(bucket_name: str, user_email: str):
+def grant_upload_access(user_email: str):
     """
-    Grant a user upload access to the given bucket. Upload access
+    Grant a user upload access to the GOOGLE_UPLOAD_BUCKET. Upload access
     means a user can write objects to the bucket but cannot delete,
     overwrite, or read objects from this bucket.
     """
-    bucket = _get_bucket(bucket_name)
+    print(f"granting upload to {user_email}")
+    bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
 
     # Update the bucket IAM policy to include the user as an uploader.
     policy = bucket.get_iam_policy()
-    policy[GOOGLE_UPLOAD_ROLE].add(_iam_id(user_email))
+    policy[GOOGLE_UPLOAD_ROLE].add(policy.user(user_email))
     bucket.set_iam_policy(policy)
 
 
-def revoke_upload_access(bucket_name: str, user_email: str):
+def revoke_upload_access(user_email: str):
     """
     Revoke a user's upload access for the given bucket.
     """
-    bucket = _get_bucket(bucket_name)
+    print(f"revoking upload from {user_email}")
+    bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
 
     # Update the bucket IAM policy to remove the user's uploader privileges.
     policy = bucket.get_iam_policy()
-    policy[GOOGLE_UPLOAD_ROLE].discard(_iam_id(user_email))
+    policy[GOOGLE_UPLOAD_ROLE].discard(policy.user(user_email))
     bucket.set_iam_policy(policy)
 
 
