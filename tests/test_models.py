@@ -233,7 +233,7 @@ def test_assay_upload_merge_extra_metadata(db, monkeypatch):
 def test_assay_upload_ingestion_success(db, monkeypatch, capsys):
     """Check that the ingestion success method works as expected"""
     new_user = Users.create(PROFILE)
-    TrialMetadata.create(TRIAL_ID, METADATA)
+    trial = TrialMetadata.create(TRIAL_ID, METADATA)
     assay_upload = AssayUploads.create(
         assay_type="cytof",
         uploader_email=EMAIL,
@@ -246,12 +246,12 @@ def test_assay_upload_ingestion_success(db, monkeypatch, capsys):
     db.commit()
 
     # Ensure that success can't be declared from a starting state
-    with pytest.raises(Exception):
-        assay_upload.ingestion_success()
+    with pytest.raises(Exception, match="current status"):
+        assay_upload.ingestion_success(trial)
 
     # Update assay_upload status to simulate a completed but not ingested upload
     assay_upload.status = AssayUploadStatus.UPLOAD_COMPLETED.value
-    assay_upload.ingestion_success()
+    assay_upload.ingestion_success(trial)
 
     # Check that status was updated and email wasn't sent by default
     db_record = AssayUploads.find_by_id(assay_upload.id)
@@ -261,7 +261,7 @@ def test_assay_upload_ingestion_success(db, monkeypatch, capsys):
     )
 
     # Check that email gets sent when specified
-    assay_upload.ingestion_success(send_email=True)
+    assay_upload.ingestion_success(trial, send_email=True)
     assert "Would send email with subject '[UPLOAD SUCCESS]" in capsys.readouterr()[0]
 
 
@@ -298,6 +298,14 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
     for k in file_metadata.keys():
         assert getattr(new_file, k) == file_metadata[k]
     assert new_file.additional_metadata == additional_metadata
+
+    # Throw in an additional capitalization test
+    assert (
+        new_file
+        == db.query(DownloadableFiles)
+        .filter_by(data_format="fAsTq", assay_type="WeS")
+        .one()
+    )
 
 
 @db_test

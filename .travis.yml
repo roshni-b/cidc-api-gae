@@ -22,6 +22,7 @@ before_script:
   - psql -c "create user cidcdev with password '1234'"
   - psql -c "create database cidctest"
   - psql -c "grant all privileges on database cidctest to cidcdev"
+  - psql cidctest -c "create extension citext"
 script:
   - pytest
   - black --check cidc_api tests --target-version=py36
