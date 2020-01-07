@@ -392,7 +392,7 @@ def upload_data_files(
     )
 
     # Grant the user upload access to the upload bucket
-    gcloud_client.grant_upload_access(GOOGLE_UPLOAD_BUCKET, user.email)
+    gcloud_client.grant_upload_access(user.email)
 
     response = {
         "job_id": job.id,
@@ -494,7 +494,7 @@ def on_post_PATCH_assay_uploads(request: Request, payload: Response):
 
     # Revoke the user's write access
     user_email = _request_ctx_stack.top.current_user.email
-    gcloud_client.revoke_upload_access(GOOGLE_UPLOAD_BUCKET, user_email)
+    gcloud_client.revoke_upload_access(user_email)
 
 
 # @ingestion_api.route("/signed-upload-urls", methods=["POST"])

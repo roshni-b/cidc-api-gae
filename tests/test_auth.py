@@ -399,9 +399,9 @@ def test_rbac(monkeypatch, app, db):
                     assert res.status_code == 401
 
         # Test assay_uploads and manifest_uploads permissions
-        for resource, privileged_nonadmin in [
-            ("assay_uploads", CIDCRole.CIMAC_BIOFX_USER),
-            ("manifest_uploads", CIDCRole.NCI_BIOBANK_USER),
+        for resource, privileged_nonadmins in [
+            ("assay_uploads", [CIDCRole.CIMAC_BIOFX_USER, CIDCRole.CIDC_BIOFX_USER]),
+            ("manifest_uploads", [CIDCRole.NCI_BIOBANK_USER]),
         ]:
             # No one is allowed to PUT or POST to these endpoints
             res_post = client.post(resource, headers=HEADER, json={})
@@ -413,7 +413,7 @@ def test_rbac(monkeypatch, app, db):
             item = resource + "/1"
             res_patch = client.patch(item, headers=HEADER, json={})
             res_get_item = client.get(item, headers=HEADER)
-            if role in [CIDCRole.ADMIN, privileged_nonadmin]:
+            if role in [CIDCRole.ADMIN, *privileged_nonadmins]:
                 assert res_patch.status_code == 404
                 assert res_get_item.status_code == 404
             else:
