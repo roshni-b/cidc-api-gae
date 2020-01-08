@@ -179,7 +179,7 @@ def upload_handler(allowed_types: List[str]):
             if not trial:
                 errors_so_far.insert(
                     0,
-                    f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found.",
+                    f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id!r} not found.",
                 )
                 # we can't find trial so we can't proceed trying to check_perm or merge
                 raise BadRequest({"errors": [str(e) for e in errors_so_far]})
