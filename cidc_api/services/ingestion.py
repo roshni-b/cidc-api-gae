@@ -308,8 +308,8 @@ def upload_manifest(
         send_email=True,
     )
 
-    # Publish that this trial's metadata has been updated
-    gcloud_client.publish_patient_sample_update(trial.trial_id)
+    # Publish that a manifest upload has been received
+    gcloud_client.publish_patient_sample_update(manifest_upload.id)
 
     return jsonify({"metadata_json_patch": md_patch})
 
