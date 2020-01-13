@@ -179,7 +179,7 @@ def upload_handler(allowed_types: List[str]):
             if not trial:
                 errors_so_far.insert(
                     0,
-                    f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id} not found.",
+                    f"Trial with {prism.PROTOCOL_ID_FIELD_NAME}={trial_id!r} not found.",
                 )
                 # we can't find trial so we can't proceed trying to check_perm or merge
                 raise BadRequest({"errors": [str(e) for e in errors_so_far]})
@@ -308,8 +308,8 @@ def upload_manifest(
         send_email=True,
     )
 
-    # Publish that this trial's metadata has been updated
-    gcloud_client.publish_patient_sample_update(trial.trial_id)
+    # Publish that a manifest upload has been received
+    gcloud_client.publish_patient_sample_update(manifest_upload.id)
 
     return jsonify({"metadata_json_patch": md_patch})
 

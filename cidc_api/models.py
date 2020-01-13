@@ -121,12 +121,16 @@ def get_DOMAIN() -> dict:
 
     # Restrict operations on the 'assay_uploads' resource:
     # * only admins can list 'assay_uploads' (TODO: we may want people to be able to view their own uploads)
-    # * only admins and cimac users can GET items or PATCH 'assay_uploads'
-    admin_and_cimac = [CIDCRole.ADMIN.value, CIDCRole.CIMAC_BIOFX_USER.value]
+    # * only admins, cimac biofx users, and cidc biofx users can GET items or PATCH 'assay_uploads'
+    admin_cimac_cidc = [
+        CIDCRole.ADMIN.value,
+        CIDCRole.CIMAC_BIOFX_USER.value,
+        CIDCRole.CIDC_BIOFX_USER.value,
+    ]
     domain["assay_uploads"]["allowed_read_roles"] = [CIDCRole.ADMIN.value]
-    domain["assay_uploads"]["allowed_item_read_roles"] = admin_and_cimac
-    domain["assay_uploads"]["allowed_write_roles"] = admin_and_cimac
-    domain["assay_uploads"]["allowed_item_write_roles"] = admin_and_cimac
+    domain["assay_uploads"]["allowed_item_read_roles"] = admin_cimac_cidc
+    domain["assay_uploads"]["allowed_write_roles"] = admin_cimac_cidc
+    domain["assay_uploads"]["allowed_item_write_roles"] = admin_cimac_cidc
     domain["assay_uploads"]["resource_methods"] = ["GET"]
     domain["assay_uploads"]["item_methods"] = ["GET", "PATCH"]
 

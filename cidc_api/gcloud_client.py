@@ -195,9 +195,9 @@ def publish_upload_success(job_id: int):
         report.result()
 
 
-def publish_patient_sample_update(trial_id: int):
-    """Publish to the patient_sample_update topic that patient/sample info for the given trial has been updated."""
-    report = _encode_and_publish(str(trial_id), GOOGLE_PATIENT_SAMPLE_TOPIC)
+def publish_patient_sample_update(manifest_upload_id: int):
+    """Publish to the patient_sample_update topic that a new manifest has been uploaded."""
+    report = _encode_and_publish(str(manifest_upload_id), GOOGLE_PATIENT_SAMPLE_TOPIC)
 
     # Wait for response from pub/sub
     if report:
