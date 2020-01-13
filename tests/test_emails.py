@@ -31,19 +31,30 @@ def test_new_upload_alert(monkeypatch):
     vals = {"id": 1, "trial_id": "foo", "uploader_email": "test@email.com"}
 
     gen_confs = MagicMock()
-    gen_confs.return_value = {"attach.file": "content"}
+    gen_confs.side_effect = (
+        lambda ct, patch, template_type, bucket: {"attach.file": "content"}
+        if "wes" in template_type
+        else {}
+    )
     monkeypatch.setattr(
         "cidc_api.emails.generate_analysis_configs_from_upload_patch", gen_confs
     )
 
-    for upload, full_ct in [
+    for upload, full_ct, expected_att in [
         (
             AssayUploads(
                 **vals, assay_type="wes_bam", assay_patch={"assays": {"wes": []}}
             ),
             {"assays": {"wes": []}},
+            [
+                {
+                    "content": "Y29udGVudA==",  # "content" base64 encoded
+                    "filename": "attach.file",
+                    "type": "application/yaml",
+                }
+            ],
         ),
-        (ManifestUploads(**vals, manifest_type="pbmc", metadata_patch={}), {}),
+        (ManifestUploads(**vals, manifest_type="pbmc", metadata_patch={}), {}, None),
     ]:
         email = new_upload_alert(upload, full_ct)
         assert "UPLOAD SUCCESS" in email["subject"]
@@ -53,7 +64,4 @@ def test_new_upload_alert(monkeypatch):
 
         assert gen_confs.called_once()
 
-        assert len(email["attachments"]) == 1
-        assert (
-            email["attachments"][0]["content"] == "Y29udGVudA=="
-        )  # "content" base64 encoded
+        assert email.get("attachments") == expected_att

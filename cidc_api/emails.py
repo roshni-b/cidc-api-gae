@@ -105,7 +105,10 @@ def new_upload_alert(
         "to_emails": [CIDC_MAILING_LIST],
         "subject": subject,
         "html_content": html_content,
-        "attachments": [
+    }
+
+    if pipeline_configs:
+        email["attachments"] = [
             {
                 # converting to base64 email attachment format (en/decode due to b64 expecting bytes)
                 "content": base64.b64encode(conf.encode()).decode(),
@@ -113,7 +116,6 @@ def new_upload_alert(
                 "filename": conf_name,
             }
             for conf_name, conf in pipeline_configs.items()
-        ],
-    }
+        ]
 
     return email
