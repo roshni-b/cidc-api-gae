@@ -699,6 +699,7 @@ class DownloadableFiles(CommonColumns):
 
     # Visualization data columns (should always be nullable)
     clustergrammer = Column(JSONB, nullable=True)
+    ihc_combined_plot = Column(JSONB, nullable=True)
 
     @staticmethod
     @with_default_session
