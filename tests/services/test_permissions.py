@@ -36,7 +36,7 @@ def test_update_permissions_filters(app, db, monkeypatch):
                     granted_by_user=uid,
                     granted_to_user=uid,
                     trial_id=trial_id,
-                    assay_type=assay,
+                    upload_type=assay,
                 )
             )
 

@@ -24,7 +24,7 @@ from cidc_api.services.ingestion import extract_schema_and_xlsx
 from cidc_api.models import (
     TrialMetadata,
     Users,
-    AssayUploadStatus,
+    UploadJobStatus,
     Permissions,
     DownloadableFiles,
 )
@@ -34,13 +34,7 @@ from ..test_models import db_test
 from ..util import assert_same_elements
 from ..conftest import TEST_EMAIL
 
-from cidc_api.models import (
-    Users,
-    AssayUploads,
-    AssayUploadStatus,
-    TrialMetadata,
-    CIDCRole,
-)
+from cidc_api.models import Users, UploadJobs, UploadJobStatus, TrialMetadata, CIDCRole
 
 from . import open_data_file
 from ..test_models import db_test
@@ -225,7 +219,7 @@ def give_upload_permission(user, trial, type_, db):
             granted_by_user=user.id,
             granted_to_user=user.id,
             trial_id=TEST_TRIAL,
-            assay_type=type_,
+            upload_type=type_,
         )
     )
     db.commit()
@@ -484,12 +478,12 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
     mocks.upload_xlsx.assert_called_once()
 
     job_id = res.json["job_id"]
-    update_url = f"/assay_uploads/{job_id}"
+    update_url = f"/upload_jobs/{job_id}"
 
     # Report an upload failure
     res = client.patch(
         update_url,
-        json={"status": AssayUploadStatus.UPLOAD_FAILED.value},
+        json={"status": UploadJobStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
@@ -499,14 +493,14 @@ def test_upload_wes(app_no_auth, test_user, db_with_trial_and_user, db, monkeypa
 
     # Reset the upload status and try the request again
     with app_no_auth.app_context():
-        job = AssayUploads.find_by_id_and_email(job_id, test_user.email)
-        job.status = AssayUploadStatus.STARTED.value
+        job = UploadJobs.find_by_id_and_email(job_id, test_user.email)
+        job.status = UploadJobStatus.STARTED.value
         db.commit()
 
     # Report an upload success
     res = client.patch(
         update_url,
-        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
+        json={"status": UploadJobStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
@@ -578,12 +572,12 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
     mocks.upload_xlsx.assert_called_once()
 
     job_id = res.json["job_id"]
-    update_url = f"/assay_uploads/{job_id}"
+    update_url = f"/upload_jobs/{job_id}"
 
     # Report an upload failure
     res = client.patch(
         update_url,
-        json={"status": AssayUploadStatus.UPLOAD_FAILED.value},
+        json={"status": UploadJobStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
     assert res.status_code == 200
@@ -596,7 +590,7 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
     # UPLOAD_COMPLETED.
     bad_res = client.patch(
         update_url,
-        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
+        json={"status": UploadJobStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
     assert bad_res.status_code == 400
@@ -604,13 +598,13 @@ def test_upload_olink(app_no_auth, test_user, db_with_trial_and_user, db, monkey
 
     # Reset the upload status and try the request again
     with app_no_auth.app_context():
-        job = AssayUploads.find_by_id_and_email(job_id, test_user.email)
-        job.status = AssayUploadStatus.STARTED.value
+        job = UploadJobs.find_by_id_and_email(job_id, test_user.email)
+        job.status = UploadJobStatus.STARTED.value
         db.commit()
 
     res = client.patch(
         update_url,
-        json={"status": AssayUploadStatus.UPLOAD_COMPLETED.value},
+        json={"status": UploadJobStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
     mocks.publish_success.assert_called_with(job_id)
@@ -630,8 +624,8 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
 
         Users.create({"email": "other@email.com"})
         db.add(TrialMetadata(trial_id=trial_id, metadata_json={}))
-        upload_1 = AssayUploads.create(
-            assay_type="wes",
+        upload_1 = UploadJobs.create(
+            upload_type="wes",
             uploader_email=test_user.email,
             gcs_file_map={},
             metadata=metadata,
@@ -639,8 +633,8 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
         )
 
         user_created = upload_1.id
-        upload_2 = AssayUploads.create(
-            assay_type="wes",
+        upload_2 = UploadJobs.create(
+            upload_type="wes",
             uploader_email="other@email.com",
             gcs_file_map={},
             metadata=metadata,
@@ -679,12 +673,12 @@ def test_poll_upload_merge_status(app, db, test_user, monkeypatch):
 
     test_details = "A human-friendly reason for this "
     for status in [
-        AssayUploadStatus.MERGE_COMPLETED.value,
-        AssayUploadStatus.MERGE_FAILED.value,
+        UploadJobStatus.MERGE_COMPLETED.value,
+        UploadJobStatus.MERGE_FAILED.value,
     ]:
         # Simulate cloud function merge status update
         with app.app_context():
-            upload = AssayUploads.find_by_id_and_email(user_created, test_user.email)
+            upload = UploadJobs.find_by_id_and_email(user_created, test_user.email)
             upload.status = status
             upload.status_details = test_details
             db.commit()
@@ -715,10 +709,10 @@ def test_extra_metadata(app_no_auth, monkeypatch):
     assert res.status_code == 400
     assert "files" in res.json["_error"]["message"]
 
-    from cidc_api.services.ingestion import AssayUploads as _AssayUploads
+    from cidc_api.services.ingestion import UploadJobs as _UploadJobs
 
     merge_extra_metadata = MagicMock()
-    monkeypatch.setattr(_AssayUploads, "merge_extra_metadata", merge_extra_metadata)
+    monkeypatch.setattr(_UploadJobs, "merge_extra_metadata", merge_extra_metadata)
 
     res = client.post(
         "/ingestion/extra-assay-metadata",
@@ -737,8 +731,8 @@ def test_merge_extra_metadata(
 ):
     """Ensure merging of extra metadata follows the expected execution flow"""
     with app_no_auth.app_context():
-        assay_upload = AssayUploads.create(
-            assay_type="assay_with_extra_md",
+        assay_upload = UploadJobs.create(
+            upload_type="assay_with_extra_md",
             uploader_email=test_user.email,
             gcs_file_map={},
             metadata={
@@ -775,7 +769,7 @@ def test_merge_extra_metadata(
         assert res.status_code == 200
         assert custom_extra_md_parse.call_count == 2
 
-        assert 1 == db.query(AssayUploads).count()
-        au = db.query(AssayUploads).first()
-        assert "extra_md" in au.assay_patch["whatever"]["hierarchy"][0]
-        assert "extra_md" in au.assay_patch["whatever"]["hierarchy"][1]
+        assert 1 == db.query(UploadJobs).count()
+        au = db.query(UploadJobs).first()
+        assert "extra_md" in au.metadata_patch["whatever"]["hierarchy"][0]
+        assert "extra_md" in au.metadata_patch["whatever"]["hierarchy"][1]

@@ -21,11 +21,11 @@ from cidc_schemas.template_reader import XlTemplateReader
 
 import gcloud_client
 from models import (
-    AssayUploads,
-    AssayUploadStatus,
+    UploadJobs,
+    UploadJobStatus,
     TrialMetadata,
     DownloadableFiles,
-    ManifestUploads,
+    UploadJobs,
     Permissions,
     CIDCRole,
     Users,
@@ -38,8 +38,8 @@ ingestion_api = Blueprint("ingestion", __name__, url_prefix="/ingestion")
 
 def register_ingestion_hooks(app: Eve):
     """Set up ingestion-related hooks on an Eve app instance"""
-    app.on_pre_PATCH_assay_uploads = validate_assay_upload_status_update
-    app.on_post_PATCH_assay_uploads = on_post_PATCH_assay_uploads
+    app.on_pre_PATCH_upload_jobs = validate_upload_status_update
+    app.on_post_PATCH_upload_jobs = on_post_PATCH_upload_job
 
 
 def is_xlsx(filename: str) -> bool:
@@ -265,7 +265,7 @@ def upload_manifest(
     * API tries to load existing trial metadata blob (if fails, merge request fails; nothing saved).
     * API merges the merge request JSON into the trial metadata (if fails, merge request fails; nothing saved).
     * The manifest xlsx file is upload to the GCS uploads bucket and goes to Downloadable files.
-    * The merge request parsed JSON is saved to `ManifestUploads`.
+    * The merge request parsed JSON is saved to `UploadJobs`.
     * The updated trial metadata object is updated in the `TrialMetadata` table.
 
     Request: multipart/form
@@ -298,14 +298,15 @@ def upload_manifest(
         commit=False,
     )
 
-    manifest_upload = ManifestUploads.create(
-        manifest_type=template_type,
+    manifest_upload = UploadJobs.create(
+        upload_type=template_type,
         uploader_email=user.email,
         metadata=md_patch,
         gcs_xlsx_uri=gcs_blob.name,
-        trial=trial,
+        gcs_file_map=None,
         session=session,
         send_email=True,
+        status=UploadJobStatus.MERGE_COMPLETED.value,
     )
 
     # Publish that a manifest upload has been received
@@ -387,7 +388,7 @@ def upload_data_files(
     )
 
     # Save the upload job to the database
-    job = AssayUploads.create(
+    job = UploadJobs.create(
         template_type, user.email, uri2uuid, md_patch, gcs_blob.name
     )
 
@@ -436,13 +437,13 @@ def poll_upload_merge_status():
         raise BadRequest("Missing expected query parameter 'id'")
 
     user = _request_ctx_stack.top.current_user
-    upload = AssayUploads.find_by_id_and_email(upload_id, user.email)
+    upload = UploadJobs.find_by_id_and_email(upload_id, user.email)
     if not upload:
         raise NotFound(f"Could not find assay upload job with id {upload_id}")
 
     if upload.status in [
-        AssayUploadStatus.MERGE_COMPLETED.value,
-        AssayUploadStatus.MERGE_FAILED.value,
+        UploadJobStatus.MERGE_COMPLETED.value,
+        UploadJobStatus.MERGE_FAILED.value,
     ]:
         return jsonify(
             {"status": upload.status, "status_details": upload.status_details}
@@ -452,7 +453,7 @@ def poll_upload_merge_status():
     return jsonify({"retry_in": 5})
 
 
-def validate_assay_upload_status_update(request: Request, _: dict):
+def validate_upload_status_update(request: Request, _: dict):
     """Event hook ensuring a user is requesting a valid upload job status transition"""
     # Extract the target status
     upload_patch = request.json
@@ -464,19 +465,19 @@ def validate_assay_upload_status_update(request: Request, _: dict):
     # Look up the current status
     user = _request_ctx_stack.top.current_user
     upload_id = request.view_args["id"]
-    upload = AssayUploads.find_by_id_and_email(upload_id, user.email)
+    upload = UploadJobs.find_by_id_and_email(upload_id, user.email)
     if not upload:
         raise NotFound(f"Could not find assay upload job with id {upload_id}")
 
     # Check that the requested status update is valid
-    if not AssayUploadStatus.is_valid_transition(upload.status, target_status):
+    if not UploadJobStatus.is_valid_transition(upload.status, target_status):
         raise BadRequest(
             f"Cannot set assay upload status to '{target_status}': "
             f"current status is '{upload.status}'"
         )
 
 
-def on_post_PATCH_assay_uploads(request: Request, payload: Response):
+def on_post_PATCH_upload_job(request: Request, payload: Response):
     """Revoke the user's write access to the objects they've uploaded to."""
     if not payload.json or not "id" in payload.json:
         raise BadRequest("Unexpected payload while updating assay_uploads")
@@ -489,7 +490,7 @@ def on_post_PATCH_assay_uploads(request: Request, payload: Response):
     status = request.json["status"]
 
     # If this is a successful upload job, publish this info to Pub/Sub
-    if status == AssayUploadStatus.UPLOAD_COMPLETED.value:
+    if status == UploadJobStatus.UPLOAD_COMPLETED.value:
         gcloud_client.publish_upload_success(job_id)
 
     # Revoke the user's write access
@@ -586,7 +587,7 @@ def extra_assay_metadata():
     files = request.files.to_dict()
 
     try:
-        AssayUploads.merge_extra_metadata(job_id, files)
+        UploadJobs.merge_extra_metadata(job_id, files)
     except Exception as e:
         # TODO see if it's validation sort of error and return BadRequest
         raise e

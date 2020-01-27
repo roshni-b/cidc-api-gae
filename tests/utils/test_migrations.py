@@ -10,12 +10,7 @@ from cidc_api.utils.migrations import (
     Session,
     run_metadata_migration,
 )
-from cidc_api.models import (
-    AssayUploads,
-    ManifestUploads,
-    TrialMetadata,
-    DownloadableFiles,
-)
+from cidc_api.models import UploadJobs, TrialMetadata, DownloadableFiles
 from cidc_api.config.settings import GOOGLE_DATA_BUCKET
 
 
@@ -108,7 +103,7 @@ def test_migrations_rollback(monkeypatch):
     rename_gcs_obj.side_effect = [None, Exception("gcs failure"), None]
 
     with pytest.raises(Exception, match="gcs failure"):
-        run_metadata_migration(mock_migration)
+        run_metadata_migration(mock_migration, False)
     # Called 3 times - task 1 succeeds, task 2 fails, task 1 rolls back
     assert len(rename_gcs_obj.call_args_list) == 3
     mock_session.commit.assert_not_called()
@@ -122,7 +117,7 @@ def test_migrations_rollback(monkeypatch):
     select_assay_uploads.side_effect = Exception("sql failure")
 
     with pytest.raises(Exception, match="sql failure"):
-        run_metadata_migration(mock_migration)
+        run_metadata_migration(mock_migration, False)
     mock_session.commit.assert_not_called()
     mock_session.rollback.assert_called_once()
     mock_session.close.assert_called_once()
@@ -133,7 +128,7 @@ def test_migrations_rollback(monkeypatch):
 
     # No failures
     select_assay_uploads.side_effect = None
-    run_metadata_migration(mock_migration)
+    run_metadata_migration(mock_migration, False)
     # Ensure we renamed the right objects
     assert rename_gcs_obj.call_args_list == [
         call(GOOGLE_DATA_BUCKET, "a_old_url", "a_new_url"),

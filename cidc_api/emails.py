@@ -4,7 +4,7 @@ from functools import wraps
 from typing import Union
 
 from cidc_api import gcloud_client
-from cidc_api.models import Users, AssayUploads, ManifestUploads
+from cidc_api.models import Users, UploadJobs
 from cidc_api.config.settings import ENV, GOOGLE_DATA_BUCKET
 from cidc_schemas.prism import generate_analysis_configs_from_upload_patch
 
@@ -73,21 +73,13 @@ def new_user_registration(email: str) -> dict:
 
 
 @sendable
-def new_upload_alert(
-    upload: Union[AssayUploads, ManifestUploads], full_metadata: dict
-) -> dict:
+def new_upload_alert(upload: Union[UploadJobs], full_metadata: dict) -> dict:
     """Alert the CIDC administrators that an upload succeeded."""
-
-    patch = (
-        upload.assay_patch if hasattr(upload, "assay_patch") else upload.metadata_patch
-    )
-
-    upload_type = (
-        upload.assay_type if hasattr(upload, "assay_type") else upload.manifest_type
-    )
+    patch = upload.metadata_patch
+    upload_type = upload.upload_type
 
     pipeline_configs = generate_analysis_configs_from_upload_patch(
-        full_metadata, patch, upload_type, GOOGLE_DATA_BUCKET
+        full_metadata, upload.metadata_patch, upload.upload_type, GOOGLE_DATA_BUCKET
     )
 
     subject = f"[UPLOAD SUCCESS]({ENV}) {upload_type} uploaded to {upload.trial_id}"

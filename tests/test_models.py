@@ -12,11 +12,11 @@ from cidc_api.app import app
 from cidc_api.models import (
     Users,
     TrialMetadata,
-    AssayUploads,
+    UploadJobs,
     Permissions,
     DownloadableFiles,
     with_default_session,
-    AssayUploadStatus,
+    UploadJobStatus,
 )
 from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 from cidc_schemas import prism
@@ -156,15 +156,15 @@ def test_create_assay_upload(db):
 
     # Should fail, since trial doesn't exist yet
     with pytest.raises(IntegrityError):
-        AssayUploads.create("wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri)
+        UploadJobs.create("wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri)
     db.rollback()
 
     TrialMetadata.create(TRIAL_ID, METADATA)
 
-    new_job = AssayUploads.create(
+    new_job = UploadJobs.create(
         "wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri
     )
-    job = AssayUploads.find_by_id_and_email(new_job.id, PROFILE["email"])
+    job = UploadJobs.find_by_id_and_email(new_job.id, PROFILE["email"])
     assert_same_elements(new_job.gcs_file_map, job.gcs_file_map)
     assert job.status == "started"
 
@@ -189,8 +189,8 @@ def test_assay_upload_merge_extra_metadata(db, monkeypatch):
 
     TrialMetadata.create(TRIAL_ID, METADATA)
 
-    assay_upload = AssayUploads.create(
-        assay_type="assay_with_extra_md",
+    assay_upload = UploadJobs.create(
+        upload_type="assay_with_extra_md",
         uploader_email=EMAIL,
         gcs_file_map={},
         metadata={
@@ -214,7 +214,7 @@ def test_assay_upload_merge_extra_metadata(db, monkeypatch):
         prism, "_EXTRA_METADATA_PARSERS", {"assay_with_extra_md": custom_extra_md_parse}
     )
 
-    AssayUploads.merge_extra_metadata(
+    UploadJobs.merge_extra_metadata(
         111,
         {
             "uuid-1": io.BytesIO(b"within extra md file 1"),
@@ -223,10 +223,10 @@ def test_assay_upload_merge_extra_metadata(db, monkeypatch):
         session=db,
     )
 
-    assert 1 == db.query(AssayUploads).count()
-    au = db.query(AssayUploads).first()
-    assert "extra" in au.assay_patch["whatever"]["hierarchy"][0]
-    assert "extra" in au.assay_patch["whatever"]["hierarchy"][1]
+    assert 1 == db.query(UploadJobs).count()
+    au = db.query(UploadJobs).first()
+    assert "extra" in au.metadata_patch["whatever"]["hierarchy"][0]
+    assert "extra" in au.metadata_patch["whatever"]["hierarchy"][1]
 
 
 @db_test
@@ -234,8 +234,8 @@ def test_assay_upload_ingestion_success(db, monkeypatch, capsys):
     """Check that the ingestion success method works as expected"""
     new_user = Users.create(PROFILE)
     trial = TrialMetadata.create(TRIAL_ID, METADATA)
-    assay_upload = AssayUploads.create(
-        assay_type="cytof",
+    assay_upload = UploadJobs.create(
+        upload_type="cytof",
         uploader_email=EMAIL,
         gcs_file_map={},
         metadata={PROTOCOL_ID_FIELD_NAME: TRIAL_ID},
@@ -250,12 +250,12 @@ def test_assay_upload_ingestion_success(db, monkeypatch, capsys):
         assay_upload.ingestion_success(trial)
 
     # Update assay_upload status to simulate a completed but not ingested upload
-    assay_upload.status = AssayUploadStatus.UPLOAD_COMPLETED.value
+    assay_upload.status = UploadJobStatus.UPLOAD_COMPLETED.value
     assay_upload.ingestion_success(trial)
 
     # Check that status was updated and email wasn't sent by default
-    db_record = AssayUploads.find_by_id(assay_upload.id)
-    assert db_record.status == AssayUploadStatus.MERGE_COMPLETED.value
+    db_record = UploadJobs.find_by_id(assay_upload.id)
+    assert db_record.status == UploadJobStatus.MERGE_COMPLETED.value
     assert (
         "Would send email with subject '[UPLOAD SUCCESS]" not in capsys.readouterr()[0]
     )
@@ -303,7 +303,7 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
     assert (
         new_file
         == db.query(DownloadableFiles)
-        .filter_by(data_format="fAsTq", assay_type="WeS")
+        .filter_by(data_format="fAsTq", upload_type="WeS")
         .one()
     )
 
@@ -360,24 +360,24 @@ def test_with_default_session(app_no_auth):
 
 
 def test_assay_upload_status():
-    """Test AssayUploadStatus transition validation logic"""
+    """Test UploadJobStatus transition validation logic"""
     upload_statuses = [
-        AssayUploadStatus.UPLOAD_COMPLETED.value,
-        AssayUploadStatus.UPLOAD_FAILED.value,
+        UploadJobStatus.UPLOAD_COMPLETED.value,
+        UploadJobStatus.UPLOAD_FAILED.value,
     ]
     merge_statuses = [
-        AssayUploadStatus.MERGE_COMPLETED.value,
-        AssayUploadStatus.MERGE_FAILED.value,
+        UploadJobStatus.MERGE_COMPLETED.value,
+        UploadJobStatus.MERGE_FAILED.value,
     ]
     for upload in upload_statuses:
-        assert AssayUploadStatus.is_valid_transition(AssayUploadStatus.STARTED, upload)
+        assert UploadJobStatus.is_valid_transition(UploadJobStatus.STARTED, upload)
         for merge in merge_statuses:
-            assert not AssayUploadStatus.is_valid_transition(
-                AssayUploadStatus.STARTED, merge
+            assert not UploadJobStatus.is_valid_transition(
+                UploadJobStatus.STARTED, merge
             )
             for status in [upload, merge]:
-                assert not AssayUploadStatus.is_valid_transition(
-                    status, AssayUploadStatus.STARTED
+                assert not UploadJobStatus.is_valid_transition(
+                    status, UploadJobStatus.STARTED
                 )
-            assert AssayUploadStatus.is_valid_transition(upload, merge)
-            assert not AssayUploadStatus.is_valid_transition(merge, upload)
+            assert UploadJobStatus.is_valid_transition(upload, merge)
+            assert not UploadJobStatus.is_valid_transition(merge, upload)
