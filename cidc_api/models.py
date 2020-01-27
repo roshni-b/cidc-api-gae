@@ -400,7 +400,7 @@ class TrialMetadata(CommonColumns):
     ):
         return prism.merge_artifact(
             ct=metadata,
-            upload_type=upload_type,
+            assay_type=upload_type,  # assay_type is the old name for upload_type
             artifact_uuid=uuid,
             object_url=gcs_object.name,
             file_size_bytes=gcs_object.size,
