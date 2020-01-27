@@ -1,7 +1,7 @@
 runtime: python37
 env: standard
 entrypoint: gunicorn -b :$PORT --chdir cidc_api --log-level DEBUG app:app --timeout 60
-
+instance_class: F2
 automatic_scaling:
   min_instances: 1
 
@@ -15,7 +15,6 @@ handlers:
 env_variables:
   ENV: 'prod'
   AUTH0_DOMAIN: 'cidc.auth0.com'
-  AUTH0_AUDIENCE: 'http://localhost:5000'
   AUTH0_CLIENT_ID: 'nI74q5VDJ2w2OaKgoK3lAkuxWvCkKP30'
   CLOUD_SQL_INSTANCE_NAME: 'cidc-dfci:us-east1:cidc-postgresql-prod'
   CLOUD_SQL_DB_USER: 'cidcuser'
