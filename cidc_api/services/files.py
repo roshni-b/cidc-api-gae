@@ -39,7 +39,7 @@ def get_download_url():
     if user.role != CIDCRole.ADMIN.value:
         # Check for a permission matching this file's trial and assay
         if not any(
-            perm.assay_type == file_record.assay_type
+            perm.upload_type == file_record.upload_type
             and perm.trial_id == file_record.trial_id
             for perm in perms
         ):
@@ -76,12 +76,13 @@ def update_file_filters(request: Request, _):
         return
 
     # Build a where-query that looks up only the downloadable_files with
-    # trial ID and assay type that the current user is allowed to view.
+    # trial ID and upload type that the current user is allowed to view.
     # If the user has permission to view WES for Trial "1" and Olink for "2",
     # this query will look like:
-    #   (trial==1 and assay_type==wes)or(trial==2 and assay_type==olink)
+    #   (trial==1 and upload_type==wes)or(trial==2 and upload_type==olink)
     where_query = "or".join(
-        f"(trial=={p.trial_id!r} and assay_type=={p.assay_type!r})" for p in permissions
+        f"(trial=={p.trial_id!r} and upload_type=={p.upload_type!r})"
+        for p in permissions
     )
 
     user_where_query = request.args.get("where")

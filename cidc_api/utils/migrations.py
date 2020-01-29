@@ -12,9 +12,11 @@ from google.cloud import storage
 from cidc_api.models import (
     TrialMetadata,
     DownloadableFiles,
-    AssayUploads,
-    AssayUploadStatus,
-    ManifestUploads,
+    CommonColumns,
+    UploadJobStatus,
+    UploadJobs,
+    String,
+    Column,
 )
 from cidc_api.gcloud_client import publish_artifact_upload
 from cidc_api.config.settings import GOOGLE_DATA_BUCKET, GOOGLE_UPLOAD_BUCKET
@@ -88,31 +90,66 @@ def migration_session():
         session.close()
 
 
-def run_metadata_migration(metadata_migration: Callable[[dict], MigrationResult]):
+def run_metadata_migration(
+    metadata_migration: Callable[[dict], MigrationResult], use_upload_jobs_table: bool
+):
     """Migrate trial metadata, upload job patches, and downloadable files according to `metadata_migration`"""
     with migration_session() as (session, task_queue):
-        _run_metadata_migration(metadata_migration, task_queue, session)
+        _run_metadata_migration(
+            metadata_migration, use_upload_jobs_table, task_queue, session
+        )
 
 
 def _select_trials(session: Session) -> List[TrialMetadata]:
     return session.query(TrialMetadata).with_for_update().all()
 
 
-def _select_successful_assay_uploads(session: Session) -> List[AssayUploads]:
+class AssayUploads(CommonColumns):
+    """This model no longer exists in cidc_api.models, but a partial model is required for migrations."""
+
+    __tablename__ = "assay_uploads"
+    status = Column(String)
+
+
+class ManifestUploads(CommonColumns):
+    """This model no longer exists in cidc_api.models, but a partial model is required for migrations."""
+
+    __tablename__ = "manifest_uploads"
+
+
+def _select_successful_assay_uploads(
+    use_upload_jobs_table: bool, session: Session
+) -> List[UploadJobs]:
+    if use_upload_jobs_table:
+        return (
+            session.query(UploadJobs)
+            .filter_by(status=UploadJobStatus.MERGE_COMPLETED.value, multifile=True)
+            .with_for_update()
+            .all()
+        )
+
     return (
         session.query(AssayUploads)
-        .filter_by(status=AssayUploadStatus.MERGE_COMPLETED.value)
+        .filter_by(status=UploadJobStatus.MERGE_COMPLETED.value)
         .with_for_update()
         .all()
     )
 
 
-def _select_manifest_uploads(session: Session) -> List[ManifestUploads]:
+def _select_manifest_uploads(
+    use_upload_jobs_table: bool, session: Session
+) -> List[UploadJobs]:
+    if use_upload_jobs_table:
+        return (
+            session.query(UploadJobs).filter_by(multifile=False).with_for_update().all()
+        )
+
     return session.query(ManifestUploads).with_for_update().all()
 
 
 def _run_metadata_migration(
     metadata_migration: Callable[[dict], MigrationResult],
+    use_upload_jobs_table: bool,
     gcs_tasks: RollbackableQueue,
     session: Session,
 ):
@@ -165,18 +202,22 @@ def _run_metadata_migration(
                 gcs_tasks.schedule(renamer)
 
     # Migrate all assay upload successes
-    successful_assay_uploads = _select_successful_assay_uploads(session)
+    successful_assay_uploads = _select_successful_assay_uploads(
+        use_upload_jobs_table, session
+    )
     for upload in successful_assay_uploads:
         print(f"Running metadata migration for assay upload: {upload.id}")
-        migration = metadata_migration(upload.assay_patch)
-
-        # Update the metadata patch
-        upload.assay_patch = migration.result
-
-        # A workaround fix for JSON field modifications not being tracked
-        # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
-        # in the model doesn't seem to help.
-        flag_modified(upload, "assay_patch")
+        if use_upload_jobs_table:
+            migration = metadata_migration(upload.metadata_patch)
+            upload.metadata_patch = migration.result
+            # A workaround fix for JSON field modifications not being tracked
+            # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
+            # in the model doesn't seem to help.
+            flag_modified(upload, "metadata_patch")
+        else:
+            migration = metadata_migration(upload.assay_patch)
+            upload.assay_patch = migration.result
+            flag_modified(upload, "assay_patch")
 
         # Update the GCS URIs of files that were part of this upload
         old_file_map = upload.gcs_file_map
@@ -215,7 +256,7 @@ def _run_metadata_migration(
         upload.gcs_file_map = new_file_map
 
     # Migrate all manifest records
-    manifest_uploads = _select_manifest_uploads(session)
+    manifest_uploads = _select_manifest_uploads(use_upload_jobs_table, session)
     for upload in manifest_uploads:
         print(f"Running metadata migration for manifest upload: {upload.id}")
         migration = metadata_migration(upload.metadata_patch)

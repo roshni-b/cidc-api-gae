@@ -12,10 +12,10 @@ sys.path.insert(0, os.path.join(test_dir, "..", "cidc_api"))
 from models import (
     Users,
     TrialMetadata,
-    AssayUploads,
+    UploadJobs,
     Permissions,
     DownloadableFiles,
-    ManifestUploads,
+    UploadJobs,
 )
 
 os.environ["TESTING"] = "True"
@@ -61,8 +61,8 @@ def app_no_auth(app, test_user, monkeypatch):
 def db(app):
     """Provide a clean test database session"""
     session = app.data.driver.session
-    session.query(AssayUploads).delete()
-    session.query(ManifestUploads).delete()
+    session.query(UploadJobs).delete()
+    session.query(UploadJobs).delete()
     session.query(Users).delete()
     session.query(DownloadableFiles).delete()
     session.query(TrialMetadata).delete()

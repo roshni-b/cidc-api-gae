@@ -63,7 +63,9 @@ def test_get_download_url(db, app_no_auth, test_user, monkeypatch):
     assert res.status_code == 404
 
     with app_no_auth.app_context():
-        perm = Permissions(trial_id=tid, assay_type=assay, granted_to_user=test_user.id)
+        perm = Permissions(
+            trial_id=tid, upload_type=assay, granted_to_user=test_user.id
+        )
         db.add(perm)
         db.commit()
 
@@ -97,7 +99,7 @@ def test_update_file_filters(db, app_no_auth, test_user):
         for a in ["wes", "olink"]:
             d = DownloadableFiles.create_from_metadata(
                 trial_id=t,
-                assay_type=a,
+                upload_type=a,
                 file_metadata=dict(
                     fake_metadata, object_url=f"{t}/{a}"  # so they're unique
                 ),
@@ -113,13 +115,13 @@ def test_update_file_filters(db, app_no_auth, test_user):
     assert res.status_code == 200
     assert len(res.json["_items"]) == 0
 
-    def add_permission(trial_id, assay_type):
+    def add_permission(trial_id, upload_type):
         db.add(
             Permissions(
                 granted_by_user=test_user.id,
                 granted_to_user=test_user.id,
                 trial_id=trial_id,
-                assay_type=assay_type,
+                upload_type=upload_type,
             )
         )
         db.commit()
@@ -128,7 +130,7 @@ def test_update_file_filters(db, app_no_auth, test_user):
     add_permission(t1, "wes")
     add_permission(t2, "olink")
 
-    trial_assay_pair = lambda trial: (trial["trial"], trial["assay_type"])
+    trial_assay_pair = lambda trial: (trial["trial"], trial["upload_type"])
 
     # No filter with permissions
     res = client.get("/downloadable_files")
@@ -139,7 +141,7 @@ def test_update_file_filters(db, app_no_auth, test_user):
 
     # Facet-style filter
     facet_filter = (
-        f"(trial=={t1} or trial=={t2}) and (assay_type==wes or assay_type==olink)"
+        f"(trial=={t1} or trial=={t2}) and (upload_type==wes or upload_type==olink)"
     )
     res = client.get(f"/downloadable_files?where={facet_filter}")
     assert res.status_code == 200
@@ -148,7 +150,7 @@ def test_update_file_filters(db, app_no_auth, test_user):
         assert trial_assay_pair(trial) in [(t1, "wes"), (t2, "olink")]
 
     # A query on entirely disallowed data should return empty, but no permissions error.
-    disallowed_filter = f"trial=={t1} and assay_type==olink"
+    disallowed_filter = f"trial=={t1} and upload_type==olink"
     res = client.get(f"/downloadable_files?where={disallowed_filter}")
     assert res.status_code == 200
     assert len(res.json["_items"]) == 0
@@ -161,7 +163,7 @@ def test_update_file_filters(db, app_no_auth, test_user):
 
     # Injection attempt
     injection_filter = (
-        f"trial=={t1} and assay_type==olink) or (trial=={t1} and assay_type==wes"
+        f"trial=={t1} and upload_type==olink) or (trial=={t1} and upload_type==wes"
     )
     res = client.get(f"/downloadable_files?where={injection_filter}")
     assert res.status_code == 400
@@ -170,7 +172,7 @@ def test_update_file_filters(db, app_no_auth, test_user):
     # Admins should be able to access data regardless of permissions
     test_user.role = CIDCRole.ADMIN.value
     db.commit()
-    disallowed_filter = f"trial=={t1} and assay_type==olink"
+    disallowed_filter = f"trial=={t1} and upload_type==olink"
     res = client.get(f"/downloadable_files?where={disallowed_filter}")
     assert res.status_code == 200
     assert len(res.json["_items"]) == 1

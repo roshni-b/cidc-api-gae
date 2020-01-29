@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
 
-from cidc_api.models import Users, AssayUploads, ManifestUploads
+from cidc_api.models import Users, UploadJobs
 from cidc_api.emails import (
     confirm_account_approval,
     new_user_registration,
@@ -42,8 +42,8 @@ def test_new_upload_alert(monkeypatch):
 
     for upload, full_ct, expected_att in [
         (
-            AssayUploads(
-                **vals, assay_type="wes_bam", assay_patch={"assays": {"wes": []}}
+            UploadJobs(
+                **vals, upload_type="wes_bam", metadata_patch={"assays": {"wes": []}}
             ),
             {"assays": {"wes": []}},
             [
@@ -54,7 +54,7 @@ def test_new_upload_alert(monkeypatch):
                 }
             ],
         ),
-        (ManifestUploads(**vals, manifest_type="pbmc", metadata_patch={}), {}, None),
+        (UploadJobs(**vals, upload_type="pbmc", metadata_patch={}), {}, None),
     ]:
         email = new_upload_alert(upload, full_ct)
         assert "UPLOAD SUCCESS" in email["subject"]

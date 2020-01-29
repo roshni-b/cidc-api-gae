@@ -363,12 +363,7 @@ def test_rbac(monkeypatch, app, db):
         assert res.status_code == 200
 
         # Test admin-restricted GETs
-        admin_only_GETable = [
-            "users",
-            "trial_metadata",
-            "assay_uploads",
-            "manifest_uploads",
-        ]
+        admin_only_GETable = ["users", "trial_metadata", "upload_jobs"]
         for resource in admin_only_GETable:
             res = client.get(resource, headers=HEADER)
             if CIDCRole(role) == CIDCRole.ADMIN:
@@ -398,34 +393,36 @@ def test_rbac(monkeypatch, app, db):
                 else:
                     assert res.status_code == 401
 
-        # Test assay_uploads and manifest_uploads permissions
-        for resource, privileged_nonadmins in [
-            ("assay_uploads", [CIDCRole.CIMAC_BIOFX_USER, CIDCRole.CIDC_BIOFX_USER]),
-            ("manifest_uploads", [CIDCRole.NCI_BIOBANK_USER]),
-        ]:
-            # No one is allowed to PUT or POST to these endpoints
-            res_post = client.post(resource, headers=HEADER, json={})
-            assert res_post.status_code == 405
-            res_put = client.put(resource, headers=HEADER, json={})
-            assert res_put.status_code == 405
+        # Test upload_job permissions
+        privileged_nonadmins = [
+            CIDCRole.CIMAC_BIOFX_USER,
+            CIDCRole.NCI_BIOBANK_USER,
+            CIDCRole.CIDC_BIOFX_USER,
+        ]
+        upload_jobs = "upload_jobs"
+        # No one is allowed to PUT or POST to the upload_jobs endpoint
+        res_post = client.post(upload_jobs, headers=HEADER, json={})
+        assert res_post.status_code == 405
+        res_put = client.put(upload_jobs, headers=HEADER, json={})
+        assert res_put.status_code == 405
 
-            # Both admins and one other privileged role can read items and update
-            item = resource + "/1"
-            res_patch = client.patch(item, headers=HEADER, json={})
-            res_get_item = client.get(item, headers=HEADER)
-            if role in [CIDCRole.ADMIN, *privileged_nonadmins]:
-                assert res_patch.status_code == 404
-                assert res_get_item.status_code == 404
-            else:
-                assert res_patch.status_code == 401
-                assert res_get_item.status_code == 401
+        # Both admins and one other privileged role can read items and update
+        item = upload_jobs + "/1"
+        res_patch = client.patch(item, headers=HEADER, json={})
+        res_get_item = client.get(item, headers=HEADER)
+        if role in [CIDCRole.ADMIN, *privileged_nonadmins]:
+            assert res_patch.status_code == 404
+            assert res_get_item.status_code == 404
+        else:
+            assert res_patch.status_code == 401
+            assert res_get_item.status_code == 401
 
-            # Only admins can list these endpoints
-            res_get = client.get(resource, headers=HEADER)
-            if role == CIDCRole.ADMIN:
-                assert res_get.status_code == 200
-            else:
-                assert res_get.status_code == 401
+        # Only admins can list upload_jobs
+        res_get = client.get(upload_jobs, headers=HEADER)
+        if role == CIDCRole.ADMIN:
+            assert res_get.status_code == 200
+        else:
+            assert res_get.status_code == 401
 
         # CUSTOM ENDPOINTS
 
@@ -434,7 +431,7 @@ def test_rbac(monkeypatch, app, db):
         assert res.status_code == 200
         client.post("/users/self").status_code == 403
 
-        # Test manifest uploads
+        # Test manifest UploadJobs
         for resource in ["/ingestion/validate", "/ingestion/upload_manifest"]:
             res = client.post(resource, headers=HEADER, data={})
             if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.NCI_BIOBANK_USER]:
@@ -443,7 +440,7 @@ def test_rbac(monkeypatch, app, db):
                 assert res.status_code == 401
             client.get(resource).status_code == 403
 
-        # Test assay uploads
+        # Test assay UploadJobs
         resource = "/ingestion/upload_assay"
         res = client.post(resource, headers=HEADER, data={})
         if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIMAC_BIOFX_USER]:
@@ -452,7 +449,7 @@ def test_rbac(monkeypatch, app, db):
             assert res.status_code == 401
         client.get(resource).status_code == 403
 
-        # Test analysis uploads
+        # Test analysis UploadJobs
         resource = "/ingestion/upload_analysis"
         res = client.post(resource, headers=HEADER, data={})
         if CIDCRole(role) in [CIDCRole.ADMIN, CIDCRole.CIDC_BIOFX_USER]:
