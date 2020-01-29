@@ -98,7 +98,8 @@ def grant_upload_access(user_email: str):
 
     # Update the bucket IAM policy to include the user as an uploader.
     policy = bucket.get_iam_policy()
-    policy[GOOGLE_UPLOAD_ROLE].add(policy.user(user_email))
+    policy[GOOGLE_UPLOAD_ROLE] = {*policy[GOOGLE_UPLOAD_ROLE], f"user:{user_email}"}
+    print(f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}")
     bucket.set_iam_policy(policy)
 
 
@@ -111,7 +112,8 @@ def revoke_upload_access(user_email: str):
 
     # Update the bucket IAM policy to remove the user's uploader privileges.
     policy = bucket.get_iam_policy()
-    policy[GOOGLE_UPLOAD_ROLE].discard(policy.user(user_email))
+    policy[GOOGLE_UPLOAD_ROLE].discard(f"user:{user_email}")
+    print(f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}")
     bucket.set_iam_policy(policy)
 
 
