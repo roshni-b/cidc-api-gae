@@ -658,6 +658,9 @@ class DownloadableFiles(CommonColumns):
     object_url = Column(String, nullable=False, index=True, unique=True)
     visible = Column(Boolean, default=True)
 
+    # Would a bioinformatician likely use this file in an analysis?
+    analysis_friendly = Column(Boolean, default=False)
+
     # Visualization data columns (should always be nullable)
     clustergrammer = Column(JSONB, nullable=True)
     ihc_combined_plot = Column(JSONB, nullable=True)
