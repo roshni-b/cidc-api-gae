@@ -191,6 +191,16 @@ class CommonColumns(BaseModel):
         """Find the record with this id"""
         return session.query(cls).get(id)
 
+    @classmethod
+    @with_default_session
+    def get_distinct(cls, column_name: str, session: Session):
+        """Get a list of distinct values for the given column."""
+        assert (
+            column_name in cls.__table__.columns.keys()
+        ), f"{cls.__tablename__} has no column {column_name}"
+
+        return list(v[0] for v in session.query(getattr(cls, column_name)).distinct())
+
 
 class Users(CommonColumns):
     __tablename__ = "users"

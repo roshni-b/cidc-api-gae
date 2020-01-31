@@ -19,6 +19,15 @@ from ..test_models import db_test
 
 FILE = {"object_url": "1"}
 URL = "foo"
+fake_metadata = {
+    "artifact_category": "Assay Artifact from CIMAC",
+    "object_url": "",
+    "file_name": "",
+    "file_size_bytes": 0,
+    "md5_hash": "",
+    "data_format": "TEXT",
+    "uploaded_timestamp": datetime.now(),
+}
 
 
 def test_get_download_url(db, app_no_auth, test_user, monkeypatch):
@@ -45,15 +54,6 @@ def test_get_download_url(db, app_no_auth, test_user, monkeypatch):
     assert res.status_code == 404
 
     with app_no_auth.app_context():
-        fake_metadata = {
-            "artifact_category": "Assay Artifact from CIMAC",
-            "object_url": "",
-            "file_name": "",
-            "file_size_bytes": 0,
-            "md5_hash": "",
-            "data_format": "TEXT",
-            "uploaded_timestamp": datetime.now(),
-        }
         f = DownloadableFiles.create_from_metadata(tid, assay, fake_metadata)
         file_id = f.id
         db.commit()
@@ -77,6 +77,51 @@ def test_get_download_url(db, app_no_auth, test_user, monkeypatch):
     assert res.json == test_url
 
 
+def test_get_filter_facets(db, app_no_auth, test_user, monkeypatch):
+    trials = [f"trial_{i}" for i in range(3)]
+    upload_types = [f"type_{i}" for i in range(3)]
+    with app_no_auth.app_context():
+        test_user.role = CIDCRole.CIMAC_USER.value
+        for i, trial_id in enumerate(trials):
+            TrialMetadata.create(trial_id=trial_id, metadata_json={})
+            for upload_type in upload_types:
+                DownloadableFiles.create_from_metadata(
+                    trial_id=trial_id,
+                    upload_type=upload_type,
+                    file_metadata={
+                        **fake_metadata,
+                        "object_url": f"{trial_id}/{upload_type}",
+                    },
+                )
+                # Only create permissions for trial_1
+                if i == 1:
+                    p = Permissions(
+                        trial_id=trial_id,
+                        upload_type=upload_type,
+                        granted_to_user=test_user.id,
+                    )
+                    db.add(p)
+        db.commit()
+
+    client = app_no_auth.test_client()
+
+    data = client.get("/downloadable_files/filter_facets").json
+    assert data["trial_id"] == ["trial_1"]
+    assert set(data["upload_type"]) == set(upload_types)
+    assert len(data["upload_type"]) == len(upload_types)
+
+    # Make user an admin
+    with app_no_auth.app_context():
+        test_user.role = CIDCRole.ADMIN.value
+        db.commit()
+
+    data = client.get("/downloadable_files/filter_facets").json
+    assert set(data["trial_id"]) == set(trials)
+    assert len(data["trial_id"]) == len(trials)
+    assert set(data["upload_type"]) == set(upload_types)
+    assert len(data["upload_type"]) == len(upload_types)
+
+
 @db_test
 def test_update_file_filters(db, app_no_auth, test_user):
     """Test that update_file_filters updates filter params as expected"""
@@ -86,15 +131,6 @@ def test_update_file_filters(db, app_no_auth, test_user):
     t2 = "test_trial_2"
     trial = TrialMetadata.create(trial_id=t1, metadata_json={})
     TrialMetadata.create(trial_id=t2, metadata_json={})
-    fake_metadata = {
-        "artifact_category": "Assay Artifact from CIMAC",
-        "object_url": "",
-        "file_name": "",
-        "file_size_bytes": 0,
-        "md5_hash": "",
-        "data_format": "TEXT",
-        "uploaded_timestamp": datetime.now(),
-    }
     for t in [t1, t2]:
         for a in ["wes", "olink"]:
             d = DownloadableFiles.create_from_metadata(

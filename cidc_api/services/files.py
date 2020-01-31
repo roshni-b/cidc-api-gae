@@ -50,6 +50,33 @@ def get_download_url():
     return jsonify(download_url)
 
 
+@files_api.route("/filter_facets", methods=["GET"])
+@requires_auth("filter_facets")
+def get_filter_facets():
+    """
+    Return a list of allowed filter facet values for a user.
+    Response will have structure:
+    {
+        <facet 1>: [<value 1>, <value 2>,...],
+        <facet 2>: [...],
+        ...
+    }
+    """
+    user = _request_ctx_stack.top.current_user
+
+    if user.role == CIDCRole.ADMIN.value:
+        # Admins can facet on every trial or upload type
+        trial_ids = DownloadableFiles.get_distinct("trial_id")
+        upload_types = DownloadableFiles.get_distinct("upload_type")
+    else:
+        # Non-admins can only facet on what they have permission to view
+        perms = Permissions.find_for_user(user)
+        trial_ids = list({perm.trial_id for perm in perms})
+        upload_types = list({perm.upload_type for perm in perms})
+
+    return jsonify({"trial_id": trial_ids, "upload_type": upload_types})
+
+
 def register_files_hooks(app: Eve):
     app.on_pre_GET_downloadable_files = update_file_filters
 
