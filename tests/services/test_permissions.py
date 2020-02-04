@@ -52,7 +52,7 @@ def test_update_permissions_filters(app, db, monkeypatch):
     assert res.status_code == 200
     assert len(res.json["_items"]) == 2
     for perm in res.json["_items"]:
-        assert perm["to_user"] == user_id
+        assert perm["granted_to_user"] == user_id
 
     # Update user's role to admin
     with app.app_context():

@@ -96,7 +96,7 @@ def update_file_filters(request: Request, _):
 
     # User cannot access any trials, so make filter guaranteed-empty
     if len(permissions) == 0:
-        guaranteed_empty = "(trial==a and trial==b)"
+        guaranteed_empty = "(trial_id==a and trial_id==b)"
         lookup = request.args.copy()
         lookup["where"] = guaranteed_empty
         request.args = ImmutableMultiDict(lookup)
@@ -106,9 +106,9 @@ def update_file_filters(request: Request, _):
     # trial ID and upload type that the current user is allowed to view.
     # If the user has permission to view WES for Trial "1" and Olink for "2",
     # this query will look like:
-    #   (trial==1 and upload_type==wes)or(trial==2 and upload_type==olink)
+    #   (trial_id==1 and upload_type==wes)or(trial_id==2 and upload_type==olink)
     where_query = "or".join(
-        f"(trial=={p.trial_id!r} and upload_type=={p.upload_type!r})"
+        f"(trial_id=={p.trial_id!r} and upload_type=={p.upload_type!r})"
         for p in permissions
     )
 
