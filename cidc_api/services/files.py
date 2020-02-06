@@ -50,6 +50,33 @@ def get_download_url():
     return jsonify(download_url)
 
 
+@files_api.route("/filter_facets", methods=["GET"])
+@requires_auth("filter_facets")
+def get_filter_facets():
+    """
+    Return a list of allowed filter facet values for a user.
+    Response will have structure:
+    {
+        <facet 1>: [<value 1>, <value 2>,...],
+        <facet 2>: [...],
+        ...
+    }
+    """
+    user = _request_ctx_stack.top.current_user
+
+    if user.role == CIDCRole.ADMIN.value:
+        # Admins can facet on every trial or upload type
+        trial_ids = DownloadableFiles.get_distinct("trial_id")
+        upload_types = DownloadableFiles.get_distinct("upload_type")
+    else:
+        # Non-admins can only facet on what they have permission to view
+        perms = Permissions.find_for_user(user)
+        trial_ids = list({perm.trial_id for perm in perms})
+        upload_types = list({perm.upload_type for perm in perms})
+
+    return jsonify({"trial_id": trial_ids, "upload_type": upload_types})
+
+
 def register_files_hooks(app: Eve):
     app.on_pre_GET_downloadable_files = update_file_filters
 
@@ -69,7 +96,7 @@ def update_file_filters(request: Request, _):
 
     # User cannot access any trials, so make filter guaranteed-empty
     if len(permissions) == 0:
-        guaranteed_empty = "(trial==a and trial==b)"
+        guaranteed_empty = "(trial_id==a and trial_id==b)"
         lookup = request.args.copy()
         lookup["where"] = guaranteed_empty
         request.args = ImmutableMultiDict(lookup)
@@ -79,9 +106,9 @@ def update_file_filters(request: Request, _):
     # trial ID and upload type that the current user is allowed to view.
     # If the user has permission to view WES for Trial "1" and Olink for "2",
     # this query will look like:
-    #   (trial==1 and upload_type==wes)or(trial==2 and upload_type==olink)
+    #   (trial_id==1 and upload_type==wes)or(trial_id==2 and upload_type==olink)
     where_query = "or".join(
-        f"(trial=={p.trial_id!r} and upload_type=={p.upload_type!r})"
+        f"(trial_id=={p.trial_id!r} and upload_type=={p.upload_type!r})"
         for p in permissions
     )
 
