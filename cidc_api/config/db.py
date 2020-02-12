@@ -1,6 +1,6 @@
 from os import environ
 
-from .secrets import get_secrets_manager
+from cidc_api.config.secrets import get_secrets_manager
 
 
 def get_sqlachemy_database_uri(testing: bool = False) -> str:

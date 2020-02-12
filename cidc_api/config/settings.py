@@ -4,8 +4,8 @@ from copy import deepcopy
 
 from dotenv import load_dotenv
 
-from . import db
-from . import get_secret_manager
+from cidc_api.config import db
+from cidc_api.config import get_secret_manager
 from cidc_api.models import get_DOMAIN
 
 load_dotenv()
