@@ -12,8 +12,12 @@ load_dotenv()
 
 
 ## Configure application environment
-ENV = environ.get("ENV", "staging")
-assert ENV in ("dev", "staging", "prod")
+ENV = environ.get("ENV")
+assert ENV in (
+    "dev",
+    "staging",
+    "prod",
+), "ENV environment variable must be set to 'dev', 'staging', or 'prod'"
 DEBUG = ENV == "dev" and environ.get("DEBUG")
 TESTING = environ.get("TESTING") == "True"
 MIN_CLI_VERSION = "0.8.0"
