@@ -27,7 +27,9 @@ def requires_auth(resource: str, allowed_roles: list = []):
     def decorator(f):
         @wraps(f)
         def wrapped(*args, **kwargs):
-            app.auth.authorized(allowed_roles, resource, request.method)
+            is_authorized = app.auth.authorized(allowed_roles, resource, request.method)
+            if not is_authorized:
+                raise Unauthorized("Please provide proper credentials")
             return f(*args, **kwargs)
 
         return wrapped
