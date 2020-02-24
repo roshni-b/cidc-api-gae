@@ -23,9 +23,15 @@ before_script:
   - psql -c "create database cidctest"
   - psql -c "grant all privileges on database cidctest to cidcdev"
   - psql cidctest -c "create extension citext"
+  - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+  - chmod +x ./cc-test-reporter
+  - ./cc-test-reporter before-build
 script:
-  - pytest
+  - pytest --cov=cidc_schemas -v
   - black --check cidc_api tests --target-version=py36
+after_script:
+  - coverage xml
+  - ./cc-test-reporter after-build -t coverage.py --exit-code $TRAVIS_TEST_RESULT 
 
 before_deploy:
   - if [ "$TRAVIS_BRANCH" = production ]; then
