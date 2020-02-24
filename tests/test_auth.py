@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 from flask import _request_ctx_stack
 from werkzeug.exceptions import Unauthorized, BadRequest, PreconditionFailed
 
-from cidc_api.auth import BearerAuth
+from cidc_api.auth import BearerAuth, requires_auth
 from cidc_api.models import Users, CIDCRole
 
 from .test_models import db_test
@@ -33,6 +33,24 @@ throw_auth_error = make_raiser(Unauthorized("foo"))
 def bearer_auth(monkeypatch):
     monkeypatch.setattr("config.secrets.CloudStorageSecretManager", MagicMock)
     return BearerAuth()
+
+
+def test_requires_auth_no_auth_headers(app, monkeypatch):
+    """
+    Check that the requires_auth decorator throws 401 when 
+    no authorization header is provided.
+    """
+
+    @app.route("/test")
+    @requires_auth("test")
+    def test_endpoint():
+        user = _request_ctx_stack.top.current_user
+
+    client = app.test_client()
+
+    # 401 when no auth headers provided
+    response = client.get("/test")
+    assert response.status_code == 401
 
 
 def test_check_auth_smoketest(monkeypatch, app, bearer_auth):
