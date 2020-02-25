@@ -41,7 +41,7 @@ def test_user():
 
 
 @pytest.fixture
-def app_no_auth(app, test_user, monkeypatch):
+def app_no_auth(app, test_user, db, monkeypatch):
     """Return a 'fresh' instance of the app with auth disabled"""
 
     def fake_auth(*args):

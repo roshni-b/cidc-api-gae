@@ -352,8 +352,10 @@ def test_rbac(monkeypatch, app, db):
                         assert res.status_code == 404
                     else:
                         assert res.status_code == 401
+                elif resource == "new_users":
+                    assert res.status_code == 404
                 else:
-                    assert res.status_code == 405  # Method Not Allowed
+                    assert res.status_code == 405
 
         # No one can GET new_users
         res = client.get("new_users")

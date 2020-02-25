@@ -487,7 +487,7 @@ def on_post_PATCH_upload_job(request: Request, payload: Response):
     # have no remaining jobs with status "started".
 
     job_id = payload.json["id"]
-    status = request.json["status"]
+    status = request.json.get("status")
 
     # If this is a successful upload job, publish this info to Pub/Sub
     if status == UploadJobStatus.UPLOAD_COMPLETED.value:
@@ -498,71 +498,16 @@ def on_post_PATCH_upload_job(request: Request, payload: Response):
     gcloud_client.revoke_upload_access(user_email)
 
 
-# @ingestion_api.route("/signed-upload-urls", methods=["POST"])
-# NOTE: this endpoint isn't used currently, so it's not added to the API.
-def signed_upload_urls():
-    """
-    NOTE: We will use IAM for managing bucket access instead of signed URLs, 
-    because this will allow us to leverage gsutil on the client side. This
-    endpoint isn't currently in use.
-
-    Given a request whose body contains a directory name and a list of object names,
-    return a JSON object mapping object names to signed GCS upload URLs for those objects.
-
-    Note: a signed URL gives time-restricted, method-restricted access to one of our GCS
-    storage buckets
-
-    TODO: In the long run, this endpoint *needs* user-level rate-limiting or similar. If we don't keep 
-    track of how recently we've issued signed URLs to a certain user, then that user can
-    keep acquiring signed URLs over and over, effectively circumventing the time-restrictions
-    built into these URLs. For now, though, since only people on the development team are
-    registered in the app, we don't need to worry about this.
-
-    Sample request body:
-    {
-        "directory_name": "my-assay-run-id",
-        "object_names": ["my-fastq-1.fastq.gz", "my-fastq-2.fastq.gz"]
-    }
-
-    Sample response body:
-    {
-        "my-fastq-1.fastq.gz": [a signed URL with PUT permissions],
-        "my-fastq-2.fastq.gz": [a signed URL with PUT permissions]
-    }
-    """
-    # Validate the request body
-    if not request.json:
-        raise BadRequest("expected JSON request body.")
-    if not "directory_name" in request.json and "object_names" in request.json:
-        raise BadRequest(
-            "expected keys 'directory_name' and 'object_names' in request body."
-        )
-
-    directory_name = request.json["directory_name"]
-    object_urls = {}
-    # Build up the mapping of object names to buckets
-    for object_name in request.json["object_names"]:
-        # Prepend objects with the given directory name
-        full_object_name = f"{directory_name}/{object_name}"
-        object_url = gcloud_client.get_signed_url(full_object_name)
-        object_urls[object_name] = object_url
-
-    return jsonify(object_urls)
-
-
 @ingestion_api.route("/extra-assay-metadata", methods=["POST"])
 def extra_assay_metadata():
     """
-
     Extracts:
         job_id, and extra_metadata_file from request body
     Raises:
         BadRequest: if the request requirements aren't satisfied
-
     request.form = {
         'job_id': the job_id to update the patch for,
     }
-
     request.files = {
         [artifact_uuid_1]: [open extra metadata file 1],
         [artifact_uuid_2]: [open extra metadata file 2]
