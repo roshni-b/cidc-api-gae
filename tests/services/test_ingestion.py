@@ -399,11 +399,13 @@ class UploadMocks:
 finfo = LocalFileUploadEntry
 
 
-def test_upload_endpoint_blocking(app_no_auth, test_user, monkeypatch):
+def test_upload_endpoint_blocking(app_no_auth, test_user, monkeypatch, db):
     """Ensure you can't upload an analysis to the upload assay endpoint or vice versa"""
     client = app_no_auth.test_client()
 
     mocks = UploadMocks(monkeypatch)
+    db.add(TrialMetadata(trial_id=TEST_TRIAL, metadata_json={}))
+    db.commit()
 
     assay_form = lambda: form_data("cytof.xlsx", io.BytesIO(b"1234"), "cytof")
     analysis_form = lambda: form_data(

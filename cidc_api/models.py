@@ -109,7 +109,7 @@ def get_DOMAIN() -> dict:
     # * A new_user can _only_ be created (not updated)
     del domain["new_users"]["schema"]["role"]
     del domain["new_users"]["schema"]["approval_date"]
-    domain["new_users"]["item_methods"] = []
+    domain["new_users"]["item_lookup"] = False
     domain["new_users"]["resource_methods"] = ["POST"]
 
     # Restrict operations on resources that only admins should be able to access

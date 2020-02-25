@@ -3,7 +3,6 @@ flask-sqlalchemy~=2.4.0
 werkzeug~=0.15.4 # required to fix an Eve-SQLAlchemy dependency issue
 pymongo==3.5.0 # required to fix an Eve-SQLAlchemy dependency issue
 eve-sqlalchemy~=0.7.0
-eve-swagger~=0.0.11
 google-cloud-storage~=1.25.0
 google-cloud-pubsub==0.42.1
 cidc-schemas~=0.16.6
