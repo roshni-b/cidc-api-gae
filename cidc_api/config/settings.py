@@ -20,7 +20,7 @@ assert ENV in (
 ), "ENV environment variable must be set to 'dev', 'staging', or 'prod'"
 DEBUG = ENV == "dev" and environ.get("DEBUG")
 TESTING = environ.get("TESTING") == "True"
-MIN_CLI_VERSION = "0.8.0"
+MIN_CLI_VERSION = "0.8.1"
 TEMPLATES_DIR = path.join("/tmp", "templates")
 ## End application environment config
 
