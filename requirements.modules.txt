@@ -5,6 +5,6 @@ pymongo==3.5.0 # required to fix an Eve-SQLAlchemy dependency issue
 eve-sqlalchemy~=0.7.0
 google-cloud-storage~=1.25.0
 google-cloud-pubsub==0.42.1
-cidc-schemas~=0.16.6
+cidc-schemas~=0.16.7
 python-dotenv==0.10.3
 requests==2.22.0
