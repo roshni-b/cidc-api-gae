@@ -2,7 +2,7 @@ from os import environ
 from google.cloud import storage
 
 
-def get_secrets_manager(is_testing):
+def get_secrets_manager(is_testing=False):
     """Get a secrets manager based on whether the app is running in test mode"""
     if is_testing:
         from unittest.mock import MagicMock

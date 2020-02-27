@@ -280,6 +280,10 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
     }
     additional_metadata = {"more": "info"}
 
+    # Mock artifact upload publishing
+    publisher = MagicMock()
+    monkeypatch.setattr("cidc_api.models.publish_artifact_upload", publisher)
+
     # Create the trial (to avoid violating foreign-key constraint)
     TrialMetadata.create(TRIAL_ID, METADATA)
     # Create the file
@@ -307,6 +311,19 @@ def test_create_downloadable_file_from_metadata(db, monkeypatch):
         .one()
     )
 
+    # Check that no artifact upload event was published
+    publisher.assert_not_called()
+
+    # Check that artifact upload publishes
+    DownloadableFiles.create_from_metadata(
+        TRIAL_ID,
+        "wes",
+        file_metadata,
+        additional_metadata=additional_metadata,
+        alert_artifact_upload=True,
+    )
+    publisher.assert_called_once_with(file_metadata["object_url"])
+
 
 @db_test
 def test_create_downloadable_file_from_blob(db, monkeypatch):
@@ -322,6 +339,10 @@ def test_create_downloadable_file_from_blob(db, monkeypatch):
     df = DownloadableFiles.create_from_blob(
         "id", "pbmc", "Shipping Manifest", fake_blob
     )
+
+    # Mock artifact upload publishing
+    publisher = MagicMock()
+    monkeypatch.setattr("cidc_api.models.publish_artifact_upload", publisher)
 
     # Check that the file was created
     assert 1 == db.query(DownloadableFiles).count()
@@ -344,6 +365,15 @@ def test_create_downloadable_file_from_blob(db, monkeypatch):
     df_lookup = DownloadableFiles.find_by_id(df.id)
     assert df_lookup.file_size_bytes == 6
     assert df_lookup.md5_hash == "6"
+
+    # Check that no artifact upload event was published
+    publisher.assert_not_called()
+
+    # Check that artifact upload publishes
+    DownloadableFiles.create_from_blob(
+        "id", "pbmc", "Shipping Manifest", fake_blob, alert_artifact_upload=True
+    )
+    publisher.assert_called_once_with(fake_blob.name)
 
 
 def test_with_default_session(app_no_auth):

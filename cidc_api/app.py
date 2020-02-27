@@ -17,7 +17,7 @@ from auth import BearerAuth
 from services import register_services
 
 ABSPATH = dirname(abspath(__file__))
-SETTINGS = join(ABSPATH, "config", "settings.py")
+SETTINGS = join(ABSPATH, "config", "evesettings.py")
 MIGRATIONS = join(ABSPATH, "..", "migrations")
 
 # Instantiate the Eve app

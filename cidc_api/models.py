@@ -29,6 +29,8 @@ from eve_sqlalchemy.config import DomainConfig, ResourceConfig
 
 from cidc_schemas import prism, unprism
 
+from cidc_api.gcloud_client import publish_artifact_upload, publish_upload_success
+
 ## Constants
 ORGS = ["CIDC", "DFCI", "ICAHN", "STANFORD", "ANDERSON"]
 
@@ -698,6 +700,7 @@ class DownloadableFiles(CommonColumns):
         session: Session,
         additional_metadata: Optional[dict] = None,
         commit: bool = True,
+        alert_artifact_upload: bool = False,
     ):
         """
         Create a new DownloadableFiles record from artifact metadata.
@@ -717,9 +720,10 @@ class DownloadableFiles(CommonColumns):
 
         etag = make_etag(*(filtered_metadata.values()))
 
+        object_url = filtered_metadata["object_url"]
         df = (
             session.query(DownloadableFiles)
-            .filter_by(object_url=filtered_metadata["object_url"])
+            .filter_by(object_url=object_url)
             .with_for_update()
             .first()
         )
@@ -734,6 +738,9 @@ class DownloadableFiles(CommonColumns):
         if commit:
             session.commit()
 
+        if alert_artifact_upload:
+            publish_artifact_upload(object_url)
+
         return df
 
     @staticmethod
@@ -745,6 +752,7 @@ class DownloadableFiles(CommonColumns):
         blob: Blob,
         session: Session,
         commit: bool = True,
+        alert_artifact_upload: bool = False,
     ):
         """
         Create a new DownloadableFiles record from from a GCS blob,
@@ -775,6 +783,9 @@ class DownloadableFiles(CommonColumns):
 
         if commit:
             session.commit()
+
+        if alert_artifact_upload:
+            publish_artifact_upload(blob.name)
 
         return df
 

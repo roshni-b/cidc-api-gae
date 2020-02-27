@@ -14,6 +14,6 @@ setup(
     packages=["cidc_api.config"],
     py_modules=["cidc_api.models", "cidc_api.gcloud_client", "cidc_api.emails"],
     url="https://github.com/CIMAC-CIDC/cidc_api-gae",
-    version="0.16.8",
+    version="0.16.9",
     zip_safe=False,
 )
