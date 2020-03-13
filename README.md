@@ -1,9 +1,9 @@
 # CIDC API <!-- omit in TOC -->
 
-| Environment | Branch                                                                   | Status                                                                                                                                |
-| ----------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| production  | [production](https://github.com/CIMAC-CIDC/cidc-api-gae/tree/production) | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=production)](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae) |
-| staging     | [master](https://github.com/CIMAC-CIDC/cidc-api-gae)                     | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=master)](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae)     |
+| Environment | Branch                                                                   | Status                                                                                                                                | Maintainability | Test Coverage |
+| ----------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ---- | ---- |
+| production  | [production](https://github.com/CIMAC-CIDC/cidc-api-gae/tree/production) | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=production)](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae) | | |
+| staging     | [master](https://github.com/CIMAC-CIDC/cidc-api-gae)                     | [![Build Status](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae.svg?branch=master)](https://travis-ci.org/CIMAC-CIDC/cidc-api-gae)     | [![Maintainability](https://api.codeclimate.com/v1/badges/71d93f067ea23efdc842/maintainability)](https://codeclimate.com/github/CIMAC-CIDC/cidc-api-gae/maintainability) | [![Test Coverage](https://api.codeclimate.com/v1/badges/71d93f067ea23efdc842/test_coverage)](https://codeclimate.com/github/CIMAC-CIDC/cidc-api-gae/test_coverage) |
 
 
 The next generation of the CIDC API, reworked to use Google Cloud-managed services. This API is built with the Eve REST API framework backed by Google Cloud SQL, running on Google App Engine.
