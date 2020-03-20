@@ -21,7 +21,7 @@ from cidc_api.models import (
 from cidc_api.gcloud_client import publish_artifact_upload
 from cidc_api.config.settings import GOOGLE_DATA_BUCKET, GOOGLE_UPLOAD_BUCKET
 from cidc_schemas.migrations import MigrationResult
-from cidc_schemas.prism import _get_uuid_info
+from cidc_schemas.prism.merger import _get_uuid_info
 
 
 class PieceOfWork(NamedTuple):

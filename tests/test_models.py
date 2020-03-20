@@ -211,7 +211,8 @@ def test_assay_upload_merge_extra_metadata(db, monkeypatch):
     custom_extra_md_parse = MagicMock()
     custom_extra_md_parse.side_effect = lambda f: {"extra": f.read().decode()}
     monkeypatch.setattr(
-        prism, "_EXTRA_METADATA_PARSERS", {"assay_with_extra_md": custom_extra_md_parse}
+        "cidc_schemas.prism.merger.EXTRA_METADATA_PARSERS",
+        {"assay_with_extra_md": custom_extra_md_parse},
     )
 
     UploadJobs.merge_extra_metadata(

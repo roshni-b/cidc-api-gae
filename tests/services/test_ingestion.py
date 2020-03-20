@@ -762,8 +762,7 @@ def test_merge_extra_metadata(
         custom_extra_md_parse = MagicMock()
         custom_extra_md_parse.side_effect = lambda f: {"extra_md": f.read().decode()}
         monkeypatch.setattr(
-            prism,
-            "_EXTRA_METADATA_PARSERS",
+            "cidc_schemas.prism.merger.EXTRA_METADATA_PARSERS",
             {"assay_with_extra_md": custom_extra_md_parse},
         )
 
