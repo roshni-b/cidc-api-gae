@@ -6,7 +6,7 @@ from cidc_api.models import get_DOMAIN
 
 TESTING = os.environ.get("TESTING")
 TEMPLATES_DIR = os.path.join("/tmp", "templates")
-MIN_CLI_VERSION = "0.8.3"
+MIN_CLI_VERSION = "0.8.4"
 
 ## Configure database
 SQLALCHEMY_DATABASE_URI = db.get_sqlachemy_database_uri(TESTING)
