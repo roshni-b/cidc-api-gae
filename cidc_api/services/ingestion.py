@@ -193,7 +193,7 @@ def upload_handler(allowed_types: List[str]):
                 raise Unauthorized({"errors": [str(e) for e in errors_so_far]})
 
             # Try to merge assay metadata into the existing clinical trial metadata
-            # Ignoring result as we inly want to check there's no validation errors
+            # Ignoring result as we only want to check there's no validation errors
             try:
                 merged_md, errors = prism.merge_clinical_trial_metadata(
                     md_patch, trial.metadata_json
