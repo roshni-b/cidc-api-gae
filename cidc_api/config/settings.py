@@ -68,7 +68,6 @@ MIGRATIONS_PATH = path.join(this_directory, "..", "..", "migrations")
 # fails with a credentials-related error unless this is explicitly
 # set.
 if not environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not TESTING:
-    print(get_secrets_manager)
     secret_manager = get_secrets_manager()
     creds_file_name = tempfile.mktemp(".json")
     with open(creds_file_name, "w") as creds_file:

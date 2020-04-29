@@ -238,7 +238,7 @@ def test_extract_token(empty_app):
             auth._extract_token()
 
     # Well-formed auth header
-    token = "test-token"
+    token = "Case-Sensitive-Test-Token"
     with empty_app.test_request_context(
         "/", headers={"authorization": f"Bearer {token}"}
     ):

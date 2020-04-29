@@ -124,9 +124,9 @@ def authenticate() -> Users:
 def _extract_token() -> str:
     """Extract an identity token from the current request's authorization header."""
     try:
-        auth_header = request.headers.get("Authorization").lower()
+        auth_header = request.headers.get("Authorization")
         bearer, id_token = auth_header.split(" ")
-        assert bearer == "bearer"
+        assert bearer.lower() == "bearer"
     except:
         raise Unauthorized(
             "Authorization header must be set with structure 'Authorization: Bearer <id token>'"
