@@ -1,26 +1,27 @@
 runtime: python37
 env: standard
-entrypoint: gunicorn -b :$PORT --chdir cidc_api --log-level DEBUG app:app --timeout 60
+entrypoint: gunicorn cidc_api:app
 
 handlers:
-# Force HTTPS on all requests
-- url: /.*
-  script: auto
-  secure: always
-  redirect_http_response_code: 301
+  # Force HTTPS on all requests
+  - url: /.*
+    script: auto
+    secure: always
+    redirect_http_response_code: 301
 
 env_variables:
-  ENV: 'staging'
-  AUTH0_DOMAIN: 'cidc-test.auth0.com'
-  AUTH0_CLIENT_ID: 'Yjlt8LT5vXFJw1Z8m8eaB5aZO26uPyeD'
-  CLOUD_SQL_INSTANCE_NAME: 'cidc-dfci-staging:us-central1:cidc-postgresql-staging'
-  CLOUD_SQL_DB_USER: 'cidcuser'
-  CLOUD_SQL_DB_NAME: 'cidc-staging'
-  GOOGLE_DATA_BUCKET: 'cidc-data-staging'
-  GOOGLE_SECRETS_BUCKET: 'cidc-secrets-staging'
-  GOOGLE_UPLOAD_BUCKET: 'cidc-uploads-staging'
-  GOOGLE_UPLOAD_TOPIC: 'uploads'
-  GOOGLE_EMAILS_TOPIC: 'emails'
-  GOOGLE_PATIENT_SAMPLE_TOPIC: 'patient_sample_update'
-  GOOGLE_ARTIFACT_UPLOAD_TOPIC: 'artifact_upload'
-  GOOGLE_UPLOAD_ROLE: 'projects/cidc-dfci-staging/roles/objectUploader'
+  ENV: "staging"
+  ALLOWED_CLIENT_URL: "https://stagingportal.cimac-network.org"
+  AUTH0_DOMAIN: "cidc-test.auth0.com"
+  AUTH0_CLIENT_ID: "Yjlt8LT5vXFJw1Z8m8eaB5aZO26uPyeD"
+  CLOUD_SQL_INSTANCE_NAME: "cidc-dfci-staging:us-central1:cidc-postgresql-staging"
+  CLOUD_SQL_DB_USER: "cidcuser"
+  CLOUD_SQL_DB_NAME: "cidc-staging"
+  GOOGLE_DATA_BUCKET: "cidc-data-staging"
+  GOOGLE_SECRETS_BUCKET: "cidc-secrets-staging"
+  GOOGLE_UPLOAD_BUCKET: "cidc-uploads-staging"
+  GOOGLE_UPLOAD_TOPIC: "uploads"
+  GOOGLE_EMAILS_TOPIC: "emails"
+  GOOGLE_PATIENT_SAMPLE_TOPIC: "patient_sample_update"
+  GOOGLE_ARTIFACT_UPLOAD_TOPIC: "artifact_upload"
+  GOOGLE_UPLOAD_ROLE: "projects/cidc-dfci-staging/roles/objectUploader"

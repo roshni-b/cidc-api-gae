@@ -5,4 +5,5 @@ python-jose==3.0.1
 psycopg2-binary==2.8.3
 packaging==19.2
 gunicorn
+webargs==6.0.0
 -r requirements.modules.txt

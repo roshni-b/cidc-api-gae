@@ -9,7 +9,7 @@ import os
 
 from cidc_schemas.migrations import v0_10_0_to_v0_10_2
 
-from cidc_api.utils.migrations import run_metadata_migration
+from cidc_api.models.migrations import run_metadata_migration
 
 # revision identifiers, used by Alembic.
 revision = "ff3141aecdd4"

@@ -1,13 +1,12 @@
 """Smoke tests ranging across the CIDC REST API.
 
 This file doesn't contain tests for methods that don't directly correspond
-to data resources, like those implemented in the services module (e.g., for
-handling upload-related functionality).
+to data resources, like endpoints that handle upload-related functionality.
 """
 from unittest.mock import MagicMock
 from datetime import datetime
+from dateutil.parser import parse as parse_date
 
-from flask import _request_ctx_stack
 
 import pytest
 from cidc_api.models import (
@@ -19,6 +18,8 @@ from cidc_api.models import (
     UploadJobStatus,
     CIDCRole,
 )
+
+from .utils import mock_current_user
 
 TEST_RECORD_ID = 1
 
@@ -34,18 +35,12 @@ TEST_RECORD_ID = 1
 #       `one`: a query filter that should return exactly one result.
 #   `additional_records`: a list of JSON instances of this resource to insert before testing pagination.
 #   `mocks`: a list of functions that accept pytest's `monkeypatch` as their argument.
-new_users = {
-    "json": {"email": "test-admin@example.com"},
-    "model": Users,
-    "allowed_methods": {"POST"},
-}
-
 users = {
     "json": {
-        **new_users["json"],
+        "email": "test-admin@example.com",
         "id": TEST_RECORD_ID,
         "role": CIDCRole.ADMIN.value,
-        "approval_date": datetime.now(),
+        "approval_date": str(datetime.now()),
     },
     "model": Users,
     "allowed_methods": {"POST", "PATCH", "GET"},
@@ -55,14 +50,6 @@ users["additional_records"] = [
     {**users["json"], "id": 2, "email": "foo@bar.com"},
     {**users["json"], "id": 3, "email": "fizz@buzz.com"},
 ]
-users["filters"] = {
-    "empty": {
-        "where": f"role=='{CIDCRole.CIMAC_USER.value}' and email=='{users['json']['email']}'"
-    },
-    "one": {
-        "where": f"role=='{CIDCRole.CIMAC_USER.value}' or email=='{users['json']['email']}'"
-    },
-}
 
 trial_metadata = {
     "json": {"id": TEST_RECORD_ID, "trial_id": "foo", "metadata_json": {}},
@@ -89,10 +76,12 @@ downloadable_files = {
     "PATCH_json": {"upload_type": "fizzbuzz"},
     "filters": {
         "empty": {
-            "where": f"trial_id=='{trial_metadata['json']['trial_id']}' and upload_type=='not_olink'"
+            "trial_ids": [trial_metadata["json"]["trial_id"]],
+            "upload_types": ["not_olink"],
         },
         "one": {
-            "where": f"trial_id=='{trial_metadata['json']['trial_id']}' and upload_type=='olink' and id==1"
+            "trial_ids": [trial_metadata["json"]["trial_id"]],
+            "upload_types": ["olink"],
         },
     },
 }
@@ -109,13 +98,10 @@ permissions = {
         "upload_type": downloadable_files["json"]["upload_type"],
     },
     "model": Permissions,
-    "allowed_methods": {"POST", "PATCH", "GET", "DELETE"},
+    "allowed_methods": {"POST", "GET", "DELETE"},
     "POST_setup": ["users", "trial_metadata"],
     "PATCH_json": {"upload_type": "fizzbuzz"},
-    "filters": {
-        "empty": {"where": "granted_to_user==2"},
-        "one": {"where": f"granted_to_user=={TEST_RECORD_ID}"},
-    },
+    "filters": {"empty": {"user_id": 2}, "one": {"user_id": TEST_RECORD_ID}},
 }
 
 upload_jobs = {
@@ -135,56 +121,55 @@ upload_jobs = {
     "PATCH_json": {"upload_type": "fizzbuzz"},
     "mocks": [
         lambda monkeypatch: monkeypatch.setattr(
-            "cidc_api.services.ingestion.gcloud_client.revoke_upload_access",
-            MagicMock(),
+            "cidc_api.shared.gcloud_client.revoke_upload_access", MagicMock()
         )
     ],
 }
 
-resource_requests = dict(
-    new_users=new_users,
-    users=users,
-    trial_metadata=trial_metadata,
-    downloadable_files=downloadable_files,
-    permissions=permissions,
-    upload_jobs=upload_jobs,
-)
+resource_requests = {
+    "users": users,
+    "trial_metadata": trial_metadata,
+    "downloadable_files": downloadable_files,
+    "permissions": permissions,
+    "upload_jobs": upload_jobs,
+}
 
 
-@pytest.fixture
-def app_with_admin_user(app, monkeypatch):
-    def fake_auth(*args):
-        _request_ctx_stack.top.current_user = Users(**users["json"])
-        return True
+def mock_admin_user(cidc_api, monkeypatch) -> int:
+    user = Users(**{**users["json"], "email": "other@email.com", "id": None})
+    mock_current_user(user, monkeypatch)
 
-    monkeypatch.setattr(app.auth, "authorized", fake_auth)
-
-    return app
+    with cidc_api.app_context():
+        user.insert()
+        return user.id
 
 
 ETAG = "test-etag"
 
 
-@pytest.fixture
-def db_with_records(db):
+def setup_db_records(cidc_api):
     extra = {"_etag": ETAG}
-    db.add(Users(**users["json"], **extra))
-    db.add(TrialMetadata(**trial_metadata["json"], **extra))
-    db.commit()
-
-    db.add(DownloadableFiles(**downloadable_files["json"], **extra))
-    db.add(Permissions(**permissions["json"], **extra))
-    db.add(UploadJobs(**upload_jobs["json"], **extra))
-    db.commit()
-
-    return db
+    with cidc_api.app_context():
+        Users(**users["json"], **extra).insert()
+        TrialMetadata(**trial_metadata["json"], **extra).insert()
+        DownloadableFiles(**downloadable_files["json"], **extra).insert()
+        Permissions(**permissions["json"], **extra).insert()
+        UploadJobs(**upload_jobs["json"], **extra).insert()
 
 
 def assert_dict_contains(base, target):
     assert isinstance(target, dict) and isinstance(base, dict)
+
+    def equal_dates(d1, d2):
+        if isinstance(d1, str):
+            d1 = parse_date(d1)
+        if isinstance(d2, str):
+            d2 = parse_date(d2)
+        return d1 == d2
+
     for key, value in target.items():
         assert key in base
-        assert base[key] == value or isinstance(value, datetime)
+        assert base[key] == value or equal_dates(base[key], value)
 
 
 def setup_mocks(config, monkeypatch):
@@ -202,31 +187,36 @@ def resource_requests_with_key(key):
 
 
 @pytest.mark.parametrize("resource, config", resource_requests.items())
-def test_resource_post(resource, config, app_with_admin_user, db, monkeypatch):
+def test_resource_post(resource, config, cidc_api, clean_db, monkeypatch):
+    mock_admin_user(cidc_api, monkeypatch)
     setup_mocks(config, monkeypatch)
-    client = app_with_admin_user.test_client()
+    client = cidc_api.test_client()
 
     if "POST_setup" in config:
         for setup_resource in config["POST_setup"]:
-            client.post(setup_resource, json=resource_requests[setup_resource]["json"])
+            res = client.post(
+                setup_resource, json=resource_requests[setup_resource]["json"]
+            )
+            assert res.status_code == 201, "error during POST test setup"
 
     # Try to create the item with POST
     response = client.post(resource, json=config["json"])
     if "POST" in config["allowed_methods"]:
         assert response.status_code == 201
         # Make sure it was created
-        item = db.query(config["model"]).one().__dict__
-        assert_dict_contains(item, config["json"])
+        with cidc_api.app_context():
+            item = config["model"].find_by_id(response.json["id"]).__dict__
+            assert_dict_contains(item, config["json"])
     else:
         assert response.status_code == 405
 
 
 @pytest.mark.parametrize("resource, config", resource_requests.items())
-def test_resource_and_item_get(
-    resource, config, app_with_admin_user, db_with_records, monkeypatch
-):
+def test_resource_and_item_get(resource, config, cidc_api, clean_db, monkeypatch):
     setup_mocks(config, monkeypatch)
-    client = app_with_admin_user.test_client()
+    setup_db_records(cidc_api)
+    mock_admin_user(cidc_api, monkeypatch)
+    client = cidc_api.test_client()
 
     # resource-level GET
     response = client.get(resource)
@@ -236,6 +226,9 @@ def test_resource_and_item_get(
         assert_dict_contains(item, config["json"])
         if config.get("pagination"):
             assert response.json["_meta"]["total"] == 3
+        elif resource == "users":
+            # Since the mocked admin user is also in the DB
+            assert response.json["_meta"]["total"] == 2
         else:
             assert response.json["_meta"]["total"] == 1
     else:
@@ -252,11 +245,12 @@ def test_resource_and_item_get(
 
 
 @pytest.mark.parametrize("resource, config", resource_requests.items())
-def test_item_patch(
-    resource, config, app_with_admin_user, db_with_records, monkeypatch
-):
-    client = app_with_admin_user.test_client()
+def test_item_patch(resource, config, cidc_api, clean_db, monkeypatch):
+    setup_db_records(cidc_api)
+    mock_admin_user(cidc_api, monkeypatch)
     setup_mocks(config, monkeypatch)
+
+    client = cidc_api.test_client()
 
     # Try to update the resource
     lookup = get_lookup_value(config)
@@ -271,16 +265,19 @@ def test_item_patch(
         )
         assert response.status_code == 200
         # Check that the record was updated
-        item = db_with_records.query(config["model"]).one().__dict__
-        assert_dict_contains(item, config["PATCH_json"])
+        with cidc_api.app_context():
+            item = config["model"].find_by_id(response.json["id"]).__dict__
+            assert_dict_contains(item, config["PATCH_json"])
     else:
         assert response.status_code in (404, 405)
 
 
 @pytest.mark.parametrize("resource, config", resource_requests.items())
-def test_item_put(resource, config, app_with_admin_user, db_with_records, monkeypatch):
+def test_item_put(resource, config, cidc_api, clean_db, monkeypatch):
+    setup_db_records(cidc_api)
+    mock_admin_user(cidc_api, monkeypatch)
     setup_mocks(config, monkeypatch)
-    client = app_with_admin_user.test_client()
+    client = cidc_api.test_client()
 
     # Try to PUT the resource - this is disallowed for all resources.
     lookup = get_lookup_value(config)
@@ -293,11 +290,11 @@ def test_item_put(resource, config, app_with_admin_user, db_with_records, monkey
 
 
 @pytest.mark.parametrize("resource, config", resource_requests.items())
-def test_item_delete(
-    resource, config, app_with_admin_user, db_with_records, monkeypatch
-):
+def test_item_delete(resource, config, cidc_api, clean_db, monkeypatch):
+    setup_db_records(cidc_api)
+    mock_admin_user(cidc_api, monkeypatch)
     setup_mocks(config, monkeypatch)
-    client = app_with_admin_user.test_client()
+    client = cidc_api.test_client()
 
     # Try to DELETE the resource - this is disallowed for all resources.
     lookup = get_lookup_value(config)
@@ -309,14 +306,11 @@ def test_item_delete(
 
 
 @pytest.mark.parametrize("resource, config", resource_requests_with_key("filters"))
-def test_resource_filters(
-    resource, config, app_with_admin_user, db_with_records, monkeypatch
-):
-    if "filters" not in config:
-        return
-
+def test_resource_filters(resource, config, cidc_api, clean_db, monkeypatch):
+    setup_db_records(cidc_api)
+    mock_admin_user(cidc_api, monkeypatch)
     setup_mocks(config, monkeypatch)
-    client = app_with_admin_user.test_client()
+    client = cidc_api.test_client()
 
     one_response = client.get(resource, query_string=config["filters"]["one"])
     assert one_response.status_code == 200
@@ -332,49 +326,49 @@ def test_resource_filters(
 @pytest.mark.parametrize(
     "resource, config", resource_requests_with_key("additional_records")
 )
-def test_resource_pagination(
-    resource, config, app_with_admin_user, db_with_records, monkeypatch
-):
-    # Insert additional records for pagination testing
-    for record in config["additional_records"]:
-        db_with_records.add(config["model"](**record))
-    db_with_records.commit()
-
+def test_resource_pagination(resource, config, cidc_api, clean_db, monkeypatch):
+    setup_db_records(cidc_api)
+    mock_admin_user(cidc_api, monkeypatch)
     setup_mocks(config, monkeypatch)
-    client = app_with_admin_user.test_client()
+
+    # Insert additional records for pagination testing
+    with cidc_api.app_context():
+        for record in config["additional_records"]:
+            config["model"](**record).insert()
+
+    client = cidc_api.test_client()
 
     # Check that max_results = 1 returns only one result
-    response = client.get(resource, query_string={"max_results": 1})
+    response = client.get(resource, query_string={"page_size": 1})
     assert response.status_code == 200
     assert len(response.json["_items"]) == 1
-    assert response.json["_items"][0]["id"] == TEST_RECORD_ID
 
     # Check that changing the sorting seems to work
     response = client.get(
-        resource, query_string={"max_results": 1, "sort": "[('id', -1)]"}
+        resource,
+        query_string={"page_size": 1, "sort_field": "id", "sort_direction": "desc"},
     )
     assert response.status_code == 200
-    assert response.json["_items"][0]["id"] == 3
+    assert response.json["_items"][0]["id"] > TEST_RECORD_ID
 
     # Check that pagination seems to work
-    page_1_response = client.get(resource, query_string={"max_results": 2, "page": 1})
+    page_1_response = client.get(resource, query_string={"page_size": 2, "page_num": 0})
     assert page_1_response.status_code == 200
     assert len(page_1_response.json["_items"]) == 2
-    page_2_response = client.get(resource, query_string={"max_results": 2, "page": 2})
+    page_2_response = client.get(resource, query_string={"page_size": 2, "page_num": 1})
     assert page_2_response.status_code == 200
-    assert len(page_2_response.json["_items"]) == 1
+    assert len(page_2_response.json["_items"]) == (2 if resource == "users" else 1)
 
 
-def test_endpoint_urls(app):
+def test_endpoint_urls(cidc_api):
     """
     Ensure that the API has exactly the endpoints we expect.
     """
     expected_endpoints = {
-        "/",
-        "/downloadable_files",
+        "/downloadable_files/",
         "/downloadable_files/download_url",
         "/downloadable_files/filter_facets",
-        '/downloadable_files/<regex("[0-9]+"):id>',
+        "/downloadable_files/<int:downloadable_file>",
         "/info/assays",
         "/info/analyses",
         "/info/manifests",
@@ -386,18 +380,18 @@ def test_endpoint_urls(app):
         "/ingestion/upload_analysis",
         "/ingestion/extra-assay-metadata",
         "/ingestion/poll_upload_merge_status",
-        "/permissions",
-        '/permissions/<regex("[0-9]+"):id>',
-        "/trial_metadata",
-        '/trial_metadata/<regex("[a-zA-Z0-9_-]+"):trial_id>',
-        "/upload_jobs",
-        '/upload_jobs/<regex("[0-9]+"):id>',
-        "/users",
+        "/permissions/",
+        "/permissions/<int:permission>",
+        "/trial_metadata/",
+        "/trial_metadata/<int:trial>",
+        "/trial_metadata/<string:trial>",
+        "/upload_jobs/",
+        "/upload_jobs/<int:upload_job>",
+        "/users/",
         "/users/self",
-        '/users/<regex("[0-9]+"):id>',
-        "/new_users",
+        "/users/<int:user>",
     }
 
     # Check that every endpoint included in the API is expected.
-    endpoints = set([rule.rule for rule in app.url_map._rules])
+    endpoints = set([rule.rule for rule in cidc_api.url_map._rules])
     assert endpoints == expected_endpoints

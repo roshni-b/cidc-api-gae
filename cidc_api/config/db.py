@@ -1,18 +1,37 @@
 from os import environ
 
-from cidc_api.config.secrets import get_secrets_manager
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate, upgrade
+from sqlalchemy.engine.url import URL
+from sqlalchemy.ext.declarative import declarative_base
 
 
-def get_sqlachemy_database_uri(testing: bool = False) -> str:
+from .secrets import get_secrets_manager
+
+db = SQLAlchemy()
+BaseModel = declarative_base(bind=db)
+db.Model = BaseModel
+
+
+def init_db(app: Flask):
+    """Connect `app` to the database and run migrations"""
+    db.init_app(app)
+    db.Model = BaseModel
+    Migrate(app, db, app.config["MIGRATIONS_PATH"])
+    with app.app_context():
+        upgrade(app.config["MIGRATIONS_PATH"])
+
+
+def get_sqlalchemy_database_uri(testing: bool = False) -> str:
     """Get the PostgreSQL DB URI from environment variables"""
 
     db_uri = environ.get("POSTGRES_URI")
-    secrets = get_secrets_manager(testing)
     if testing:
         # Connect to the test database
         db_uri = environ.get("TEST_POSTGRES_URI", "fake-conn-string")
     elif not db_uri:
-        from sqlalchemy.engine.url import URL
+        secrets = get_secrets_manager(testing)
 
         # If POSTGRES_URI env variable is not set,
         # we're connecting to a Cloud SQL instance.
