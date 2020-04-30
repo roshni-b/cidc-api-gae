@@ -1,5 +1,4 @@
 flask-cors==3.0.8
-flask-migrate==2.5.2
 six==1.12.0
 python-jose==3.0.1
 psycopg2-binary==2.8.3
