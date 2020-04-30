@@ -1,6 +1,6 @@
 runtime: python37
 env: standard
-entrypoint: gunicorn cidc_api:app
+entrypoint: gunicorn cidc_api.app:app
 
 handlers:
   # Force HTTPS on all requests
