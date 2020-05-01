@@ -67,11 +67,6 @@ def make_etag(args: Union[dict, list]):
     return hashlib.md5(argbytes).hexdigest()
 
 
-def make_etag_sqla(context: ExecutionContext):
-    """Generate an etag given a SQLAlchemy execution context"""
-    return make_etag(context.compiled_parameters)
-
-
 class CommonColumns(BaseModel):  # type: ignore
     """Metadata attributes shared by all resources"""
 
@@ -79,12 +74,21 @@ class CommonColumns(BaseModel):  # type: ignore
 
     _created = Column(DateTime, default=func.now())
     _updated = Column(DateTime, default=func.now(), onupdate=func.now())
-    _etag = Column(String(40), default=make_etag_sqla, onupdate=make_etag_sqla)
+    _etag = Column(String(40))
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
+
+    def compute_etag(self) -> str:
+        """Calculate the etag for this instance"""
+        columns = self.__table__.columns.keys()
+        etag_fields = [getattr(self, c) for c in columns if not c.startswith("_")]
+        return make_etag(etag_fields)
 
     @with_default_session
     def insert(self, session: Session, commit: bool = True):
         """Add the current instance to the session."""
+        # Compute an _etag if none was provided
+        self._etag = self._etag or self.compute_etag()
+
         session.add(self)
         if commit:
             session.commit()
@@ -107,6 +111,9 @@ class CommonColumns(BaseModel):  # type: ignore
 
         # Set the _updated field to now
         self._updated = datetime.now()
+
+        # Update the instance etag
+        self._etag = self.compute_etag()
 
         session.merge(self)
         if commit:
@@ -243,8 +250,7 @@ class Users(CommonColumns):
         if not user:
             print(f"Creating new user with email {email}")
             user = Users(email=email)
-            session.add(user)
-            session.commit()
+            user.insert(session=session)
         return user
 
 
@@ -410,10 +416,7 @@ class TrialMetadata(CommonColumns):
 
         print(f"Creating new trial metadata with id {trial_id}")
         trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
-        session.add(trial)
-
-        if commit:
-            session.commit()
+        trial.insert(session=session, commit=commit)
 
         return trial
 
@@ -604,9 +607,7 @@ class UploadJobs(CommonColumns):
             gcs_xlsx_uri=gcs_xlsx_uri,
             status=status,
         )
-        session.add(job)
-        if commit:
-            session.commit()
+        job.insert(session=session, commit=commit)
 
         if send_email:
             trial = TrialMetadata.find_by_trial_id(trial_id)
@@ -787,9 +788,7 @@ class DownloadableFiles(CommonColumns):
         else:
             df = DownloadableFiles(_etag=etag, **filtered_metadata)
 
-        session.add(df)
-        if commit:
-            session.commit()
+        df.insert(session=session, commit=commit)
 
         if alert_artifact_upload:
             publish_artifact_upload(object_url)
@@ -832,10 +831,7 @@ class DownloadableFiles(CommonColumns):
         df.crc32c_hash = blob.crc32c
         df.uploaded_timestamp = blob.time_created
 
-        session.add(df)
-
-        if commit:
-            session.commit()
+        df.insert(session=session, commit=commit)
 
         if alert_artifact_upload:
             publish_artifact_upload(blob.name)

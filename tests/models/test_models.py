@@ -42,6 +42,27 @@ EMAIL = "test@email.com"
 PROFILE = {"email": EMAIL}
 
 
+def test_common_compute_etag():
+    """Check that compute_etag excludes private fields"""
+
+    u = Users()
+
+    # Updates to private fields shouldn't change the etag
+    etag = u.compute_etag()
+    u._updated = datetime.now()
+    assert u.compute_etag() == etag
+
+    # Updates to public fields should change the etag
+    u.first_n = "foo"
+    new_etag = u.compute_etag()
+    assert new_etag != etag
+    u.first_n = "buzz"
+    assert u.compute_etag() != new_etag
+
+    # Compute etag returns the same result if `u` doesn't change
+    assert u.compute_etag() == u.compute_etag()
+
+
 @db_test
 def test_common_insert(clean_db):
     """Test insert, inherited from CommonColumns"""
@@ -53,8 +74,9 @@ def test_common_insert(clean_db):
     # Insert a new record without disabling committing
     u2 = Users(email="b")
     u2.insert()
-    assert u1.id
-    assert u2.id
+    assert u1.id and u1._etag
+    assert u2.id and u2._etag
+    assert u1._etag != u2._etag
 
     assert Users.find_by_id(u1.id)
     assert Users.find_by_id(u2.id)
@@ -85,12 +107,23 @@ def test_common_update(clean_db):
     assert user.last_n == last_n
 
     _updated = user._updated
+    _etag = user._etag
 
     # Make sure you can clear a field to null
     user.update(changes={"first_n": None})
     user = Users.find_by_id(user.id)
     assert user._updated > _updated
+    assert _etag != user._etag
     assert user.first_n is None
+
+    _updated = user._updated
+    _etag = user._etag
+
+    # Make sure etags don't change if public fields don't change
+    user.update()
+    user = Users.find_by_id(user.id)
+    assert user._updated > _updated
+    assert _etag == user._etag
 
 
 @db_test
