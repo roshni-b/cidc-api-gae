@@ -58,6 +58,8 @@ class UserSchema(BaseSchema):
     class Meta(BaseSchema.Meta):
         model = Users
 
+    _accessed = fields.DateTime(dump_only=True)
+
 
 UserListSchema = _make_list_schema(UserSchema())
 

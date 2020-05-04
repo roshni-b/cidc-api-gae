@@ -2,7 +2,7 @@ import io
 import sys
 from copy import deepcopy
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -20,7 +20,11 @@ from cidc_api.models import (
     UploadJobStatus,
     NoResultFound,
 )
-from cidc_api.config.settings import PAGINATION_PAGE_SIZE, MAX_PAGINATION_PAGE_SIZE
+from cidc_api.config.settings import (
+    PAGINATION_PAGE_SIZE,
+    MAX_PAGINATION_PAGE_SIZE,
+    INACTIVE_USER_DAYS,
+)
 from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 from cidc_schemas import prism
 
@@ -241,6 +245,26 @@ def test_duplicate_user(clean_db):
     Users.create(PROFILE)
     Users.create(PROFILE)
     assert clean_db.query(Users).count() == 1
+
+
+@db_test
+def test_disable_inactive_users(clean_db):
+    """Check that the disable_inactive_users method disables users appropriately"""
+    # Create two users who should be disabled, and one who should not
+    now = datetime.now()
+    Users(email="1", _accessed=now - timedelta(days=INACTIVE_USER_DAYS)).insert()
+    Users(email="2", _accessed=now - timedelta(days=INACTIVE_USER_DAYS + 5)).insert()
+    Users(email="3", _accessed=now - timedelta(days=INACTIVE_USER_DAYS - 1)).insert()
+
+    # All users start off enabled
+    for user in Users.list():
+        assert user.disabled == False
+
+    Users.disable_inactive_users()
+
+    users = Users.list()
+    assert len([u for u in users if u.disabled])
+    assert [u for u in users if not u.disabled][0].email == "3"
 
 
 TRIAL_ID = "cimac-12345"

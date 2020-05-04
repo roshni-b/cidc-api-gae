@@ -19,7 +19,7 @@ users_bp = Blueprint("users", __name__)
 
 user_schema = UserSchema()
 user_list_schema = UserListSchema()
-new_user_schema = UserSchema(exclude=("approval_date", "role"))
+new_user_schema = UserSchema(exclude=("approval_date", "role", "disabled"))
 partial_user_schema = UserSchema(partial=True)
 
 
@@ -105,6 +105,11 @@ def update_user(user: Users, user_updates: Users):
     # If a user is being awarded their first role, add an approval date
     if not user.role and "role" in user_updates:
         user_updates["approval_date"] = datetime.now()
+
+    # If a user is being reenabled after being disabled, update their last
+    # access date to now so that they aren't disabled again tomorrow.
+    if user.disabled and user_updates.get("disabled") == False:
+        user_updates["_accessed"] = datetime.now()
 
     user.update(changes=user_updates)
 

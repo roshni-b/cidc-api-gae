@@ -1,7 +1,7 @@
 import os
 import json
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum as EnumBaseClass
 from functools import wraps
 from typing import Optional, List, Union, Callable
@@ -24,6 +24,7 @@ from sqlalchemy import (
     tuple_,
     asc,
     desc,
+    update,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -38,7 +39,12 @@ from sqlalchemy.engine.interfaces import ExecutionContext
 from cidc_schemas import prism, unprism
 
 from ..config.db import BaseModel
-from ..config.settings import PAGINATION_PAGE_SIZE, MAX_PAGINATION_PAGE_SIZE, TESTING
+from ..config.settings import (
+    PAGINATION_PAGE_SIZE,
+    MAX_PAGINATION_PAGE_SIZE,
+    TESTING,
+    INACTIVE_USER_DAYS,
+)
 from ..shared import emails
 from ..shared.gcloud_client import publish_artifact_upload, publish_upload_success
 
@@ -73,7 +79,7 @@ class CommonColumns(BaseModel):  # type: ignore
     __abstract__ = True  # Indicate that this isn't a Table schema
 
     _created = Column(DateTime, default=func.now())
-    _updated = Column(DateTime, default=func.now(), onupdate=func.now())
+    _updated = Column(DateTime, default=func.now())
     _etag = Column(String(40))
     id = Column(Integer, primary_key=True, autoincrement=True, nullable=False)
 
@@ -84,7 +90,7 @@ class CommonColumns(BaseModel):  # type: ignore
         return make_etag(etag_fields)
 
     @with_default_session
-    def insert(self, session: Session, commit: bool = True):
+    def insert(self, session: Session, commit: bool = True, compute_etag: bool = True):
         """Add the current instance to the session."""
         # Compute an _etag if none was provided
         self._etag = self._etag or self.compute_etag()
@@ -212,6 +218,7 @@ ORGS = ["CIDC", "DFCI", "ICAHN", "STANFORD", "ANDERSON"]
 class Users(CommonColumns):
     __tablename__ = "users"
 
+    _accessed = Column(DateTime, default=func.now(), nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
     first_n = Column(String)
     last_n = Column(String)
@@ -223,6 +230,16 @@ class Users(CommonColumns):
     def is_admin(self) -> bool:
         """Returns true if this user is a CIDC admin."""
         return self.role == CIDCRole.ADMIN.value
+
+    @with_default_session
+    def update_accessed(self, session: Session, commit: bool = True):
+        """Set this user's last system access to now."""
+        today = datetime.now()
+        if not self._accessed or (today - self._accessed).days > 1:
+            self._accessed = today
+            session.merge(self)
+            if commit:
+                session.commit()
 
     @staticmethod
     @with_default_session
@@ -252,6 +269,22 @@ class Users(CommonColumns):
             user = Users(email=email)
             user.insert(session=session)
         return user
+
+    @staticmethod
+    @with_default_session
+    def disable_inactive_users(session: Session, commit: bool = True):
+        """
+        Disable any users who haven't accessed the API in more than `settings.INACTIVE_USER_DAYS`.
+        """
+        user_inactivity_cutoff = datetime.today() - timedelta(days=INACTIVE_USER_DAYS)
+        update_query = (
+            update(Users)
+            .where(Users._accessed < user_inactivity_cutoff)
+            .values(disabled=True)
+        )
+        session.execute(update_query)
+        if commit:
+            session.commit()
 
 
 class Permissions(CommonColumns):

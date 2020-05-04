@@ -32,6 +32,8 @@ TEMPLATES_DIR = path.join("/tmp", "templates")
 MIN_CLI_VERSION = "0.8.5"
 PAGINATION_PAGE_SIZE = 25
 MAX_PAGINATION_PAGE_SIZE = 200
+INACTIVE_USER_DAYS = 60
+
 
 ### Configure Flask-SQLAlchemy ###
 SQLALCHEMY_DATABASE_URI = get_sqlalchemy_database_uri(TESTING)

@@ -236,6 +236,8 @@ def authorize(
 
     _set_current_user(db_user)
 
+    db_user.update_accessed()
+
     # User is registered but disabled.
     if db_user.disabled:
         # Disabled users are not authorized to do anything but access their

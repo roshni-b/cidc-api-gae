@@ -150,11 +150,13 @@ ETAG = "test-etag"
 def setup_db_records(cidc_api):
     extra = {"_etag": ETAG}
     with cidc_api.app_context():
-        Users(**users["json"], **extra).insert()
-        TrialMetadata(**trial_metadata["json"], **extra).insert()
-        DownloadableFiles(**downloadable_files["json"], **extra).insert()
-        Permissions(**permissions["json"], **extra).insert()
-        UploadJobs(**upload_jobs["json"], **extra).insert()
+        Users(**users["json"], **extra).insert(compute_etag=False)
+        TrialMetadata(**trial_metadata["json"], **extra).insert(compute_etag=False)
+        DownloadableFiles(**downloadable_files["json"], **extra).insert(
+            compute_etag=False
+        )
+        Permissions(**permissions["json"], **extra).insert(compute_etag=False)
+        UploadJobs(**upload_jobs["json"], **extra).insert(compute_etag=False)
 
 
 def assert_dict_contains(base, target):

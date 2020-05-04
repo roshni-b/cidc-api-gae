@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 
 import pytest
 from jose import jwt
@@ -325,13 +325,18 @@ def test_authorize(cidc_api, clean_db):
         with pytest.raises(Unauthorized, match="not registered"):
             auth.authorize(user, [], "some-resource", "some-http-method")
 
+        # We can't track accesses for users who aren't registered
+        assert user._accessed is None
+
         # Unregistered user should not be able to GET users
         with pytest.raises(Unauthorized, match="not registered"):
             auth.authorize(user, [], "users", "GET")
+        assert user._accessed is None
 
         # Unregistered user should not be able to GET self
         with pytest.raises(Unauthorized, match="not registered"):
             auth.authorize(user, [], "self", "GET")
+        assert user._accessed is None
 
         # Unregistered user should be able to POST users
         assert auth.authorize(user, [], "self", "POST")
@@ -342,6 +347,10 @@ def test_authorize(cidc_api, clean_db):
         # Unapproved user isn't authorized to do anything
         with pytest.raises(Unauthorized, match="pending approval"):
             auth.authorize(user, [], "self", "POST")
+
+        # Check that we tracked this user's last access
+        assert user._accessed.date() == date.today()
+        _accessed = user._accessed
 
         # Ensure unapproved user can access their own data
         assert auth.authorize(user, [], "self", "GET")
@@ -388,3 +397,7 @@ def test_authorize(cidc_api, clean_db):
         # If the resource has no role restrictions, they should be still unauthorized
         with pytest.raises(Unauthorized, match="disabled"):
             auth.authorize(user, [], "some-resource", "some-http-method")
+
+        # Check that user's last access wasn't updated by all activity,
+        # since it occurred on the same day as previous accesses
+        assert user._accessed == _accessed
