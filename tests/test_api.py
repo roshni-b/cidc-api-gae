@@ -367,6 +367,7 @@ def test_endpoint_urls(cidc_api):
     Ensure that the API has exactly the endpoints we expect.
     """
     expected_endpoints = {
+        "/",
         "/downloadable_files/",
         "/downloadable_files/download_url",
         "/downloadable_files/filter_facets",
