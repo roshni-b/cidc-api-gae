@@ -413,7 +413,7 @@ def test_validate_invalid_template(cidc_api, some_file, clean_db, monkeypatch):
     data = form_data("pbmc.xlsx", some_file, "pbmc")
     res = client.post(VALIDATE, data=data)
     assert res.status_code == 400
-    assert len(res.json["message"]) > 0
+    assert len(res.json["_error"]["message"]) > 0
 
 
 @pytest.mark.parametrize(
@@ -462,7 +462,7 @@ def test_upload_manifest_non_existing_trial_id(
 
     res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 400
-    assert "test-non-existing-trial-id" in str(res.json["message"])
+    assert "test-non-existing-trial-id" in str(res.json["_error"]["message"])
 
     # Check that we tried to upload the excel file
     mocks.upload_xlsx.assert_not_called()
@@ -486,7 +486,7 @@ def test_upload_invalid_manifest(cidc_api, some_file, clean_db, monkeypatch):
     res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 400
 
-    assert len(res.json["message"]["errors"]) > 0
+    assert len(res.json["_error"]["message"]["errors"]) > 0
 
     # Check that we tried to upload the excel file
     mocks.upload_xlsx.assert_not_called()
@@ -506,8 +506,11 @@ def test_upload_unsupported_manifest(cidc_api, some_file, clean_db, monkeypatch)
     )
     assert res.status_code == 400
 
-    assert "'unsupported_' is not supported for this endpoint." in res.json["message"]
-    assert "UNSUPPORTED_".lower() in res.json["message"]
+    assert (
+        "'unsupported_' is not supported for this endpoint."
+        in res.json["_error"]["message"]
+    )
+    assert "UNSUPPORTED_".lower() in res.json["_error"]["message"]
 
     # Check that we tried to upload the excel file
     mocks.upload_xlsx.assert_not_called()
@@ -545,7 +548,7 @@ def test_upload_manifest(cidc_api, clean_db, monkeypatch, capsys):
         MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
     )
     assert res.status_code == 401
-    assert "not authorized to upload pbmc data" in str(res.json["message"])
+    assert "not authorized to upload pbmc data" in str(res.json["_error"]["message"])
 
     # Add permission and retry the upload
     grant_upload_permission(user_id, "pbmc", cidc_api)
@@ -622,13 +625,13 @@ def test_upload_endpoint_blocking(cidc_api, clean_db, monkeypatch):
     res = client.post(ASSAY_UPLOAD, data=assay_form())
     assert res.status_code == 200
     res = client.post(ASSAY_UPLOAD, data=analysis_form())
-    assert "not supported" in res.json["message"]
+    assert "not supported" in res.json["_error"]["message"]
     assert res.status_code == 400
 
     res = client.post(ANALYSIS_UPLOAD, data=analysis_form())
     assert res.status_code == 200
     res = client.post(ANALYSIS_UPLOAD, data=assay_form())
-    assert "not supported" in res.json["message"]
+    assert "not supported" in res.json["_error"]["message"]
     assert res.status_code == 400
 
 
@@ -653,7 +656,9 @@ def test_upload_wes(cidc_api, clean_db, monkeypatch):
         ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes_fastq")
     )
     assert res.status_code == 401
-    assert "not authorized to upload wes_fastq data" in str(res.json["message"])
+    assert "not authorized to upload wes_fastq data" in str(
+        res.json["_error"]["message"]
+    )
 
     mocks.clear_all()
 
@@ -756,7 +761,7 @@ def test_upload_olink(cidc_api, clean_db, monkeypatch):
         ASSAY_UPLOAD, data=form_data("olink.xlsx", io.BytesIO(b"1234"), "olink")
     )
     assert res.status_code == 401
-    assert "not authorized to upload olink data" in str(res.json["message"])
+    assert "not authorized to upload olink data" in str(res.json["_error"]["message"])
 
     mocks.clear_all()
 
@@ -816,7 +821,7 @@ def test_upload_olink(cidc_api, clean_db, monkeypatch):
     assert bad_res.status_code == 400
     assert (
         "status upload-failed can't transition to status upload-completed"
-        in bad_res.json["message"]
+        in bad_res.json["_error"]["message"]
     )
 
     # Reset the upload status and try the request again
@@ -918,15 +923,15 @@ def test_extra_metadata(cidc_api, clean_db, monkeypatch):
     client = cidc_api.test_client()
     res = client.post("/ingestion/extra-assay-metadata")
     assert res.status_code == 400
-    assert "Expected form" in res.json["message"]
+    assert "Expected form" in res.json["_error"]["message"]
 
     res = client.post("/ingestion/extra-assay-metadata", data={"foo": "bar"})
     assert res.status_code == 400
-    assert "job_id" in res.json["message"]
+    assert "job_id" in res.json["_error"]["message"]
 
     res = client.post("/ingestion/extra-assay-metadata", data={"job_id": 123})
     assert res.status_code == 400
-    assert "files" in res.json["message"]
+    assert "files" in res.json["_error"]["message"]
 
     merge_extra_metadata = MagicMock()
     monkeypatch.setattr(

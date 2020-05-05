@@ -9,6 +9,8 @@ from dateutil.parser import parse as parse_date
 
 
 import pytest
+from werkzeug.exceptions import BadRequest
+
 from cidc_api.models import (
     Users,
     DownloadableFiles,
@@ -398,3 +400,29 @@ def test_endpoint_urls(cidc_api):
     # Check that every endpoint included in the API is expected.
     endpoints = set([rule.rule for rule in cidc_api.url_map._rules])
     assert endpoints == expected_endpoints
+
+
+def test_exception_handler(clean_cidc_api):
+    """
+    Ensure that the API handles HTTPExceptions in its routes as expected.
+    """
+    message = "uh oh!"
+
+    @clean_cidc_api.route("/bad_request")
+    def raise_bad_request():
+        raise BadRequest(message)
+
+    @clean_cidc_api.route("/key_error")
+    def raise_key_error():
+        raise KeyError(message)
+
+    client = clean_cidc_api.test_client()
+
+    res = client.get("/bad_request")
+    assert res.status_code == 400
+    assert res.json == {"_status": "ERR", "_error": {"message": message}}
+
+    res = client.get("/key_error")
+    assert res.status_code == 500
+    assert res.json["_status"] == "ERR"
+    assert "internal error" in res.json["_error"]["message"]

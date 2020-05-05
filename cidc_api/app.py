@@ -32,30 +32,30 @@ register_resources(app)
 # Check that its auth configuration is validate
 validate_api_auth(app)
 
-# JSON-ify HTTP errors
-@app.errorhandler(HTTPException)
-def jsonify_http_errors(e: HTTPException):
-    """Return JSON instead of default HTML for HTTP errors."""
-    data = {"code": e.code}
-    if hasattr(e, "exc") and isinstance(e.exc, ValidationError):
-        data["message"] = e.data["messages"]
+
+@app.errorhandler(Exception)
+def handle_errors(e: Exception):
+    """Format exceptions as JSON, with status code and error message info."""
+    if isinstance(e, HTTPException):
+        status_code = e.code
+        _error = {}
+        if hasattr(e, "exc") and isinstance(e.exc, ValidationError):
+            _error["message"] = e.data["messages"]
+        else:
+            _error["message"] = e.description
     else:
-        data["message"] = e.description
+        status_code = 500
+        # This is an internal server error, so log the traceback for debugging purposes.
+        traceback.print_exception(type(e), e, e.__traceback__)
+        _error = {
+            "message": "The server encountered an internal error and was unable to complete your request."
+        }
 
-    response = jsonify(data)
-    response.status_code = e.code
+    # Format errors to be backwards-compatible with Eve-style errors
+    eve_style_error_json = {"_status": "ERR", "_error": _error}
+    response = jsonify(eve_style_error_json)
+    response.status_code = status_code
     return response
-
-
-# Log tracebacks on server errors
-@app.errorhandler(500)
-def print_server_error(exception):
-    """Print out the traceback and error message for all server errors."""
-    try:
-        orig_exc = exception.original_exception
-    except AttributeError:
-        orig_exc = exception
-    traceback.print_exception(type(orig_exc), orig_exc, orig_exc.__traceback__)
 
 
 if __name__ == "__main__":

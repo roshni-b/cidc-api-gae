@@ -61,7 +61,7 @@ def test_create_self(cidc_api, clean_db, monkeypatch):
     # A user can't create a user record with a different email than their own
     res = client.post("/users/self", json={"email": "some.other@email.com"})
     assert res.status_code == 400
-    assert "can't create a user with email" in res.json["message"]
+    assert "can't create a user with email" in res.json["_error"]["message"]
 
     # A user can create themselves
     res = client.post("/users/self", json=new_user_json)
@@ -110,7 +110,7 @@ def test_list_users(cidc_api, clean_db, monkeypatch):
     register_user(user_id, cidc_api)
     res = client.get("/users")
     assert res.status_code == 401
-    assert "not authorized" in res.json["message"]
+    assert "not authorized" in res.json["_error"]["message"]
 
     # Admins can list users
     make_admin(user_id, cidc_api)

@@ -1,4 +1,5 @@
 import os
+import importlib
 
 import pytest
 from flask import Flask
@@ -24,6 +25,16 @@ def empty_app():
 def cidc_api():
     """An instance of the CIDC API"""
     return app
+
+
+@pytest.fixture
+def clean_cidc_api():
+    """An instance of the CIDC API that hasn't yet handled any requests."""
+    import cidc_api.app
+
+    importlib.reload(cidc_api.app)
+
+    return cidc_api.app.app
 
 
 @pytest.fixture

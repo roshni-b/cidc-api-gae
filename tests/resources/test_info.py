@@ -45,18 +45,18 @@ def test_templates(cidc_api):
     # Invalid URLs
     res = client.get(f"{INFO_ENDPOINT}/templates/../pbmc")
     assert res.status_code == 400
-    assert res.json["message"] == "Invalid template family: .."
+    assert res.json["_error"]["message"] == "Invalid template family: .."
 
     res = client.get(f"{INFO_ENDPOINT}/templates/manifests/pbmc123")
     assert res.status_code == 404
     assert (
-        res.json["message"]
+        res.json["_error"]["message"]
         == "No template found for the given template family and template type"
     )
 
     res = client.get(f"{INFO_ENDPOINT}/templates/manifests/pbmc123!")
     assert res.status_code == 400
-    assert res.json["message"] == "Invalid template type: pbmc123!"
+    assert res.json["_error"]["message"] == "Invalid template type: pbmc123!"
 
     # Non-existent template
     res = client.get(f"{INFO_ENDPOINT}/templates/foo/bar")

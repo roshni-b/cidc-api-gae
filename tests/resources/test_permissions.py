@@ -73,7 +73,7 @@ def test_list_permissions(cidc_api, clean_db, monkeypatch):
     # Check that a non-admin user can't get another user's permissions
     res = client.get(f"permissions?user_id={other_user_id}")
     assert res.status_code == 401
-    assert "cannot view permissions for other users" in res.json["message"]
+    assert "cannot view permissions for other users" in res.json["_error"]["message"]
 
     # Check that an admin can read the other user's permissions
     make_admin(current_user_id, cidc_api)
@@ -125,7 +125,7 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     # Non-admins should be blocked from posting to this endpoint
     res = client.post("permissions")
     assert res.status_code == 401
-    assert "not authorized to access this endpoint" in res.json["message"]
+    assert "not authorized to access this endpoint" in res.json["_error"]["message"]
 
     # Admins should be able to create new permissions
     make_admin(current_user_id, cidc_api)
@@ -144,7 +144,7 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     # Re-insertion is not allowed
     res = client.post("permissions", json=perm)
     assert res.status_code == 400
-    assert "unique constraint" in res.json["message"]
+    assert "unique constraint" in res.json["_error"]["message"]
 
 
 def test_delete_permission(cidc_api, clean_db, monkeypatch):
@@ -159,7 +159,7 @@ def test_delete_permission(cidc_api, clean_db, monkeypatch):
     # Non-admins are not allowed to delete
     res = client.delete(f"permissions/{perm.id}")
     assert res.status_code == 401
-    assert "not authorized to access this endpoint" in res.json["message"]
+    assert "not authorized to access this endpoint" in res.json["_error"]["message"]
 
     make_admin(current_user_id, cidc_api)
 

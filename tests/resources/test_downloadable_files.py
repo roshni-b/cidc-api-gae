@@ -188,7 +188,9 @@ def test_get_download_url(cidc_api, clean_db, monkeypatch):
     # A query missing the required parameters should yield 422
     res = client.get("/downloadable_files/download_url")
     assert res.status_code == 422
-    assert res.json["message"]["query"]["id"] == ["Missing data for required field."]
+    assert res.json["_error"]["message"]["query"]["id"] == [
+        "Missing data for required field."
+    ]
 
     # A missing file should yield 404
     res = client.get("/downloadable_files/download_url?id=123212321")
