@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 from cidc_schemas.migrations import v0_15_2_to_v0_15_3
 
-from cidc_api.utils.migrations import run_metadata_migration
+from cidc_api.models.migrations import run_metadata_migration
 
 # revision identifiers, used by Alembic.
 revision = "1b74e4d0bb7f"

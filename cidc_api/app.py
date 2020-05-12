@@ -1,78 +1,62 @@
-import logging
 import traceback
 from os.path import dirname, abspath, join
 
-from eve import Eve
-from eve.auth import TokenAuth
-from eve_sqlalchemy import SQL
-from eve_sqlalchemy.validation import ValidatorSQL
-from flask import jsonify
-from flask_migrate import Migrate, upgrade
+from flask import Flask, jsonify
 from flask_cors import CORS
+from flask_migrate import Migrate, upgrade
+from werkzeug.exceptions import HTTPException
+from marshmallow.exceptions import ValidationError
 
-import cidc_schemas
+from cidc_schemas.template import generate_all_templates
 
-from models import BaseModel
-from auth import BearerAuth
-from services import register_services
+from .config.db import init_db
+from .config.settings import SETTINGS
+from .shared.auth import validate_api_auth
+from .resources import register_resources
 
-ABSPATH = dirname(abspath(__file__))
-SETTINGS = join(ABSPATH, "config", "evesettings.py")
-MIGRATIONS = join(ABSPATH, "..", "migrations")
-
-# Instantiate the Eve app
-app = Eve(
-    auth=BearerAuth,
-    data=SQL,
-    validator=ValidatorSQL,
-    settings=SETTINGS,
-    static_folder=None,
-)
-
-# Inherit logging config from gunicorn if running behind gunicorn
-app.logger.setLevel(logging.DEBUG)
-if __name__ != "__main__":
-    gunicorn_logger = logging.getLogger("gunicorn.error")
-    app.logger.handlers = gunicorn_logger.handlers
-    app.logger.setLevel(gunicorn_logger.level)
-
-# Log tracebacks on server errors
-@app.errorhandler(500)
-def print_server_error(exception):
-    """Print out the traceback and error message for all server errors."""
-    try:
-        orig_exc = exception.original_exception
-    except AttributeError:
-        orig_exc = exception
-    traceback.print_exception(type(orig_exc), orig_exc, orig_exc.__traceback__)
-
+app = Flask(__name__, static_folder=None)
+app.config.update(SETTINGS)
 
 # Enable CORS
-# TODO: be more selective about which domains can make requests
-CORS(app, resources={r"*": {"origins": "*"}})
+CORS(app, resources={r"*": {"origins": app.config["ALLOWED_CLIENT_URL"]}})
 
-# Register custom services
-register_services(app)
+# Generate empty Excel templates
+generate_all_templates(app.config["TEMPLATES_DIR"])
 
-# Bind the data model to the app's database engine
-db = app.data.driver
-BaseModel.metadata.bind = db.engine
-db.Model = BaseModel
+# Set up the database and run the migrations
+init_db(app)
 
-# Configure flask-migrate and upgrade the database
-# Note: while upgrades are performed automatically,
-# generating the migrations should be performed by hand
-# using the flask-migrate CLI, and the resulting files
-# should be checked into source control.
-Migrate(app, db, MIGRATIONS)
-with app.app_context():
-    upgrade(MIGRATIONS)
+# Wire up the API
+register_resources(app)
 
-# Generate empty manifest/assay templates on startup
-print(
-    f"Writing empty templates to {app.config['TEMPLATES_DIR']} (cidc_schemas=={cidc_schemas.__version__})"
-)
-cidc_schemas.template.generate_all_templates(app.config["TEMPLATES_DIR"])
+# Check that its auth configuration is validate
+validate_api_auth(app)
+
+
+@app.errorhandler(Exception)
+def handle_errors(e: Exception):
+    """Format exceptions as JSON, with status code and error message info."""
+    if isinstance(e, HTTPException):
+        status_code = e.code
+        _error = {}
+        if hasattr(e, "exc") and isinstance(e.exc, ValidationError):
+            _error["message"] = e.data["messages"]
+        else:
+            _error["message"] = e.description
+    else:
+        status_code = 500
+        # This is an internal server error, so log the traceback for debugging purposes.
+        traceback.print_exception(type(e), e, e.__traceback__)
+        _error = {
+            "message": "The server encountered an internal error and was unable to complete your request."
+        }
+
+    # Format errors to be backwards-compatible with Eve-style errors
+    eve_style_error_json = {"_status": "ERR", "_error": _error}
+    response = jsonify(eve_style_error_json)
+    response.status_code = status_code
+    return response
+
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000)

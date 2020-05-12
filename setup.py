@@ -11,9 +11,8 @@ setup(
     python_requires=">=3.6",
     install_requires=requirements,
     license="MIT license",
-    packages=["cidc_api.config"],
-    py_modules=["cidc_api.models", "cidc_api.gcloud_client", "cidc_api.emails"],
+    packages=["cidc_api.config", "cidc_api.models", "cidc_api.shared"],
     url="https://github.com/CIMAC-CIDC/cidc_api-gae",
-    version="0.17.3",
+    version="0.18.4",
     zip_safe=False,
 )

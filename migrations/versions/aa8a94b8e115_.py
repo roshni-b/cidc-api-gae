@@ -17,7 +17,7 @@ depends_on = None
 
 
 def upgrade():
-	# this will delete all but the most recently-updated downloadable_files record for each object_url
+    # this will delete all but the most recently-updated downloadable_files record for each object_url
     op.execute(
         """
         DELETE from 
