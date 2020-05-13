@@ -54,11 +54,27 @@ users["additional_records"] = [
 ]
 
 trial_metadata = {
-    "json": {"id": TEST_RECORD_ID, "trial_id": "foo", "metadata_json": {}},
+    "json": {
+        "id": TEST_RECORD_ID,
+        "trial_id": "foo",
+        "metadata_json": {
+            "protocol_identifier": "foo",
+            "allowed_collection_event_names": [],
+            "allowed_cohort_names": [],
+            "participants": [],
+        },
+    },
     "model": TrialMetadata,
     "allowed_methods": {"POST", "PATCH", "GET"},
     "lookup_field": "trial_id",
-    "PATCH_json": {"metadata_json": {"foo": "bar"}},
+    "PATCH_json": {
+        "metadata_json": {
+            "protocol_identifier": "foo",
+            "allowed_collection_event_names": ["bar"],
+            "allowed_cohort_names": ["buzz"],
+            "participants": [],
+        }
+    },
 }
 
 downloadable_files = {

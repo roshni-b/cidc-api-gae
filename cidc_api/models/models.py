@@ -28,6 +28,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import validates
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
@@ -36,7 +37,7 @@ from sqlalchemy.sql import expression
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.interfaces import ExecutionContext
 
-from cidc_schemas import prism, unprism
+from cidc_schemas import prism, unprism, json_validation
 
 from ..config.db import BaseModel
 from ..config.settings import (
@@ -345,6 +346,11 @@ class ValidationMultiError(Exception):
     pass
 
 
+trial_metadata_validator = json_validation.load_and_validate_schema(
+    "clinical_trial.json", return_validator=True
+)
+
+
 class TrialMetadata(CommonColumns):
     __tablename__ = "trial_metadata"
     # The CIMAC-determined trial id
@@ -353,6 +359,14 @@ class TrialMetadata(CommonColumns):
 
     # Create a GIN index on the metadata JSON blobs
     _metadata_idx = Index("metadata_idx", metadata_json, postgresql_using="gin")
+
+    @validates("metadata_json")
+    def validate_metadata_json(self, key, metadata_json):
+        errs = trial_metadata_validator.iter_errors(metadata_json)
+        messages = list(f"'metadata_json': {err.message}" for err in errs)
+        if messages:
+            raise ValidationMultiError(messages)
+        return metadata_json
 
     @staticmethod
     @with_default_session
