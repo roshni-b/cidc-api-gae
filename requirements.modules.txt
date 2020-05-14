@@ -4,6 +4,6 @@ flask-sqlalchemy~=2.4.0
 marshmallow-sqlalchemy==0.22.3
 google-cloud-storage~=1.25.0
 google-cloud-pubsub==0.42.1
-cidc-schemas~=0.16.18
+cidc-schemas~=0.16.20
 python-dotenv==0.10.3
 requests==2.22.0
