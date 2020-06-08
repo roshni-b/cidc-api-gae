@@ -16,8 +16,7 @@ from werkzeug.exceptions import (
 )
 from marshmallow.exceptions import ValidationError
 
-
-from ..models import CommonColumns, BaseModel, BaseSchema
+from ..models import CommonColumns, BaseModel, BaseSchema, ValidationMultiError
 from ..config.settings import ENV
 
 
@@ -42,16 +41,15 @@ def unmarshal_request(schema: BaseSchema, kwarg_name: str, load_sqla: bool = Tru
             if not request.json:
                 raise BadRequest("expected JSON data in request body")
 
-            if load_sqla:
-                try:
-                    body = schema.load(request.json)
-                except ValidationError as e:
-                    raise UnprocessableEntity(e.messages)
-            else:
-                body = request.json
-                errors = schema.validate(body)
-                if errors:
-                    raise UnprocessableEntity(errors)
+            body = request.json
+            try:
+                loaded_instance = schema.load(request.json)
+                if load_sqla:
+                    body = loaded_instance
+            except ValidationError as e:
+                raise UnprocessableEntity(e.messages)
+            except ValidationMultiError as e:
+                raise UnprocessableEntity({"errors": e.args[0]})
 
             kwargs[kwarg_name] = body
 

@@ -19,6 +19,7 @@ from cidc_api.models import (
     with_default_session,
     UploadJobStatus,
     NoResultFound,
+    ValidationMultiError,
 )
 from cidc_api.config.settings import (
     PAGINATION_PAGE_SIZE,
@@ -284,6 +285,13 @@ def test_create_trial_metadata(clean_db):
     assert trial
     assert trial.metadata_json == METADATA
 
+    # Check that you can't insert a trial with invalid metadata
+    with pytest.raises(ValidationMultiError, match="'buzz' was unexpected"):
+        TrialMetadata.create("foo", {"buzz": "bazz"})
+
+    with pytest.raises(ValidationMultiError, match="'buzz' was unexpected"):
+        TrialMetadata(trial_id="foo", metadata_json={"buzz": "bazz"}).insert()
+
 
 @db_test
 def test_trial_metadata_patch_manifest(clean_db):
@@ -546,7 +554,17 @@ def test_create_downloadable_file_from_blob(clean_db, monkeypatch):
     fake_blob.size = 5
     fake_blob.time_created = datetime.now()
 
-    clean_db.add(TrialMetadata(trial_id="id", metadata_json={}))
+    clean_db.add(
+        TrialMetadata(
+            trial_id="id",
+            metadata_json={
+                "protocol_identifier": "id",
+                "allowed_collection_event_names": [],
+                "allowed_cohort_names": [],
+                "participants": [],
+            },
+        )
+    )
     df = DownloadableFiles.create_from_blob(
         "id", "pbmc", "Shipping Manifest", fake_blob
     )

@@ -38,7 +38,15 @@ def setup_permissions(cidc_api, monkeypatch) -> Tuple[int, int]:
         other_user.insert()
 
         # Create trial
-        TrialMetadata.create(TRIAL_ID, {})
+        TrialMetadata.create(
+            TRIAL_ID,
+            {
+                "protocol_identifier": TRIAL_ID,
+                "allowed_collection_event_names": [],
+                "allowed_cohort_names": [],
+                "participants": [],
+            },
+        )
 
         # Create permissions
         def create_permission(uid, assay):

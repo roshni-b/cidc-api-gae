@@ -1,7 +1,6 @@
 from datetime import datetime
 from typing import Tuple
 
-from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 from cidc_api.models import (
     Users,
     DownloadableFiles,
@@ -34,7 +33,12 @@ upload_types = ["olink", "cytof"]
 def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
     """Insert two downloadable files into the database."""
     trial_id = "test-trial"
-    metadata_json = {PROTOCOL_ID_FIELD_NAME: trial_id, "participants": []}
+    metadata_json = {
+        "protocol_identifier": trial_id,
+        "allowed_collection_event_names": [],
+        "allowed_cohort_names": [],
+        "participants": [],
+    }
     trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
 
     def make_file(object_url, upload_type, analysis_friendly) -> DownloadableFiles:

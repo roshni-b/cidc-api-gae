@@ -22,9 +22,11 @@ trial_metadata_schema = TrialMetadataSchema()
 trial_metadata_list_schema = TrialMetadataListSchema()
 partial_trial_metadata_schema = TrialMetadataSchema(partial=True)
 
+trial_modifier_roles = [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
+
 
 @trial_metadata_bp.route("/", methods=["GET"])
-@requires_auth("trial_metadata", [CIDCRole.ADMIN.value])
+@requires_auth("trial_metadata", trial_modifier_roles)
 @use_args_with_pagination({}, trial_metadata_schema)
 @marshal_response(trial_metadata_list_schema)
 def list_trial_metadata(args, pagination_args):
@@ -36,7 +38,7 @@ def list_trial_metadata(args, pagination_args):
 
 
 @trial_metadata_bp.route("/", methods=["POST"])
-@requires_auth("trial_metadata_item", [CIDCRole.ADMIN.value])
+@requires_auth("trial_metadata_item", trial_modifier_roles)
 @unmarshal_request(trial_metadata_schema, "trial")
 @marshal_response(trial_metadata_schema, 201)
 def create_trial_metadata(trial):
@@ -50,7 +52,7 @@ def create_trial_metadata(trial):
 
 
 @trial_metadata_bp.route("/<int:trial>", methods=["GET"])
-@requires_auth("trial_metadata_item", [CIDCRole.ADMIN.value])
+@requires_auth("trial_metadata_item", trial_modifier_roles)
 @lookup(TrialMetadata, "trial")
 @marshal_response(trial_metadata_schema)
 def get_trial_metadata(trial):
@@ -59,7 +61,7 @@ def get_trial_metadata(trial):
 
 
 @trial_metadata_bp.route("/<string:trial>", methods=["GET"])
-@requires_auth("trial_metadata_item", [CIDCRole.ADMIN.value])
+@requires_auth("trial_metadata_item", trial_modifier_roles)
 @lookup(TrialMetadata, "trial", find_func=TrialMetadata.find_by_trial_id)
 @marshal_response(trial_metadata_schema)
 def get_trial_metadata_by_trial_id(trial):
@@ -68,7 +70,7 @@ def get_trial_metadata_by_trial_id(trial):
 
 
 @trial_metadata_bp.route("/<int:trial>", methods=["PATCH"])
-@requires_auth("trial_metadata_item", [CIDCRole.ADMIN.value])
+@requires_auth("trial_metadata_item", trial_modifier_roles)
 @lookup(TrialMetadata, "trial", check_etag=True)
 @unmarshal_request(partial_trial_metadata_schema, "trial_updates", load_sqla=False)
 @marshal_response(trial_metadata_schema, 200)
@@ -80,7 +82,7 @@ def update_trial_metadata(trial, trial_updates):
 
 
 @trial_metadata_bp.route("/<string:trial>", methods=["PATCH"])
-@requires_auth("trial_metadata_item", [CIDCRole.ADMIN.value])
+@requires_auth("trial_metadata_item", trial_modifier_roles)
 @lookup(
     TrialMetadata, "trial", check_etag=True, find_func=TrialMetadata.find_by_trial_id
 )

@@ -13,7 +13,12 @@ def mock_current_user(user: Users, monkeypatch):
 
 def make_admin(user_id, app):
     """Update the user with id `user_id`'s role to cidc-admin."""
+    make_role(user_id, CIDCRole.ADMIN.value, app)
+
+
+def make_role(user_id, role, app):
+    """Update the user with id `user_id`'s role to `role`."""
     with app.app_context():
         user = Users.find_by_id(user_id)
-        user.role = CIDCRole.ADMIN.value
+        user.role = role
         user.update()
