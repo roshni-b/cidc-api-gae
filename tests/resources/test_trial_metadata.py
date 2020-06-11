@@ -64,20 +64,20 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
 def test_get_trial(cidc_api, clean_db, monkeypatch):
     """Check that getting a single trial works as expected"""
     user_id = setup_user(cidc_api, monkeypatch)
-    trial_id, _ = set(setup_trial_metadata(cidc_api))
+    trial_record_id, _ = set(setup_trial_metadata(cidc_api))
     with cidc_api.app_context():
-        trial = TrialMetadata.find_by_id(trial_id)
+        trial = TrialMetadata.find_by_id(trial_record_id)
 
     client = cidc_api.test_client()
 
     # Non-admins can't get single trials
-    res = client.get(f"/trial_metadata/{trial_id}")
+    res = client.get(f"/trial_metadata/{trial.trial_id}")
     assert res.status_code == 401
 
     # Allowed users can get single trials
     for role in trial_modifier_roles:
         make_role(user_id, role, cidc_api)
-        res = client.get(f"/trial_metadata/{trial_id}")
+        res = client.get(f"/trial_metadata/{trial.trial_id}")
         assert res.status_code == 200
         assert res.json == TrialMetadataSchema().dump(trial)
 
@@ -169,30 +169,32 @@ def test_create_trial(cidc_api, clean_db, monkeypatch):
 def test_update_trial(cidc_api, clean_db, monkeypatch):
     """Check that updating a trial works as expected"""
     user_id = setup_user(cidc_api, monkeypatch)
-    trial_id, _ = set(setup_trial_metadata(cidc_api))
+    trial_record_id, _ = set(setup_trial_metadata(cidc_api))
     with cidc_api.app_context():
-        trial = TrialMetadata.find_by_id(trial_id)
+        trial = TrialMetadata.find_by_id(trial_record_id)
 
     client = cidc_api.test_client()
 
     # Non-admins can't update single trials
-    res = client.patch(f"/trial_metadata/{trial_id}")
+    res = client.patch(f"/trial_metadata/{trial.trial_id}")
     assert res.status_code == 401
 
     for role in trial_modifier_roles:
         make_role(user_id, role, cidc_api)
 
         # A missing ETag blocks an update
-        res = client.patch(f"/trial_metadata/{trial_id}")
+        res = client.patch(f"/trial_metadata/{trial.trial_id}")
         assert res.status_code == 428
 
         # An incorrect ETag blocks an update
-        res = client.patch(f"/trial_metadata/{trial_id}", headers={"If-Match": "foo"})
+        res = client.patch(
+            f"/trial_metadata/{trial.trial_id}", headers={"If-Match": "foo"}
+        )
         assert res.status_code == 412
 
         # No trial can be updated to have invalid metadata
         res = client.patch(
-            f"/trial_metadata/{trial_id}",
+            f"/trial_metadata/{trial.trial_id}",
             headers={"If-Match": trial._etag},
             json={"metadata_json": bad_trial_json["metadata_json"]},
         )
@@ -206,7 +208,7 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
             "allowed_cohort_names": ["buzz"],
         }
         res = client.patch(
-            f"/trial_metadata/{trial_id}",
+            f"/trial_metadata/{trial.trial_id}",
             headers={"If-Match": trial._etag},
             json={"metadata_json": new_metadata_json},
         )
@@ -216,4 +218,4 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
         assert res.json["metadata_json"] == new_metadata_json
 
         with cidc_api.app_context():
-            trial = TrialMetadata.find_by_id(trial_id)
+            trial = TrialMetadata.find_by_id(trial.id)
