@@ -253,21 +253,22 @@ def test_disable_inactive_users(clean_db):
     """Check that the disable_inactive_users method disables users appropriately"""
     # Create two users who should be disabled, and one who should not
     now = datetime.now()
-    Users(email="1", _accessed=now - timedelta(days=INACTIVE_USER_DAYS)).insert()
-    Users(email="2", _accessed=now - timedelta(days=INACTIVE_USER_DAYS + 5)).insert()
-    Users(email="3", _accessed=now - timedelta(days=INACTIVE_USER_DAYS - 1)).insert()
+    Users(email="1@", _accessed=now - timedelta(days=INACTIVE_USER_DAYS)).insert()
+    Users(email="2@", _accessed=now - timedelta(days=INACTIVE_USER_DAYS + 5)).insert()
+    Users(email="3@", _accessed=now - timedelta(days=INACTIVE_USER_DAYS - 1)).insert()
 
     # All users start off enabled
     for user in Users.list():
         assert user.disabled == False
 
     disabled = Users.disable_inactive_users()
-    
+    disabled = [u for u in disabled]
+
     assert len(disabled)
 
     users = Users.list()
     assert len([u for u in users if u.disabled]) == len(disabled)
-    assert [u for u in users if not u.disabled][0].email == "3"
+    assert [u for u in users if not u.disabled][0].email == "3@"
 
 
 TRIAL_ID = "cimac-12345"
