@@ -261,10 +261,12 @@ def test_disable_inactive_users(clean_db):
     for user in Users.list():
         assert user.disabled == False
 
-    Users.disable_inactive_users()
+    disabled = Users.disable_inactive_users()
+    
+    assert len(disabled)
 
     users = Users.list()
-    assert len([u for u in users if u.disabled])
+    assert len([u for u in users if u.disabled]) == len(disabled)
     assert [u for u in users if not u.disabled][0].email == "3"
 
 
