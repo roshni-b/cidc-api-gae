@@ -71,7 +71,7 @@ def test_list_permissions(cidc_api, clean_db, monkeypatch):
     client = cidc_api.test_client()
 
     # Check that user can get their own permissions
-    res = client.get("permissions")
+    res = client.get(f"permissions?user_id={current_user_id}")
     assert res.status_code == 200
     assert len(res.json["_items"]) == 2
     assert res.json["_meta"]["total"] == 2
