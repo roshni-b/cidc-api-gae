@@ -28,7 +28,7 @@ permission_list_schema = PermissionListSchema()
 
 @permissions_bp.route("/", methods=["GET"])
 @requires_auth("permissions")
-@use_args({"user_id": fields.Str()}, location="query")
+@use_args({"user_id": fields.Int()}, location="query")
 @marshal_response(permission_list_schema)
 def list_permissions(args: dict):
     """

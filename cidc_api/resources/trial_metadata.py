@@ -51,33 +51,12 @@ def create_trial_metadata(trial):
     return trial
 
 
-@trial_metadata_bp.route("/<int:trial>", methods=["GET"])
-@requires_auth("trial_metadata_item", trial_modifier_roles)
-@lookup(TrialMetadata, "trial")
-@marshal_response(trial_metadata_schema)
-def get_trial_metadata(trial):
-    """Get one trial metadata record by ID."""
-    return trial
-
-
 @trial_metadata_bp.route("/<string:trial>", methods=["GET"])
 @requires_auth("trial_metadata_item", trial_modifier_roles)
 @lookup(TrialMetadata, "trial", find_func=TrialMetadata.find_by_trial_id)
 @marshal_response(trial_metadata_schema)
 def get_trial_metadata_by_trial_id(trial):
     """Get one trial metadata record by trial identifier."""
-    return trial
-
-
-@trial_metadata_bp.route("/<int:trial>", methods=["PATCH"])
-@requires_auth("trial_metadata_item", trial_modifier_roles)
-@lookup(TrialMetadata, "trial", check_etag=True)
-@unmarshal_request(partial_trial_metadata_schema, "trial_updates", load_sqla=False)
-@marshal_response(trial_metadata_schema, 200)
-def update_trial_metadata(trial, trial_updates):
-    """Update an existing trial metadata record."""
-    trial.update(changes=trial_updates)
-
     return trial
 
 
