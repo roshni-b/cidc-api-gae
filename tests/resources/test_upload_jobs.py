@@ -7,6 +7,9 @@ from typing import Tuple
 
 import pytest
 from werkzeug.exceptions import (
+    NotFound,
+    Unauthorized,
+    UnprocessableEntity,
     HTTPException,
     InternalServerError,
     BadRequest,
@@ -20,7 +23,10 @@ from cidc_schemas.prism import (
 )
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
-from cidc_api.resources.upload_jobs import extract_schema_and_xlsx
+from cidc_api.resources.upload_jobs import (
+    extract_schema_and_xlsx,
+    requires_upload_token_auth,
+)
 from cidc_api.models import (
     TrialMetadata,
     Users,
@@ -172,6 +178,68 @@ def test_get_upload_job(cidc_api, clean_db, monkeypatch):
     assert res.json["id"] == other_job
 
 
+def test_requires_upload_token_auth(cidc_api, clean_db, monkeypatch):
+    """Check that the requires_upload_token_auth decorator works as expected"""
+    user_id = setup_trial_and_user(cidc_api, monkeypatch)
+    job_id = setup_upload_jobs(cidc_api)[0]
+    with cidc_api.app_context():
+        job = UploadJobs.find_by_id(job_id)
+
+    test_route = "/foobarfoo"
+
+    @requires_upload_token_auth
+    def endpoint(*args, **kwargs):
+        assert "upload_job" in kwargs
+        return "ok", 200
+
+    query_route = f"{test_route}/{job_id}"
+    nonexistent_job_id = "9999999"
+
+    # User must provide `token` query param
+    with cidc_api.test_request_context(query_route):
+        with pytest.raises(UnprocessableEntity) as e:
+            endpoint(upload_job=job_id)
+        assert e._excinfo[1].data["messages"]["query"]["token"] == [
+            "Missing data for required field."
+        ]
+
+    # User must provide correct `token` query param
+    with cidc_api.test_request_context(f"{query_route}?token={'bad token'}"):
+        with pytest.raises(
+            Unauthorized, match="upload_job token authentication failed"
+        ):
+            endpoint(upload_job=job_id)
+
+    with cidc_api.test_request_context(f"{query_route}?token={job.token}"):
+        assert endpoint(upload_job=job_id) == ("ok", 200)
+
+    # User whose id token authentication succeeds gets a 404 if the relevant job doesn't exist
+    with cidc_api.test_request_context(
+        f"{test_route}/{nonexistent_job_id}?token={job.token}"
+    ):
+        with pytest.raises(NotFound):
+            endpoint(upload_job=nonexistent_job_id)
+
+    monkeypatch.setattr(
+        "cidc_api.resources.upload_jobs.authenticate_and_get_user",
+        lambda *args, **kwargs: None,
+    )
+
+    # User whose id token authentication fails can still successfully authenticate
+    # using an upload token.
+    with cidc_api.test_request_context(f"{query_route}?token={job.token}"):
+        assert endpoint(upload_job=job_id) == ("ok", 200)
+
+    # User whose id token authentication fails gets a 401 if the relevant job doesn't exist
+    with cidc_api.test_request_context(
+        f"{test_route}/{nonexistent_job_id}?token={job.token}"
+    ):
+        with pytest.raises(
+            Unauthorized, match="upload_job token authentication failed"
+        ):
+            endpoint(upload_job=nonexistent_job_id)
+
+
 def test_update_upload_job(cidc_api, clean_db, monkeypatch):
     """Check that getting a updating an upload job by ID works as expected."""
     user_id = setup_trial_and_user(cidc_api, monkeypatch)
@@ -196,27 +264,36 @@ def test_update_upload_job(cidc_api, clean_db, monkeypatch):
     upload_failure = {"status": UploadJobStatus.UPLOAD_FAILED.value}
     invalid_update = {"status": UploadJobStatus.MERGE_COMPLETED.value}
 
-    # A cimac user doesn't have permissions to PATCH against this endpoint
+    # A user gets error if they fail to provide an upload token
     res = client.patch(f"/upload_jobs/{other_job}", json=upload_success)
-    assert res.status_code == 401
+    assert res.status_code == 422
     publish_success.assert_not_called()
     revoke_upload_access.assert_not_called()
 
-    # A biofx user can't find upload jobs that they don't own
-    make_cimac_biofx_user(user_id, cidc_api)
+    # A user gets an authentication error if they provide an incorrect upload token
     res = client.patch(
-        f"/upload_jobs/{other_job}",
+        f"/upload_jobs/{other_job}?token=nope",
         headers={"if-match": other_job_record._etag},
         json=upload_success,
     )
-    assert res.status_code == 404
+    assert res.status_code == 401
+    assert res.json["_error"]["message"] == "upload_job token authentication failed"
     publish_success.assert_not_called()
     revoke_upload_access.assert_not_called()
 
-    # A biofx user can update their own job to be a failure
+    # A user gets an error if they try to update something besides the job's status
     res = client.patch(
-        f"/upload_jobs/{user_job}",
-        headers={"if-match": user_job_record._etag},
+        f"/upload_jobs/{other_job}?token={other_job_record.token}",
+        headers={"if-match": other_job_record._etag},
+        json={"uploader_email": "foo@bar.com", "status": ""},
+    )
+    assert res.status_code == 422
+    assert res.json["_error"]["message"]["uploader_email"][0] == "Unknown field."
+
+    # A user providing a correct token can update their job's status to be a failure
+    res = client.patch(
+        f"/upload_jobs/{other_job}?token={other_job_record.token}",
+        headers={"if-match": other_job_record._etag},
         json=upload_failure,
     )
     assert res.status_code == 200
@@ -228,9 +305,9 @@ def test_update_upload_job(cidc_api, clean_db, monkeypatch):
         user_job_record._set_status_no_validation(UploadJobStatus.STARTED.value)
         user_job_record.update()
 
-    # A biofx user can update their own job to be a success
+    # A user can update a job to be a success
     res = client.patch(
-        f"/upload_jobs/{user_job}",
+        f"/upload_jobs/{user_job}?token={user_job_record.token}",
         headers={"if-match": user_job_record._etag},
         json=upload_success,
     )
@@ -240,25 +317,13 @@ def test_update_upload_job(cidc_api, clean_db, monkeypatch):
     publish_success.reset_mock()
     revoke_upload_access.reset_mock()
 
-    # An admin can update another user's job
-    make_admin(user_id, cidc_api)
-    res = client.patch(
-        f"/upload_jobs/{other_job}",
-        headers={"if-match": other_job_record._etag},
-        json=upload_success,
-    )
-    assert res.status_code == 200
-    publish_success.assert_called_once_with(other_job)
-    revoke_upload_access.assert_called_once()
-    publish_success.reset_mock()
-    revoke_upload_access.reset_mock()
-
     with cidc_api.app_context():
+        user_job_record._set_status_no_validation(UploadJobStatus.STARTED.value)
         user_job_record.update()
 
-    # No user (admins included) can make an illegal state transition
+    # Users can't make an illegal state transition
     res = client.patch(
-        f"/upload_jobs/{user_job}",
+        f"/upload_jobs/{user_job}?token={user_job_record.token}",
         headers={"if-match": user_job_record._etag},
         json=invalid_update,
     )
@@ -699,7 +764,7 @@ def test_upload_wes(cidc_api, clean_db, monkeypatch):
 
     # Report an upload failure
     res = client.patch(
-        update_url,
+        f"{update_url}?token={res.json['token']}",
         json={"status": UploadJobStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
@@ -717,7 +782,7 @@ def test_upload_wes(cidc_api, clean_db, monkeypatch):
 
     # Report an upload success
     res = client.patch(
-        update_url,
+        f"{update_url}?token={res.json['token']}",
         json={"status": UploadJobStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": _etag},
     )
@@ -801,7 +866,7 @@ def test_upload_olink(cidc_api, clean_db, monkeypatch):
 
     # Report an upload failure
     res = client.patch(
-        update_url,
+        f"{update_url}?token={res.json['token']}",
         json={"status": UploadJobStatus.UPLOAD_FAILED.value},
         headers={"If-Match": res.json["job_etag"]},
     )
@@ -814,7 +879,7 @@ def test_upload_olink(cidc_api, clean_db, monkeypatch):
     # is UPLOAD_FAILED, the API shouldn't permit this status to be updated to
     # UPLOAD_COMPLETED.
     bad_res = client.patch(
-        update_url,
+        f"{update_url}?token={res.json['token']}",
         json={"status": UploadJobStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": res.json["_etag"]},
     )
@@ -832,7 +897,7 @@ def test_upload_olink(cidc_api, clean_db, monkeypatch):
         _etag = job._etag
 
     res = client.patch(
-        update_url,
+        f"{update_url}?token={res.json['token']}",
         json={"status": UploadJobStatus.UPLOAD_COMPLETED.value},
         headers={"If-Match": _etag},
     )
@@ -854,41 +919,30 @@ def test_poll_upload_merge_status(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         other_user = Users(email="other@email.com")
         other_user.insert()
-        upload_1 = UploadJobs.create(
+        upload_job = UploadJobs.create(
             upload_type="wes",
             uploader_email=user.email,
             gcs_file_map={},
             metadata=metadata,
             gcs_xlsx_uri="",
         )
-        upload_1.insert()
-
-        upload_2 = UploadJobs.create(
-            upload_type="wes",
-            uploader_email=other_user.email,
-            gcs_file_map={},
-            metadata=metadata,
-            gcs_xlsx_uri="",
-        )
-        upload_2.insert()
-
-        user_created = upload_1.id
-        not_user_created = upload_2.id
+        upload_job.insert()
+        upload_job_id = upload_job.id
 
     client = cidc_api.test_client()
 
     # Upload not found
-    res = client.get("/ingestion/poll_upload_merge_status?id=12345")
+    res = client.get(
+        f"/ingestion/poll_upload_merge_status/12345?token={upload_job.token}"
+    )
     assert res.status_code == 404
 
-    # Upload not created by user
-    res = client.get(f"/ingestion/poll_upload_merge_status?id={not_user_created}")
-    assert res.status_code == 404
-
-    user_created_url = f"/ingestion/poll_upload_merge_status?id={user_created}"
+    upload_job_url = (
+        f"/ingestion/poll_upload_merge_status/{upload_job_id}?token={upload_job.token}"
+    )
 
     # Upload not-yet-ready
-    res = client.get(user_created_url)
+    res = client.get(upload_job_url)
     assert res.status_code == 200
     assert "retry_in" in res.json and res.json["retry_in"] == 5
     assert "status" not in res.json
@@ -900,13 +954,12 @@ def test_poll_upload_merge_status(cidc_api, clean_db, monkeypatch):
     ]:
         # Simulate cloud function merge status update
         with cidc_api.app_context():
-            upload = UploadJobs.find_by_id_and_email(user_created, user.email)
-            upload._set_status_no_validation(status)
-            upload.status_details = test_details
-            upload.update()
+            upload_job._set_status_no_validation(status)
+            upload_job.status_details = test_details
+            upload_job.update()
 
         # Upload ready
-        res = client.get(user_created_url)
+        res = client.get(upload_job_url)
         assert res.status_code == 200
         assert "retry_in" not in res.json
         assert "status" in res.json and res.json["status"] == status

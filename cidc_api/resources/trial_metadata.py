@@ -10,7 +10,7 @@ from ..models import (
     IntegrityError,
 )
 from ..shared.rest_utils import (
-    lookup,
+    with_lookup,
     marshal_response,
     unmarshal_request,
     use_args_with_pagination,
@@ -53,7 +53,7 @@ def create_trial_metadata(trial):
 
 @trial_metadata_bp.route("/<string:trial>", methods=["GET"])
 @requires_auth("trial_metadata_item", trial_modifier_roles)
-@lookup(TrialMetadata, "trial", find_func=TrialMetadata.find_by_trial_id)
+@with_lookup(TrialMetadata, "trial", find_func=TrialMetadata.find_by_trial_id)
 @marshal_response(trial_metadata_schema)
 def get_trial_metadata_by_trial_id(trial):
     """Get one trial metadata record by trial identifier."""
@@ -62,7 +62,7 @@ def get_trial_metadata_by_trial_id(trial):
 
 @trial_metadata_bp.route("/<string:trial>", methods=["PATCH"])
 @requires_auth("trial_metadata_item", trial_modifier_roles)
-@lookup(
+@with_lookup(
     TrialMetadata, "trial", check_etag=True, find_func=TrialMetadata.find_by_trial_id
 )
 @unmarshal_request(partial_trial_metadata_schema, "trial_updates", load_sqla=False)

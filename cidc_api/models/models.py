@@ -33,8 +33,8 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.query import Query
-from sqlalchemy.sql import expression
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.sql import expression, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.engine.interfaces import ExecutionContext
 
 from cidc_schemas import prism, unprism, json_validation
@@ -561,6 +561,8 @@ class UploadJobs(CommonColumns):
     _status = Column(
         "status", Enum(*UPLOAD_STATUSES, name="upload_job_status"), nullable=False
     )
+    # A long, random identifier for this upload job
+    token = Column(UUID, server_default=text("gen_random_uuid()"), nullable=False)
     # Text containing feedback on why the upload status is what it is
     status_details = Column(String, nullable=True)
     # Whether the upload contains multiple files

@@ -29,7 +29,7 @@ ALLOWED_CLIENT_URL = environ.get("ALLOWED_CLIENT_URL")
 
 ### Configure miscellaneous constants ###
 TEMPLATES_DIR = path.join("/tmp", "templates")
-MIN_CLI_VERSION = "0.8.4"
+MIN_CLI_VERSION = "0.9.0"
 PAGINATION_PAGE_SIZE = 25
 MAX_PAGINATION_PAGE_SIZE = 200
 INACTIVE_USER_DAYS = 60

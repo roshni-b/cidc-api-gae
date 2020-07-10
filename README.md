@@ -53,11 +53,13 @@ psql -c "create user cidcdev with password '1234'"
 psql -c "create database cidc"
 psql -c "grant all privileges on database cidc to cidcdev"
 psql cidc -c "create extension citext"
+psql cidc -c "create extension pgcrypto"
 
 # Database to use for automated testing
 psql -c "create database cidctest"
 psql -c "grant all privileges on database cidctest to cidcdev"
 psql cidctest -c "create extension citext"
+psql cidctest -c "create extension pgcrypto"
 ```
 Now, you should be able to connect to your development database with the URI `postgresql://cidcdev:1234@localhost:5432/cidc`. Or, in the postgres REPL:
 ```bash
