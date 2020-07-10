@@ -355,26 +355,14 @@ def upload_manifest(
     except prism.ValidationMultiError as e:
         raise BadRequest({"errors": e.args[0]})
 
-    gcs_blob = gcloud_client.upload_xlsx_to_gcs(
-        trial.trial_id, "manifest", template_type, xlsx_file, upload_moment
-    )
     # TODO maybe rely on default session
     session = Session.object_session(trial)
 
-    DownloadableFiles.create_from_blob(
-        trial.trial_id,
-        template_type,
-        "Shipping Manifest",
-        gcs_blob,
-        session=session,
-        commit=False,
-    )
-
+    
     manifest_upload = UploadJobs.create(
         upload_type=template_type,
         uploader_email=user.email,
         metadata=md_patch,
-        gcs_xlsx_uri=gcs_blob.name,
         gcs_file_map=None,
         session=session,
         send_email=True,
