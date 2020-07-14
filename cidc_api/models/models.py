@@ -282,10 +282,12 @@ class Users(CommonColumns):
             update(Users)
             .where(Users._accessed < user_inactivity_cutoff)
             .values(disabled=True)
+            .returning(Users.email)
         )
-        session.execute(update_query)
+        res = session.execute(update_query)
         if commit:
             session.commit()
+        return res
 
 
 class Permissions(CommonColumns):
