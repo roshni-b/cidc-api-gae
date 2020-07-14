@@ -295,7 +295,6 @@ def upload_handler(allowed_types: List[str]):
                 for e in validations.json["errors"]:
                     print(f"\t{e}")
                 errors_so_far.extend(validations.json["errors"])
-            
 
             md_patch, file_infos, errors = prism.prismify(xlsx, template)
             print(f"prismified: {len(errors)} errors, {len(file_infos)} file_infos")
