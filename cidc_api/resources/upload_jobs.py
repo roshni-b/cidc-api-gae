@@ -284,18 +284,25 @@ def upload_handler(allowed_types: List[str]):
             xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
             print(f"xlsx parsed: {len(errors)} errors")
             if errors:
+                for e in errors:
+                    print(f"\t{e}")
                 errors_so_far.extend(errors)
 
             # Run basic validations on the provided Excel file
             validations = validate(template, xlsx)
-            if len(validations.json["errors"]) > 0:
-                errors_so_far.extend(validations.json["errors"])
             print(f"xlsx validated: {len(validations.json['errors'])} errors")
+            if len(validations.json["errors"]) > 0:
+                for e in validations.json["errors"]:
+                    print(f"\t{e}")
+                errors_so_far.extend(validations.json["errors"])
+            
 
             md_patch, file_infos, errors = prism.prismify(xlsx, template)
-            if errors:
-                errors_so_far.extend(errors)
             print(f"prismified: {len(errors)} errors, {len(file_infos)} file_infos")
+            if errors:
+                for e in errors:
+                    print(f"\t{e}")
+                errors_so_far.extend(errors)
 
             try:
                 trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
@@ -343,6 +350,8 @@ def upload_handler(allowed_types: List[str]):
                 ) from e
             print(f"merged: {len(errors)} errors")
             if errors:
+                for e in errors:
+                    print(f"\t{e}")
                 errors_so_far.extend(errors)
 
             if errors_so_far:
