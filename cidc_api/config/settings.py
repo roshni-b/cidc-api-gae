@@ -34,6 +34,8 @@ PAGINATION_PAGE_SIZE = 25
 MAX_PAGINATION_PAGE_SIZE = 200
 INACTIVE_USER_DAYS = 60
 
+### Configure prism encrypt ###
+PRISM_ENCRYPT_KEY = environ["PRISM_ENCRYPT_KEY"]
 
 ### Configure Flask-SQLAlchemy ###
 SQLALCHEMY_DATABASE_URI = get_sqlalchemy_database_uri(TESTING)

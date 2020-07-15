@@ -37,7 +37,7 @@ from ..shared.rest_utils import (
     unmarshal_request,
     use_args_with_pagination,
 )
-from ..config.settings import GOOGLE_UPLOAD_BUCKET
+from ..config.settings import GOOGLE_UPLOAD_BUCKET, PRISM_ENCRYPT_KEY
 from ..models import (
     UploadJobs,
     UploadJobSchema,
@@ -50,6 +50,8 @@ from ..models import (
     CIDCRole,
     Users,
 )
+
+prism.set_prism_encrypt_key(PRISM_ENCRYPT_KEY)
 
 # TODO: consolidate ingestion blueprint into upload_jobs blueprint
 ingestion_bp = Blueprint("ingestion", __name__)
