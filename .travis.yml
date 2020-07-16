@@ -24,7 +24,6 @@ before_script:
   - psql -c "create database cidctest"
   - psql -c "grant all privileges on database cidctest to cidcdev"
   - psql cidctest -c "create extension citext"
-  - psql cidctest --tuples-only -c  "select * from alembic_version"
   - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
   - chmod +x ./cc-test-reporter
   - ./cc-test-reporter before-build
