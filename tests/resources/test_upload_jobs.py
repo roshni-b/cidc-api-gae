@@ -588,7 +588,7 @@ def test_upload_manifest_twice(cidc_api, clean_db, monkeypatch):
     mocks.publish_patient_sample_update.assert_called_once()
 
     with cidc_api.app_context():
-        assert not DownloadableFiles.list() # manifest is not stored
+        assert not DownloadableFiles.list()  # manifest is not stored
 
     # uploading second time
     res = client.post(
@@ -596,10 +596,10 @@ def test_upload_manifest_twice(cidc_api, clean_db, monkeypatch):
     )
     assert res.status_code == 200
 
-    assert mocks.upload_xlsx.call_count == 0 # manifest is not stored
+    assert mocks.upload_xlsx.call_count == 0  # manifest is not stored
 
     with cidc_api.app_context():
-        assert not DownloadableFiles.list() # manifest is not stored
+        assert not DownloadableFiles.list()  # manifest is not stored
 
 
 finfo = LocalFileUploadEntry
