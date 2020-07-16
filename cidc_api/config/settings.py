@@ -35,7 +35,11 @@ MAX_PAGINATION_PAGE_SIZE = 200
 INACTIVE_USER_DAYS = 60
 
 ### Configure prism encrypt ###
-PRISM_ENCRYPT_KEY = environ["PRISM_ENCRYPT_KEY"]
+if not TESTING:
+    secret_manager = get_secrets_manager()
+    PRISM_ENCRYPT_KEY = secret_manager.get("PRISM_ENCRYPT_KEY")
+else:
+    PRISM_ENCRYPT_KEY = environ.get("PRISM_ENCRYPT_KEY")
 
 ### Configure Flask-SQLAlchemy ###
 SQLALCHEMY_DATABASE_URI = get_sqlalchemy_database_uri(TESTING)
