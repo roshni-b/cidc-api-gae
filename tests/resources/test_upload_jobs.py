@@ -435,7 +435,6 @@ class UploadMocks:
         )
 
     def make_all_assertions(self):
-        self.upload_xlsx.assert_called_once()
         self.prismify.assert_called_once()
         self.open_xlsx.assert_called_once()
         self.iter_errors.assert_called_once()
@@ -653,11 +652,8 @@ def test_upload_manifest_twice(cidc_api, clean_db, monkeypatch):
     # Check that we tried to publish a patient/sample update
     mocks.publish_patient_sample_update.assert_called_once()
 
-    # Check that we tried to upload the excel file
-    mocks.upload_xlsx.assert_called_once()
-
     with cidc_api.app_context():
-        assert 1 == len(DownloadableFiles.list())
+        assert not DownloadableFiles.list()  # manifest is not stored
 
     # uploading second time
     res = client.post(
@@ -665,10 +661,10 @@ def test_upload_manifest_twice(cidc_api, clean_db, monkeypatch):
     )
     assert res.status_code == 200
 
-    assert mocks.upload_xlsx.call_count == 2
+    assert mocks.upload_xlsx.call_count == 0  # manifest is not stored
 
     with cidc_api.app_context():
-        assert 1 == len(DownloadableFiles.list())
+        assert not DownloadableFiles.list()  # manifest is not stored
 
 
 finfo = LocalFileUploadEntry

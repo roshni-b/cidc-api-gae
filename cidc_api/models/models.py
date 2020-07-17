@@ -573,7 +573,7 @@ class UploadJobs(CommonColumns):
     # For single file UploadJobs, this field is null.
     gcs_file_map = Column(JSONB, nullable=True)
     # track the GCS URI of the .xlsx file used for this upload
-    gcs_xlsx_uri = Column(String, nullable=False)
+    gcs_xlsx_uri = Column(String, nullable=True)
     # The parsed JSON metadata blob associated with this upload
     metadata_patch = Column(JSONB, nullable=False)
     # The type of upload (pbmc, wes, olink, wes_analysis, ...)
