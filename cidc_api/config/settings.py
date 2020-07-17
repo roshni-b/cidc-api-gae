@@ -29,11 +29,17 @@ ALLOWED_CLIENT_URL = environ.get("ALLOWED_CLIENT_URL")
 
 ### Configure miscellaneous constants ###
 TEMPLATES_DIR = path.join("/tmp", "templates")
-MIN_CLI_VERSION = "0.8.4"
+MIN_CLI_VERSION = "0.9.0"
 PAGINATION_PAGE_SIZE = 25
 MAX_PAGINATION_PAGE_SIZE = 200
 INACTIVE_USER_DAYS = 60
 
+### Configure prism encrypt ###
+if not TESTING:
+    secret_manager = get_secrets_manager()
+    PRISM_ENCRYPT_KEY = secret_manager.get("PRISM_ENCRYPT_KEY")
+else:
+    PRISM_ENCRYPT_KEY = environ.get("PRISM_ENCRYPT_KEY")
 
 ### Configure Flask-SQLAlchemy ###
 SQLALCHEMY_DATABASE_URI = get_sqlalchemy_database_uri(TESTING)

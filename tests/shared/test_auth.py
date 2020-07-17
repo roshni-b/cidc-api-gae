@@ -2,7 +2,7 @@ from datetime import datetime, date
 
 import pytest
 from jose import jwt
-from flask import Flask
+from flask import Flask, g
 from werkzeug.exceptions import Unauthorized, BadRequest, PreconditionFailed
 
 from cidc_api.models import Users, CIDCRole
@@ -105,6 +105,22 @@ def test_requires_auth(empty_app, monkeypatch):
     response = client.get("/test")
     assert response.status_code == 200
     assert response.data == b"ok!"
+
+
+def test_authenticate_and_get_user(cidc_api, monkeypatch):
+    """Check that authenticate_and_get_user works as expected"""
+    # Auth success
+    monkeypatch.setattr("cidc_api.shared.auth.check_auth", lambda *args: True)
+    test_user = Users(email="test@email.com")
+    with cidc_api.app_context():
+        auth._set_current_user(test_user)
+        user = auth.authenticate_and_get_user()
+        assert user == test_user
+
+    # Auth failure
+    monkeypatch.setattr("cidc_api.shared.auth.check_auth", make_raiser(Exception))
+    user = auth.authenticate_and_get_user()
+    assert user is None
 
 
 def test_check_auth_smoketest(monkeypatch, cidc_api):

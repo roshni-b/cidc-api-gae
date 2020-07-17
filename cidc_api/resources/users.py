@@ -8,7 +8,7 @@ from ..shared import gcloud_client
 from ..shared.auth import get_current_user, requires_auth
 from ..shared.emails import new_user_registration, confirm_account_approval
 from ..shared.rest_utils import (
-    lookup,
+    with_lookup,
     marshal_response,
     unmarshal_request,
     use_args_with_pagination,
@@ -88,7 +88,7 @@ def list_users(args, pagination_args):
 
 @users_bp.route("/<int:user>", methods=["GET"])
 @requires_auth("users_item", [CIDCRole.ADMIN.value])
-@lookup(Users, "user")
+@with_lookup(Users, "user")
 @marshal_response(user_schema)
 def get_user(user: Users):
     """Get a single user by their id."""
@@ -97,7 +97,7 @@ def get_user(user: Users):
 
 @users_bp.route("/<int:user>", methods=["PATCH"])
 @requires_auth("users_item", [CIDCRole.ADMIN.value])
-@lookup(Users, "user", check_etag=True)
+@with_lookup(Users, "user", check_etag=True)
 @unmarshal_request(partial_user_schema, "user_updates", load_sqla=False)
 @marshal_response(user_schema)
 def update_user(user: Users, user_updates: Users):

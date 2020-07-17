@@ -1,6 +1,6 @@
 """Shared utility functions for building CIDC API resource endpoints."""
 from functools import wraps
-from typing import Optional, List, Callable
+from typing import Optional, List, Callable, Union
 
 from flask import Flask, current_app as app, request, Response, jsonify
 from webargs import fields
@@ -84,59 +84,72 @@ def marshal_response(schema: BaseSchema, status_code: int = 200):
     return decorator
 
 
-def lookup(
+ETAG_HEADER = "if-match"
+
+
+def with_lookup(
     model: CommonColumns,
     url_param: str,
     check_etag: bool = False,
-    find_func: Optional[Callable[[str], BaseModel]] = None,
+    find_func: Optional[Callable[[Union[int, str]], BaseModel]] = None,
 ):
     """
-    Given an route with a URL parameter (`url_param_name`) that will contain an id,
+    Given a route with a URL parameter (`url_param`) that will contain an id,
     search the `model` relation in the database for a record with that id. If `check_etag`
     is true, only proceed with the lookup if the client-provided etag matches the etag
     on the record if a record is found. Pass the record as a kwarg to the decorated function. 
     E.g.,
 
     @app.route('/<permission>', methods=['GET'])
-    @lookup(Permissions, 'permission')
+    @with_lookup(Permissions, 'permission')
     def get_perm_record(permission):
         # Do something with the `permission` record here.
-        # Without the @lookup decorator, `permission` would be a string
+        # Without the @with_lookup decorator, `permission` would be a string
         # containing an identifier extracted from the URL, but with the decorator
         # it's a full SQLAlchemy model instance.
     """
-    ETAG_HEADER = "if-match"
-
-    if not find_func:
-        find_func = model.find_by_id
 
     def decorator(endpoint):
         @wraps(endpoint)
         def wrapped(*args, **kwargs):
-            if check_etag:
-                etag = request.headers.get(ETAG_HEADER)
-                if not etag:
-                    raise PreconditionRequired(
-                        "request must provide an If-Match header"
-                    )
-
-            record = find_func(kwargs[url_param])
-            if not record:
-                raise NotFound()
-
-            if check_etag:
-                if etag != record._etag:
-                    raise PreconditionFailed(
-                        "provided ETag does not match the stored ETag for this record"
-                    )
-
-            kwargs[url_param] = record
-
+            kwargs[url_param] = lookup(model, kwargs[url_param], check_etag, find_func)
             return endpoint(*args, **kwargs)
 
         return wrapped
 
     return decorator
+
+
+def lookup(
+    model: CommonColumns,
+    record_id: Union[int, str],
+    check_etag: bool = False,
+    find_func: Optional[Callable[[Union[int, str]], BaseModel]] = None,
+):
+    """
+    Search the `model` relation in the database for a record with id `record_id`. 
+    If `check_etag` is true, only proceed with the lookup if the client-provided 
+    etag matches the etag on the record if a record is found.
+    """
+    if not find_func:
+        find_func = model.find_by_id
+
+    if check_etag:
+        etag = request.headers.get(ETAG_HEADER)
+        if not etag:
+            raise PreconditionRequired("request must provide an If-Match header")
+
+    record = find_func(record_id)
+    if not record:
+        raise NotFound()
+
+    if check_etag:
+        if etag != record._etag:
+            raise PreconditionFailed(
+                "provided ETag does not match the stored ETag for this record"
+            )
+
+    return record
 
 
 def use_args_with_pagination(argmap: dict, model_schema: BaseSchema):
