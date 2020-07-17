@@ -362,7 +362,7 @@ def upload_manifest(
         upload_type=template_type,
         uploader_email=user.email,
         metadata=md_patch,
-        gcs_xlsx_uri='',  # not saving xlsx so we won't have phi-ish stuff in it
+        gcs_xlsx_uri="",  # not saving xlsx so we won't have phi-ish stuff in it
         gcs_file_map=None,
         session=session,
         send_email=True,
