@@ -1,28 +1,43 @@
 import os, sys
 import json
 import datetime
-from typing import BinaryIO, Tuple, List, NamedTuple
+from typing import BinaryIO, Tuple, List, NamedTuple, Callable
 from functools import wraps
 
+from marshmallow import Schema, INCLUDE
+from webargs import fields
+from webargs.flaskparser import use_args
 from flask import Blueprint, request, Request, Response, jsonify
 from jsonschema.exceptions import ValidationError
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.exc import NoResultFound
-from werkzeug.exceptions import BadRequest, InternalServerError, NotFound, Unauthorized
+from werkzeug.exceptions import (
+    BadRequest,
+    InternalServerError,
+    NotFound,
+    Unauthorized,
+    PreconditionRequired,
+)
 
 from cidc_schemas import constants, prism
 from cidc_schemas.template import Template
 from cidc_schemas.template_reader import XlTemplateReader
 
 from ..shared import gcloud_client
-from ..shared.auth import requires_auth, get_current_user
+from ..shared.auth import (
+    public,
+    requires_auth,
+    get_current_user,
+    authenticate_and_get_user,
+)
 from ..shared.rest_utils import (
+    with_lookup,
     lookup,
     marshal_response,
     unmarshal_request,
     use_args_with_pagination,
 )
-from ..config.settings import GOOGLE_UPLOAD_BUCKET
+from ..config.settings import GOOGLE_UPLOAD_BUCKET, PRISM_ENCRYPT_KEY
 from ..models import (
     UploadJobs,
     UploadJobSchema,
@@ -36,14 +51,14 @@ from ..models import (
     Users,
 )
 
+prism.set_prism_encrypt_key(PRISM_ENCRYPT_KEY)
+
 # TODO: consolidate ingestion blueprint into upload_jobs blueprint
 ingestion_bp = Blueprint("ingestion", __name__)
 upload_jobs_bp = Blueprint("upload_jobs", __name__)
 
 upload_job_schema = UploadJobSchema()
 upload_job_list_schema = UploadJobListSchema()
-partial_upload_job_schema = UploadJobSchema(partial=True)
-
 
 ### UploadJobs REST methods ###
 upload_job_roles = [
@@ -75,7 +90,7 @@ def list_upload_jobs(args, pagination_args):
 
 @upload_jobs_bp.route("/<int:upload_job>", methods=["GET"])
 @requires_auth("upload_jobs", upload_job_roles)
-@lookup(UploadJobs, "upload_job")
+@with_lookup(UploadJobs, "upload_job")
 @marshal_response(upload_job_schema)
 def get_upload_job(upload_job: UploadJobs):
     """Get an upload_job by ID. Non-admins can only view their own upload_jobs."""
@@ -86,18 +101,62 @@ def get_upload_job(upload_job: UploadJobs):
     return upload_job
 
 
+def requires_upload_token_auth(endpoint):
+    """
+    Decorator that adds "upload token" authentication to an endpoint. 
+    The provided endpoint must include the upload job id as a URL param, i.e., 
+    `<int:upload_job>`. This upload job ID is used to look up the relevant upload_job
+    and check its `token` field against the user-provided `token` query parameter.
+    If authentication and upload job record lookup succeeds, pass the upload job record
+    in the `upload_job` kwarg to `endpoint`.
+    """
+    # Flag this endpoint as authenticated
+    endpoint.is_protected = True
+
+    token_schema = Schema.from_dict({"token": fields.Str(required=True)})(
+        # Don't throw an error if there are unknown query params in addition to "token"
+        unknown=INCLUDE
+    )
+
+    @wraps(endpoint)
+    @use_args(token_schema, location="query")
+    def wrapped(args, *pos_args, **kwargs):
+        # Attempt identity token authentication to get user info
+        user = authenticate_and_get_user()
+
+        try:
+            upload_job = lookup(
+                UploadJobs, kwargs["upload_job"], check_etag=request.method == "PATCH"
+            )
+        except (PreconditionRequired, NotFound) as e:
+            # If there's an authenticated user associated with this request,
+            # raise errors thrown by `lookup`. Otherwise, just report that auth failed.
+            if user:
+                raise e
+            else:
+                raise Unauthorized("upload_job token authentication failed")
+
+        # Check that the user-provided upload token matches the saved upload token
+        token = args["token"]
+        if str(token) != str(upload_job.token):
+            raise Unauthorized("upload_job token authentication failed")
+
+        # Pass the looked-up upload_job record to `endpoint` via the `upload_job` keyword argument
+        kwargs["upload_job"] = upload_job
+
+        return endpoint(*pos_args, **kwargs)
+
+    return wrapped
+
+
 @upload_jobs_bp.route("/<int:upload_job>", methods=["PATCH"])
-@requires_auth("upload_jobs", upload_job_roles)
-@lookup(UploadJobs, "upload_job", check_etag=True)
-@unmarshal_request(partial_upload_job_schema, "upload_job_updates", load_sqla=False)
+@requires_upload_token_auth
+@unmarshal_request(
+    UploadJobSchema(only=["status", "token"]), "upload_job_updates", load_sqla=False
+)
 @marshal_response(upload_job_schema, 200)
 def update_upload_job(upload_job: UploadJobs, upload_job_updates: UploadJobs):
-    """Update an upload_job. Non-admins can only update their own upload_jobs."""
-    user = get_current_user()
-
-    if not user.is_admin() and upload_job.uploader_email != user.email:
-        raise NotFound()
-
+    """Update an upload_job."""
     try:
         upload_job.update(changes=upload_job_updates)
     except ValueError as e:
@@ -107,9 +166,9 @@ def update_upload_job(upload_job: UploadJobs, upload_job_updates: UploadJobs):
     if upload_job.status == UploadJobStatus.UPLOAD_COMPLETED.value:
         gcloud_client.publish_upload_success(upload_job.id)
 
-    # Revoke the user's upload bucket access, since their querying this endpoint
-    # likely indicates a completed / failed upload attempt.
-    gcloud_client.revoke_upload_access(user.email)
+    # Revoke the uploading user's bucket access, since their querying
+    # this endpoint indicates a completed / failed upload attempt.
+    gcloud_client.revoke_upload_access(upload_job.uploader_email)
 
     return upload_job
 
@@ -226,19 +285,22 @@ def upload_handler(allowed_types: List[str]):
 
             xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
             print(f"xlsx parsed: {len(errors)} errors")
-            if errors:
-                errors_so_far.extend(errors)
+            for e in errors:
+                print(f"\t{e}")
+            errors_so_far.extend(errors)
 
             # Run basic validations on the provided Excel file
             validations = validate(template, xlsx)
-            if len(validations.json["errors"]) > 0:
-                errors_so_far.extend(validations.json["errors"])
             print(f"xlsx validated: {len(validations.json['errors'])} errors")
+            for e in validations.json["errors"]:
+                print(f"\t{e}")
+            errors_so_far.extend(validations.json["errors"])
 
             md_patch, file_infos, errors = prism.prismify(xlsx, template)
-            if errors:
-                errors_so_far.extend(errors)
             print(f"prismified: {len(errors)} errors, {len(file_infos)} file_infos")
+            for e in errors:
+                print(f"\t{e}")
+            errors_so_far.extend(errors)
 
             try:
                 trial_id = md_patch[prism.PROTOCOL_ID_FIELD_NAME]
@@ -285,8 +347,9 @@ def upload_handler(allowed_types: List[str]):
                     f"Internal error with {trial_id!r}. Please contact a CIDC Administrator."
                 ) from e
             print(f"merged: {len(errors)} errors")
-            if errors:
-                errors_so_far.extend(errors)
+            for e in errors:
+                print(f"\t{e}")
+            errors_so_far.extend(errors)
 
             if errors_so_far:
                 raise BadRequest({"errors": [str(e) for e in errors_so_far]})
@@ -355,26 +418,14 @@ def upload_manifest(
     except prism.ValidationMultiError as e:
         raise BadRequest({"errors": e.args[0]})
 
-    gcs_blob = gcloud_client.upload_xlsx_to_gcs(
-        trial.trial_id, "manifest", template_type, xlsx_file, upload_moment
-    )
     # TODO maybe rely on default session
     session = Session.object_session(trial)
-
-    DownloadableFiles.create_from_blob(
-        trial.trial_id,
-        template_type,
-        "Shipping Manifest",
-        gcs_blob,
-        session=session,
-        commit=False,
-    )
 
     manifest_upload = UploadJobs.create(
         upload_type=template_type,
         uploader_email=user.email,
         metadata=md_patch,
-        gcs_xlsx_uri=gcs_blob.name,
+        gcs_xlsx_uri="",  # not saving xlsx so we won't have phi-ish stuff in it
         gcs_file_map=None,
         session=session,
         send_email=True,
@@ -428,6 +479,8 @@ def upload_data_files(
         job_id: the unique identifier for this upload job in the database
         job_etag: the job record's etag, required by Eve for safe updates
         extra_metadata: files with extra metadata information (only applicable to few assays), else None
+        token: the unique token identifier for this upload job - possession of this token
+            gives a user the right to update the corresponding upload job (no other authentication required).
     
     # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
     """
@@ -473,6 +526,7 @@ def upload_data_files(
         "url_mapping": url_mapping,
         "gcs_bucket": GOOGLE_UPLOAD_BUCKET,
         "extra_metadata": None,
+        "token": job.token,
     }
     if bool(files_with_extra_md):
         response["extra_metadata"] = files_with_extra_md
@@ -480,21 +534,12 @@ def upload_data_files(
     return jsonify(response)
 
 
-@ingestion_bp.route("/poll_upload_merge_status", methods=["GET"])
-@requires_auth(
-    "ingestion/poll_upload_merge_status",
-    [
-        CIDCRole.ADMIN.value,
-        CIDCRole.CIMAC_BIOFX_USER.value,
-        CIDCRole.CIDC_BIOFX_USER.value,
-    ],
-)
-def poll_upload_merge_status():
+@ingestion_bp.route("/poll_upload_merge_status/<int:upload_job>", methods=["GET"])
+@requires_upload_token_auth
+def poll_upload_merge_status(upload_job: UploadJobs):
     """
     Check an assay upload's status, and supply the client with directions on when to retry the check.
 
-    Request: no body
-        query parameter "id": the id of the assay_upload of interest
     Response: application/json
         status {str or None}: the current status of the assay_upload (empty if not MERGE_FAILED or MERGE_COMPLETED)
         status_details {str or None}: information about `status` (e.g., error details). Only present if `status` is present.
@@ -504,21 +549,12 @@ def poll_upload_merge_status():
         401: the requesting user did not create the requested upload job
         404: no upload job with id "id" is found
     """
-    upload_id = request.args.get("id")
-    if not upload_id:
-        raise BadRequest("Missing expected query parameter 'id'")
-
-    user = get_current_user()
-    upload = UploadJobs.find_by_id_and_email(upload_id, user.email)
-    if not upload:
-        raise NotFound(f"Could not find assay upload job with id {upload_id}")
-
-    if upload.status in [
+    if upload_job.status in [
         UploadJobStatus.MERGE_COMPLETED.value,
         UploadJobStatus.MERGE_FAILED.value,
     ]:
         return jsonify(
-            {"status": upload.status, "status_details": upload.status_details}
+            {"status": upload_job.status, "status_details": upload_job.status_details}
         )
 
     # TODO: get smarter about retry-scheduling

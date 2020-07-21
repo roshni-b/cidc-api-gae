@@ -15,7 +15,7 @@ from ..models import (
 from ..shared import gcloud_client
 from ..shared.auth import get_current_user, requires_auth
 from ..shared.rest_utils import (
-    lookup,
+    with_lookup,
     marshal_response,
     unmarshal_request,
     use_args_with_pagination,
@@ -52,7 +52,7 @@ def list_downloadable_files(args, pagination_args):
 
 @downloadable_files_bp.route("/<int:downloadable_file>", methods=["GET"])
 @requires_auth("downloadable_files")
-@lookup(DownloadableFiles, "downloadable_file")
+@with_lookup(DownloadableFiles, "downloadable_file")
 @marshal_response(downloadable_files_schema)
 def get_downloadable_file(downloadable_file: DownloadableFiles) -> DownloadableFiles:
     """Get a single file by ID if the current user is allowed to view it."""

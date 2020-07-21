@@ -14,7 +14,7 @@ from ..models import (
 )
 from ..shared.auth import get_current_user, requires_auth
 from ..shared.rest_utils import (
-    lookup,
+    with_lookup,
     marshal_response,
     unmarshal_request,
     delete_response,
@@ -61,7 +61,7 @@ def list_permissions(args: dict):
 
 @permissions_bp.route("/<int:permission>", methods=["GET"])
 @requires_auth("permissions_item")
-@lookup(Permissions, "permission")
+@with_lookup(Permissions, "permission")
 @marshal_response(permission_schema)
 def get_permission(permission: Permissions) -> Permissions:
     """Look up the permission record with id `permission_id`."""
@@ -92,7 +92,7 @@ def create_permission(permission: Permissions) -> Permissions:
 
 @permissions_bp.route("/<int:permission>", methods=["DELETE"])
 @requires_auth("permissions_item", allowed_roles=[CIDCRole.ADMIN.value])
-@lookup(Permissions, "permission", check_etag=True)
+@with_lookup(Permissions, "permission", check_etag=True)
 def delete_permission(permission: Permissions):
     """Delete a permission record."""
     permission.delete()
