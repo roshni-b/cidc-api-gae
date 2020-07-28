@@ -27,7 +27,7 @@ def setup_user(cidc_api, monkeypatch) -> int:
 
 
 trial_id = "test-trial"
-upload_types = ["olink", "cytof"]
+upload_types = ["wes", "cytof"]
 
 
 def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
@@ -41,7 +41,7 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
     }
     trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
 
-    def make_file(object_url, upload_type, analysis_friendly) -> DownloadableFiles:
+    def make_file(object_url, upload_type) -> DownloadableFiles:
         return DownloadableFiles(
             trial_id=trial_id,
             upload_type=upload_type,
@@ -50,17 +50,17 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
             uploaded_timestamp=datetime.now(),
             file_size_bytes=0,
             file_name="",
-            analysis_friendly=analysis_friendly,
         )
 
-    file1, file2 = [make_file(i, t, i == 1) for i, t in enumerate(upload_types)]
+    wes_file = make_file(f"{trial_id}/wes/.../reads_123.bam", "wes")
+    cytof_file = make_file(f"{trial_id}/cytof/.../analysis.zip", "cytof")
 
     with cidc_api.app_context():
         trial.insert()
-        file1.insert()
-        file2.insert()
+        wes_file.insert()
+        cytof_file.insert()
 
-        return file1.id, file2.id
+        return wes_file.id, cytof_file.id
 
 
 def test_list_downloadable_files(cidc_api, clean_db, monkeypatch):
@@ -91,9 +91,8 @@ def test_list_downloadable_files(cidc_api, clean_db, monkeypatch):
     assert res.json["_items"][0]["id"] == file_id_1
 
     # Non-admin filter queries exclude files they aren't allowed to view
-    res = client.get(
-        f"/downloadable_files?upload_types={upload_types[1]}&analysis_friendly=true"
-    )
+    res = client.get(f"/downloadable_files?facets=Assay Type|CyTOF|Analysis Results")
+    print(res.json)
     assert res.status_code == 200
     assert len(res.json["_items"]) == 0
     assert res.json["_meta"]["total"] == 0
@@ -107,9 +106,7 @@ def test_list_downloadable_files(cidc_api, clean_db, monkeypatch):
     assert set([f["id"] for f in res.json["_items"]]) == set([file_id_1, file_id_2])
 
     # Admin filter queries include any files that fit the criteria
-    res = client.get(
-        f"/downloadable_files?upload_types={upload_types[1]}&analysis_friendly=false"
-    )
+    res = client.get(f"/downloadable_files?facets=Assay Type|CyTOF|Analysis Results")
     assert res.status_code == 200
     assert len(res.json["_items"]) == 1
     assert res.json["_meta"]["total"] == 1
@@ -157,29 +154,10 @@ def test_get_filter_facets(cidc_api, clean_db, monkeypatch):
 
     client = cidc_api.test_client()
 
-    # A user with no permissions can't view any facets
     res = client.get("/downloadable_files/filter_facets")
     assert res.status_code == 200
-    assert res.json["trial_id"] == []
-    assert res.json["upload_type"] == []
-
-    # A user with one permission can only view facets related to that permission
-    with cidc_api.app_context():
-        perm = Permissions(
-            granted_to_user=user_id, trial_id=trial_id, upload_type=upload_types[0]
-        )
-        perm.insert()
-    res = client.get("/downloadable_files/filter_facets")
-    assert res.status_code == 200
-    assert res.json["trial_id"] == [trial_id]
-    assert res.json["upload_type"] == [upload_types[0]]
-
-    # An admin can view all available facets
-    make_admin(user_id, cidc_api)
-    data = client.get("/downloadable_files/filter_facets").json
-    assert data["trial_id"] == [trial_id]
-    assert set(data["upload_type"]) == set(upload_types)
-    assert len(data["upload_type"]) == len(upload_types)
+    assert res.json["trial_ids"] == [trial_id]
+    assert isinstance(res.json["facets"], dict)
 
 
 def test_get_download_url(cidc_api, clean_db, monkeypatch):

@@ -83,9 +83,9 @@ downloadable_files = {
         "id": TEST_RECORD_ID,
         "trial_id": trial_metadata["json"]["trial_id"],
         "file_name": "",
-        "upload_type": "olink",
+        "upload_type": "rna",
         "data_format": "",
-        "object_url": "",
+        "object_url": f'{trial_metadata["json"]["trial_id"]}/rna/.../r1_123.fastq.gz',
         "uploaded_timestamp": datetime.now(),
         "file_size_bytes": 1,
     },
@@ -96,11 +96,11 @@ downloadable_files = {
     "filters": {
         "empty": {
             "trial_ids": [trial_metadata["json"]["trial_id"]],
-            "upload_types": ["not_olink"],
+            "facets": "Clinical Type|Participants Info",
         },
         "one": {
             "trial_ids": [trial_metadata["json"]["trial_id"]],
-            "upload_types": ["olink"],
+            "facets": "Assay Type|RNA|Source",
         },
     },
 }
