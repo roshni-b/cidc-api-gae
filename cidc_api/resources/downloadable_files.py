@@ -117,4 +117,4 @@ def get_filter_facets():
     """
     trial_ids = DownloadableFiles.get_distinct("trial_id")
 
-    return jsonify({"trial_ids": trial_ids, "facets": facets.get_facet_labels()})
+    return jsonify({"trial_ids": trial_ids, "facets": facets.get_facet_info()})
