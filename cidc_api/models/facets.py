@@ -141,6 +141,9 @@ assay_facets: Facets = {
             ]
         ),
     },
+    "Olink": {"All Olink Files": FacetConfig(["%/olink%"])},
+    "IHC": {"All IHC Files": FacetConfig(["%/ihc%"])},
+    "mIF": {"All mIF Files": FacetConfig(["%/mif%"])},
 }
 
 clinical_facets: Facets = {
