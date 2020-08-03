@@ -11,6 +11,7 @@ from ..models import (
     DownloadableFileSchema,
     DownloadableFileListSchema,
     Permissions,
+    facets,
 )
 from ..shared import gcloud_client
 from ..shared.auth import get_current_user, requires_auth
@@ -27,16 +28,15 @@ downloadable_files_schema = DownloadableFileSchema()
 downloadable_files_list_schema = DownloadableFileListSchema()
 
 
-file_filter_params = {
-    "trial_ids": fields.DelimitedList(fields.Str(), default=[]),
-    "upload_types": fields.DelimitedList(fields.Str(), default=[]),
-    "analysis_friendly": fields.Bool(default=False),
+file_filter_schema = {
+    "trial_ids": fields.DelimitedList(fields.Str),
+    "facets": fields.DelimitedList(fields.DelimitedList(fields.Str, delimiter="|")),
 }
 
 
 @downloadable_files_bp.route("/", methods=["GET"])
 @requires_auth("downloadable_files")
-@use_args_with_pagination(file_filter_params, downloadable_files_schema)
+@use_args_with_pagination(file_filter_schema, downloadable_files_schema)
 @marshal_response(downloadable_files_list_schema)
 def list_downloadable_files(args, pagination_args):
     """List downloadable files that the current user is allowed to view."""
@@ -115,16 +115,6 @@ def get_filter_facets():
         ...
     }
     """
-    user = get_current_user()
+    trial_ids = DownloadableFiles.get_distinct("trial_id")
 
-    if user.is_admin():
-        # Admins can facet on every trial or upload type
-        trial_ids = DownloadableFiles.get_distinct("trial_id")
-        upload_types = DownloadableFiles.get_distinct("upload_type")
-    else:
-        # Non-admins can only facet on what they have permission to view
-        user_filter = lambda q: q.filter(Permissions.granted_to_user == user.id)
-        trial_ids = Permissions.get_distinct("trial_id", filter_=user_filter)
-        upload_types = Permissions.get_distinct("upload_type", filter_=user_filter)
-
-    return jsonify({"trial_id": trial_ids, "upload_type": upload_types})
+    return jsonify({"trial_ids": trial_ids, "facets": facets.get_facet_info()})

@@ -25,6 +25,7 @@ from sqlalchemy import (
     asc,
     desc,
     update,
+    or_,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -39,6 +40,7 @@ from sqlalchemy.engine.interfaces import ExecutionContext
 
 from cidc_schemas import prism, unprism, json_validation
 
+from .facets import get_facets_for_paths
 from ..config.db import BaseModel
 from ..config.settings import (
     PAGINATION_PAGE_SIZE,
@@ -757,10 +759,7 @@ class DownloadableFiles(CommonColumns):
 
     @staticmethod
     def build_file_filter(
-        trial_ids: List[str] = None,
-        upload_types: List[str] = None,
-        analysis_friendly: bool = False,
-        user: Users = None,
+        trial_ids: List[str] = [], facets: List[List[str]] = [], user: Users = None
     ) -> Callable[[Query], Query]:
         """
         Build a file filter function based on the provided parameters. The resultant
@@ -779,10 +778,11 @@ class DownloadableFiles(CommonColumns):
         file_filters = []
         if trial_ids:
             file_filters.append(DownloadableFiles.trial_id.in_(trial_ids))
-        if upload_types:
-            file_filters.append(DownloadableFiles.upload_type.in_(upload_types))
-        if analysis_friendly:
-            file_filters.append(DownloadableFiles.analysis_friendly == True)
+        if facets:
+            facet_filters = get_facets_for_paths(
+                DownloadableFiles.object_url.like, facets
+            )
+            file_filters.append(or_(*facet_filters))
         if user and not user.is_admin():
             permissions = Permissions.find_for_user(user.id)
             perm_set = [(p.trial_id, p.upload_type) for p in permissions]
