@@ -141,9 +141,26 @@ assay_facets: Facets = {
             ]
         ),
     },
-    "Olink": {"All Olink Files": FacetConfig(["%/olink%"])},
+    "mIF": {
+        "Source Images": FacetConfig(
+            ["%composite_image.tif", "%component_data.tif", "%multispectral.im3"],
+            "Image files containing the source multi-dimensional images for both ROIs and whole slide if appropriate.",
+        ),
+        "Analysis Images": FacetConfig(
+            ["%binary_seg_maps.tif", "%phenotype_map.tif"],
+            "Image-like files created or used in the analysis workflow. These include cell and region segmentation maps.",
+        ),
+        "Analysis Data": FacetConfig(
+            ["%score_data_%.txt", "%cell_seg_data.txt", "%cell_seg_data_summary.txt"],
+            "Data files from image analysis software indicating the cell type assignments, phenotypes and other scoring metrics and thresholds.",
+        ),
+    },
+    "Olink": {
+        "All Olink Files": FacetConfig(
+            ["%/olink%"], "Analysis files from the Olink platform."
+        )
+    },
     "IHC": {"All IHC Files": FacetConfig(["%/ihc%"])},
-    "mIF": {"All mIF Files": FacetConfig(["%/mif%"])},
 }
 
 clinical_facets: Facets = {
