@@ -350,7 +350,7 @@ class ValidationMultiError(Exception):
     pass
 
 
-trial_metadata_validator = json_validation.load_and_validate_schema(
+trial_metadata_validator: json_validation._Validator = json_validation.load_and_validate_schema(
     "clinical_trial.json", return_validator=True
 )
 
@@ -366,8 +366,8 @@ class TrialMetadata(CommonColumns):
 
     @validates("metadata_json")
     def validate_metadata_json(self, key, metadata_json):
-        errs = trial_metadata_validator.iter_errors(metadata_json)
-        messages = list(f"'metadata_json': {err.message}" for err in errs)
+        errs = trial_metadata_validator.iter_error_messages(metadata_json)
+        messages = list(f"'metadata_json': {err}" for err in errs)
         if messages:
             raise ValidationMultiError(messages)
         return metadata_json

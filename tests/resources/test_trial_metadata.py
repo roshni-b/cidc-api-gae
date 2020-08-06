@@ -114,11 +114,11 @@ def test_get_trial_by_trial_id(cidc_api, clean_db, monkeypatch):
 bad_trial_json = {"trial_id": "foo", "metadata_json": {"foo": "bar"}}
 bad_trial_error_message = {
     "errors": [
-        "'metadata_json': Additional properties are not allowed ('foo' was unexpected)",
-        "'metadata_json': 'protocol_identifier' is a required property",
-        "'metadata_json': 'participants' is a required property",
-        "'metadata_json': 'allowed_cohort_names' is a required property",
-        "'metadata_json': 'allowed_collection_event_names' is a required property",
+        "'metadata_json': error on [root]={'foo': 'bar'}: Additional properties are not allowed ('foo' was unexpected)",
+        "'metadata_json': error on [root]={'foo': 'bar'}: missing required property 'protocol_identifier'",
+        "'metadata_json': error on [root]={'foo': 'bar'}: missing required property 'participants'",
+        "'metadata_json': error on [root]={'foo': 'bar'}: missing required property 'allowed_cohort_names'",
+        "'metadata_json': error on [root]={'foo': 'bar'}: missing required property 'allowed_collection_event_names'",
     ]
 }
 
@@ -199,6 +199,7 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
             json={"metadata_json": bad_trial_json["metadata_json"]},
         )
         assert res.status_code == 422
+        print(res.json["_error"]["message"])
         assert res.json["_error"]["message"] == bad_trial_error_message
 
         # An admin can successfully update a trial

@@ -19,7 +19,7 @@ from werkzeug.exceptions import (
     PreconditionRequired,
 )
 
-from cidc_schemas import constants, prism
+from cidc_schemas import constants, prism, json_validation
 from cidc_schemas.template import Template
 from cidc_schemas.template_reader import XlTemplateReader
 
@@ -333,7 +333,7 @@ def upload_handler(allowed_types: List[str]):
                     md_patch, trial.metadata_json
                 )
             except ValidationError as e:
-                errors_so_far.append(f"{e.message} in {e.instance}")
+                errors_so_far.append(json_validation.format_validation_error(e))
             except prism.MergeCollisionException as e:
                 errors_so_far.append(str(e))
             except prism.InvalidMergeTargetException as e:
@@ -414,7 +414,7 @@ def upload_manifest(
     try:
         trial = TrialMetadata.patch_manifest(trial.trial_id, md_patch, commit=False)
     except ValidationError as e:
-        raise BadRequest(f"{e.message} in {e.instance}")
+        raise BadRequest(json_validation.format_validation_error(e))
     except prism.ValidationMultiError as e:
         raise BadRequest({"errors": e.args[0]})
 
