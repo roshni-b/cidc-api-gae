@@ -7,3 +7,5 @@ google-cloud-pubsub==0.42.1
 cidc-schemas~=0.18.8
 python-dotenv==0.10.3
 requests==2.22.0
+# pin jinja version to resolve cidc-schemas dependency issue
+jinja2==2.10.3
