@@ -112,6 +112,11 @@ def test_list_downloadable_files(cidc_api, clean_db, monkeypatch):
     assert res.json["_meta"]["total"] == 1
     assert res.json["_items"][0]["id"] == file_id_2
 
+    # Make sure it's possible to sort by file extension
+    res = client.get(f"/downloadable_files?sort_field=file_ext&sort_direction=asc")
+    assert res.status_code == 200
+    assert [f["file_ext"] for f in res.json["_items"]] == ["bam", "zip"]
+
 
 def test_get_downloadable_file(cidc_api, clean_db, monkeypatch):
     """Check that getting a single file works as expected."""

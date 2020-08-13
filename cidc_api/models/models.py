@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import hashlib
 from datetime import datetime, timedelta
@@ -157,8 +158,10 @@ class CommonColumns(BaseModel):  # type: ignore
 
         # Handle sorting
         if sort_field:
+            # Get the attribute from the class, in case this is a hybrid attribute
+            sort_attribute = getattr(cls, sort_field)
             field_with_dir = (
-                asc(sort_field) if sort_direction == "asc" else desc(sort_field)
+                asc(sort_attribute) if sort_direction == "asc" else desc(sort_attribute)
             )
             query = query.order_by(field_with_dir)
 
@@ -756,6 +759,17 @@ class DownloadableFiles(CommonColumns):
     # Visualization data columns (should always be nullable)
     clustergrammer = Column(JSONB, nullable=True)
     ihc_combined_plot = Column(JSONB, nullable=True)
+
+    FILE_EXT_REGEX = r"\.([^./]*(\.gz)?)$"
+
+    @hybrid_property
+    def file_ext(self):
+        match = re.search(self.FILE_EXT_REGEX, self.object_url)
+        return match.group(1) if match else None
+
+    @file_ext.expression
+    def file_ext(cls):
+        return func.substring(cls.object_url, cls.FILE_EXT_REGEX)
 
     @staticmethod
     def build_file_filter(
