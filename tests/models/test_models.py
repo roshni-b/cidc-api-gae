@@ -569,7 +569,7 @@ def test_create_downloadable_file_from_blob(clean_db, monkeypatch):
         )
     )
     df = DownloadableFiles.create_from_blob(
-        "id", "pbmc", "Shipping Manifest", fake_blob
+        "id", "pbmc", "Shipping Manifest", "pbmc/shipping", fake_blob
     )
 
     # Mock artifact upload publishing
@@ -589,7 +589,7 @@ def test_create_downloadable_file_from_blob(clean_db, monkeypatch):
     fake_blob.size = 6
     fake_blob.md5_hash = "6"
     df = DownloadableFiles.create_from_blob(
-        "id", "pbmc", "Shipping Manifest", fake_blob
+        "id", "pbmc", "Shipping Manifest", "pbmc/shipping", fake_blob
     )
 
     # Check that the file was created
@@ -603,7 +603,12 @@ def test_create_downloadable_file_from_blob(clean_db, monkeypatch):
 
     # Check that artifact upload publishes
     DownloadableFiles.create_from_blob(
-        "id", "pbmc", "Shipping Manifest", fake_blob, alert_artifact_upload=True
+        "id",
+        "pbmc",
+        "Shipping Manifest",
+        "pbmc/shipping",
+        fake_blob,
+        alert_artifact_upload=True,
     )
     publisher.assert_called_once_with(fake_blob.name)
 

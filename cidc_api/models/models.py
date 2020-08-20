@@ -741,6 +741,7 @@ class DownloadableFiles(CommonColumns):
     file_name = Column(String, nullable=False)
     file_size_bytes = Column(BigInteger, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
+    facet_group = Column(String, nullable=False)
     # NOTE: this column actually has type CITEXT.
     data_format = Column(String, nullable=False)
     additional_metadata = Column(JSONB, nullable=True)
@@ -866,6 +867,7 @@ class DownloadableFiles(CommonColumns):
         trial_id: str,
         upload_type: str,
         data_format: str,
+        facet_group: str,
         blob: Blob,
         session: Session,
         commit: bool = True,
@@ -889,6 +891,7 @@ class DownloadableFiles(CommonColumns):
         df.trial_id = trial_id
         df.upload_type = upload_type
         df.data_format = data_format
+        df.facet_group = facet_group
         df.object_url = blob.name
         df.file_name = blob.name
         df.file_size_bytes = blob.size
