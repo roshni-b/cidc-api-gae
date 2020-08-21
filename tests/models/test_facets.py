@@ -6,7 +6,7 @@ from werkzeug.exceptions import BadRequest
 from cidc_api.models.facets import (
     facets,
     get_facet_info,
-    get_facets_for_paths,
+    get_facet_groups_for_paths,
     FacetConfig,
 )
 
@@ -31,11 +31,10 @@ def test_get_facet_info():
                 test_info_structure(config)
 
 
-def test_get_facets_for_paths():
-    """Test that get_facets_for_paths works as expected."""
-    mock_like = lambda v: v
+def test_get_facet_groups_for_paths():
+    """Test that get_facet_groups_for_paths works as expected."""
 
-    assert get_facets_for_paths(mock_like, []) == []
+    assert get_facet_groups_for_paths([]) == []
 
     # Existing paths
     good_paths = [
@@ -43,7 +42,7 @@ def test_get_facets_for_paths():
         ["Assay Type", "RNA", "Quality"],
         ["Clinical Type", "Participants Info"],
     ]
-    facets_for_paths = get_facets_for_paths(mock_like, good_paths)
+    facets_for_paths = get_facet_groups_for_paths(good_paths)
     assert facets_for_paths == [
         *facets["Assay Type"]["WES"]["Somatic"].match_clauses,
         *facets["Assay Type"]["RNA"]["Quality"].match_clauses,
@@ -59,4 +58,4 @@ def test_get_facets_for_paths():
     ]
     for path in bad_paths:
         with pytest.raises(BadRequest, match=f"no facet for path"):
-            get_facets_for_paths(mock_like, [path])
+            get_facet_groups_for_paths([path])

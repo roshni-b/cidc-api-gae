@@ -69,6 +69,7 @@ class DownloadableFileSchema(BaseSchema):
         model = DownloadableFiles
 
     file_ext = fields.Str(dump_only=True)
+    data_category = fields.Str(dump_only=True)
 
 
 DownloadableFileListSchema = _make_list_schema(DownloadableFileSchema())

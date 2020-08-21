@@ -86,6 +86,7 @@ downloadable_files = {
         "upload_type": "rna",
         "data_format": "",
         "object_url": f'{trial_metadata["json"]["trial_id"]}/rna/.../r1_123.fastq.gz',
+        "facet_group": "/rna/reads_.bam",
         "uploaded_timestamp": datetime.now(),
         "file_size_bytes": 1,
     },
