@@ -41,19 +41,24 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
     }
     trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
 
-    def make_file(object_url, upload_type) -> DownloadableFiles:
+    def make_file(object_url, upload_type, facet_group) -> DownloadableFiles:
         return DownloadableFiles(
             trial_id=trial_id,
             upload_type=upload_type,
             object_url=object_url,
             data_format="",
+            facet_group=facet_group,
             uploaded_timestamp=datetime.now(),
             file_size_bytes=0,
             file_name="",
         )
 
-    wes_file = make_file(f"{trial_id}/wes/.../reads_123.bam", "wes")
-    cytof_file = make_file(f"{trial_id}/cytof/.../analysis.zip", "cytof")
+    wes_file = make_file(
+        f"{trial_id}/wes/.../reads_123.bam", "wes", "/wes/r1_.fastq.gz"
+    )
+    cytof_file = make_file(
+        f"{trial_id}/cytof/.../analysis.zip", "cytof", "/cytof_analysis/analysis.zip"
+    )
 
     with cidc_api.app_context():
         trial.insert()
@@ -92,7 +97,6 @@ def test_list_downloadable_files(cidc_api, clean_db, monkeypatch):
 
     # Non-admin filter queries exclude files they aren't allowed to view
     res = client.get(f"/downloadable_files?facets=Assay Type|CyTOF|Analysis Results")
-    print(res.json)
     assert res.status_code == 200
     assert len(res.json["_items"]) == 0
     assert res.json["_meta"]["total"] == 0
@@ -111,6 +115,19 @@ def test_list_downloadable_files(cidc_api, clean_db, monkeypatch):
     assert len(res.json["_items"]) == 1
     assert res.json["_meta"]["total"] == 1
     assert res.json["_items"][0]["id"] == file_id_2
+
+    # Make sure it's possible to sort by file extension
+    res = client.get(f"/downloadable_files?sort_field=file_ext&sort_direction=asc")
+    assert res.status_code == 200
+    assert [f["file_ext"] for f in res.json["_items"]] == ["bam", "zip"]
+
+    # Make sure it's possible to sort by data category
+    res = client.get(f"/downloadable_files?sort_field=data_category&sort_direction=asc")
+    assert res.status_code == 200
+    assert [f["data_category"] for f in res.json["_items"]] == [
+        "CyTOF|Analysis Results",
+        "WES|Source",
+    ]
 
 
 def test_get_downloadable_file(cidc_api, clean_db, monkeypatch):

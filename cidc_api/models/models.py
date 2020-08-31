@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import hashlib
 from datetime import datetime, timedelta
@@ -26,6 +27,8 @@ from sqlalchemy import (
     desc,
     update,
     or_,
+    case,
+    literal_column,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -40,7 +43,7 @@ from sqlalchemy.engine.interfaces import ExecutionContext
 
 from cidc_schemas import prism, unprism, json_validation
 
-from .facets import get_facets_for_paths
+from .facets import get_facet_groups_for_paths, facet_groups_to_names
 from ..config.db import BaseModel
 from ..config.settings import (
     PAGINATION_PAGE_SIZE,
@@ -157,8 +160,10 @@ class CommonColumns(BaseModel):  # type: ignore
 
         # Handle sorting
         if sort_field:
+            # Get the attribute from the class, in case this is a hybrid attribute
+            sort_attribute = getattr(cls, sort_field)
             field_with_dir = (
-                asc(sort_field) if sort_direction == "asc" else desc(sort_field)
+                asc(sort_attribute) if sort_direction == "asc" else desc(sort_attribute)
             )
             query = query.order_by(field_with_dir)
 
@@ -738,6 +743,7 @@ class DownloadableFiles(CommonColumns):
     file_name = Column(String, nullable=False)
     file_size_bytes = Column(BigInteger, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
+    facet_group = Column(String, nullable=False)
     # NOTE: this column actually has type CITEXT.
     data_format = Column(String, nullable=False)
     additional_metadata = Column(JSONB, nullable=True)
@@ -756,6 +762,25 @@ class DownloadableFiles(CommonColumns):
     # Visualization data columns (should always be nullable)
     clustergrammer = Column(JSONB, nullable=True)
     ihc_combined_plot = Column(JSONB, nullable=True)
+
+    FILE_EXT_REGEX = r"\.([^./]*(\.gz)?)$"
+
+    @hybrid_property
+    def file_ext(self):
+        match = re.search(self.FILE_EXT_REGEX, self.object_url)
+        return match.group(1) if match else None
+
+    @file_ext.expression
+    def file_ext(cls):
+        return func.substring(cls.object_url, cls.FILE_EXT_REGEX)
+
+    @hybrid_property
+    def data_category(self):
+        return facet_groups_to_names.get(self.facet_group)
+
+    @data_category.expression
+    def data_category(cls):
+        return DATA_CATEGORY_CASE_CLAUSE
 
     @staticmethod
     def build_file_filter(
@@ -779,10 +804,8 @@ class DownloadableFiles(CommonColumns):
         if trial_ids:
             file_filters.append(DownloadableFiles.trial_id.in_(trial_ids))
         if facets:
-            facet_filters = get_facets_for_paths(
-                DownloadableFiles.object_url.like, facets
-            )
-            file_filters.append(or_(*facet_filters))
+            facet_groups = get_facet_groups_for_paths(facets)
+            file_filters.append(DownloadableFiles.facet_group.in_(facet_groups))
         if user and not user.is_admin():
             permissions = Permissions.find_for_user(user.id)
             perm_set = [(p.trial_id, p.upload_type) for p in permissions]
@@ -852,6 +875,7 @@ class DownloadableFiles(CommonColumns):
         trial_id: str,
         upload_type: str,
         data_format: str,
+        facet_group: str,
         blob: Blob,
         session: Session,
         commit: bool = True,
@@ -875,6 +899,7 @@ class DownloadableFiles(CommonColumns):
         df.trial_id = trial_id
         df.upload_type = upload_type
         df.data_format = data_format
+        df.facet_group = facet_group
         df.object_url = blob.name
         df.file_name = blob.name
         df.file_size_bytes = blob.size
@@ -897,3 +922,10 @@ class DownloadableFiles(CommonColumns):
         the given GCS object url.
         """
         return session.query(DownloadableFiles).filter_by(object_url=object_url).one()
+
+
+# Query clause for computing a downloadable file's data category.
+# Used above in the DownloadableFiles.data_category computed property.
+DATA_CATEGORY_CASE_CLAUSE = case(
+    [(DownloadableFiles.facet_group == k, v) for k, v in facet_groups_to_names.items()]
+)

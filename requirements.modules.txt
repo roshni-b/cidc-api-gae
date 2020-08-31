@@ -4,6 +4,8 @@ flask-sqlalchemy~=2.4.0
 marshmallow-sqlalchemy==0.22.3
 google-cloud-storage~=1.25.0
 google-cloud-pubsub==0.42.1
-cidc-schemas~=0.18.8
+cidc-schemas~=0.19.1
 python-dotenv==0.10.3
 requests==2.22.0
+# pin jinja version to resolve cidc-schemas dependency issue
+jinja2==2.10.3
