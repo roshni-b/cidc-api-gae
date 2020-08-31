@@ -3,7 +3,7 @@ import sys
 from copy import deepcopy
 from functools import wraps
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
@@ -28,6 +28,8 @@ from cidc_api.config.settings import (
 )
 from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 from cidc_schemas import prism
+
+from ..utils import mock_gcloud_client
 
 
 def db_test(test):
@@ -648,3 +650,82 @@ def test_assay_upload_status():
                 )
             assert UploadJobStatus.is_valid_transition(upload, merge)
             assert not UploadJobStatus.is_valid_transition(merge, upload)
+
+
+@db_test
+def test_permissions_delete(clean_db, monkeypatch):
+    gcloud_client = mock_gcloud_client(monkeypatch)
+    user = Users(email="test@user.com")
+    user.insert()
+    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
+    trial.insert()
+    perm = Permissions(
+        granted_to_user=user.id, trial_id=trial.trial_id, upload_type="wes"
+    )
+    perm.insert()
+
+    # Deletion of an existing permission leads to no error
+    gcloud_client.reset_mocks()
+    perm.delete()
+    gcloud_client.revoke_download_access.assert_called_once()
+    gcloud_client.grant_download_access.assert_not_called()
+
+    # Deleting an already-deleted record is idempotent
+    gcloud_client.reset_mocks()
+    perm.delete()
+    gcloud_client.revoke_download_access.assert_called_once()
+    gcloud_client.grant_download_access.assert_not_called()
+
+    # Deleting a record whose user doesn't exist leads to an error
+    gcloud_client.reset_mocks()
+    with pytest.raises(NoResultFound, match="no user with id"):
+        Permissions(granted_to_user=999999).delete()
+
+    gcloud_client.revoke_download_access.assert_not_called()
+    gcloud_client.grant_download_access.assert_not_called()
+
+
+@db_test
+def test_permissions_grant_all_iam_permissions(clean_db, monkeypatch):
+    """
+    Smoke test that Permissions.grant_all_iam_permissions calls grant_download_access the right arguments.
+    """
+    gcloud_client = mock_gcloud_client(monkeypatch)
+    user = Users(email="test@user.com")
+    user.insert()
+    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
+    trial.insert()
+
+    upload_types = ["wes", "cytof", "rna", "plasma"]
+    for upload_type in upload_types:
+        Permissions(
+            granted_to_user=user.id, trial_id=trial.trial_id, upload_type=upload_type
+        ).insert()
+
+    Permissions.grant_all_iam_permissions()
+    gcloud_client.grant_download_access.assert_has_calls(
+        [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
+    )
+
+
+@db_test
+def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
+    """
+    Smoke test that Permissions.revoke_all_iam_permissions calls revoke_download_access the right arguments.
+    """
+    gcloud_client = mock_gcloud_client(monkeypatch)
+    user = Users(email="test@user.com")
+    user.insert()
+    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
+    trial.insert()
+
+    upload_types = ["wes", "cytof", "rna", "plasma"]
+    for upload_type in upload_types:
+        Permissions(
+            granted_to_user=user.id, trial_id=trial.trial_id, upload_type=upload_type
+        ).insert()
+
+    Permissions.revoke_all_iam_permissions()
+    gcloud_client.revoke_download_access.assert_has_calls(
+        [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
+    )

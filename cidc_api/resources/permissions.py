@@ -3,7 +3,7 @@ from typing import List
 from webargs import fields
 from webargs.flaskparser import use_args
 from flask import Blueprint
-from werkzeug.exceptions import Unauthorized, NotFound, BadRequest
+from werkzeug.exceptions import Unauthorized, NotFound, BadRequest, InternalServerError
 
 from ..models import (
     Permissions,
@@ -11,6 +11,8 @@ from ..models import (
     PermissionListSchema,
     CIDCRole,
     IntegrityError,
+    NoResultFound,
+    IAMException,
 )
 from ..shared.auth import get_current_user, requires_auth
 from ..shared.rest_utils import (
@@ -86,6 +88,9 @@ def create_permission(permission: Permissions) -> Permissions:
         permission.insert()
     except IntegrityError as e:
         raise BadRequest(str(e.orig))
+    except IAMException as e:
+        # We return info on this internal error, since this is an admin-only endpoint
+        raise InternalServerError(str(e))
 
     return permission
 
@@ -95,6 +100,12 @@ def create_permission(permission: Permissions) -> Permissions:
 @with_lookup(Permissions, "permission", check_etag=True)
 def delete_permission(permission: Permissions):
     """Delete a permission record."""
-    permission.delete()
+    try:
+        permission.delete()
+    except NoResultFound as e:
+        raise NotFound(str(e.orig))
+    except IAMException as e:
+        # We return info on this internal error, since this is an admin-only endpoint
+        raise InternalServerError(str(e))
 
     return delete_response()

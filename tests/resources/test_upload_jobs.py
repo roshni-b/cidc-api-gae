@@ -37,7 +37,7 @@ from cidc_api.models import (
     CIDCRole,
 )
 
-from ..utils import mock_current_user, make_admin
+from ..utils import mock_current_user, make_admin, mock_gcloud_client
 
 trial_id = "test_trial"
 user_email = "test@email.com"
@@ -48,6 +48,10 @@ def setup_trial_and_user(cidc_api, monkeypatch) -> int:
     Insert a trial and a cimac-user into the database, and set the user
     as the current user.
     """
+    # this is necessary for adding/removing permissions from this user
+    # without trying to contact GCP
+    mock_gcloud_client(monkeypatch)
+
     user = Users(
         email=user_email, role=CIDCRole.CIMAC_USER.value, approval_date=datetime.now()
     )

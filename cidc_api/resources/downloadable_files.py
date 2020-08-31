@@ -1,6 +1,7 @@
+from io import BytesIO
 from typing import List
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, send_file
 from webargs import fields
 from webargs.flaskparser import use_args
 from werkzeug.exceptions import NotFound
@@ -21,6 +22,7 @@ from ..shared.rest_utils import (
     unmarshal_request,
     use_args_with_pagination,
 )
+from ..config.settings import GOOGLE_DATA_BUCKET
 
 downloadable_files_bp = Blueprint("downloadable_files", __name__)
 
@@ -71,6 +73,48 @@ def get_downloadable_file(downloadable_file: DownloadableFiles) -> DownloadableF
         raise NotFound()
 
     return downloadable_file
+
+
+@downloadable_files_bp.route("/filelist", methods=["GET"])
+@requires_auth("filelist")
+@use_args(
+    {"file_ids": fields.DelimitedList(fields.Int, required=True)}, location="query"
+)
+def get_filelist(args):
+    """
+    Return a file `filelist.tsv` mapping GCS URIs to flat filenames for the
+    provided set of file ids.
+    """
+    # Build query filter
+    current_user = get_current_user()
+    user_perms_filter = DownloadableFiles.build_file_filter(user=current_user)
+    file_ids = args["file_ids"]
+    batch_id_filter = lambda q: user_perms_filter(
+        q.filter(DownloadableFiles.id.in_(file_ids))
+    )
+
+    # Get requested files
+    files = DownloadableFiles.list(filter_=batch_id_filter)
+
+    # If the query returned no files, respond with 404
+    if len(files) == 0:
+        raise NotFound()
+
+    # Build TSV mapping GCS URIs to flat filenames
+    # (bytes because that's what send_file knows how to send)
+    tsv = b""
+    for f in files:
+        full_gcs_uri = f"gs://{GOOGLE_DATA_BUCKET}/{f.object_url}"
+        tsv += bytes(f"{full_gcs_uri}\t{f.flat_object_url}\n", "utf-8")
+
+    buffer = BytesIO(tsv)
+
+    return send_file(
+        buffer,
+        as_attachment=True,
+        attachment_filename="filelist.tsv",
+        mimetype="text/tsv",
+    )
 
 
 @downloadable_files_bp.route("/download_url", methods=["GET"])
