@@ -52,7 +52,12 @@ from ..config.settings import (
     INACTIVE_USER_DAYS,
 )
 from ..shared import emails
-from ..shared.gcloud_client import publish_artifact_upload, publish_upload_success
+from ..shared.gcloud_client import (
+    publish_artifact_upload,
+    publish_upload_success,
+    grant_download_access,
+    revoke_download_access,
+)
 
 
 def with_default_session(f):
@@ -297,6 +302,10 @@ class Users(CommonColumns):
         return res
 
 
+class IAMException(Exception):
+    pass
+
+
 class Permissions(CommonColumns):
     __tablename__ = "permissions"
     __table_args__ = (
@@ -330,6 +339,55 @@ class Permissions(CommonColumns):
     trial_id = Column(String, nullable=False, index=True)
     upload_type = Column(String, nullable=False)
 
+    @with_default_session
+    def insert(self, session: Session, commit: bool = True, compute_etag: bool = True):
+        """
+        Insert this permission record into the database and add a corresponding IAM policy binding
+        on the GCS data bucket.
+
+        NOTE: values provided to the `commit` argument will be ignored. This method always commits.
+        """
+        grantee = Users.find_by_id(self.granted_to_user)
+        if grantee is None:
+            raise IntegrityError(
+                params=None,
+                statement=None,
+                orig=f"`granted_to_user` user must exist, but no user found with id {self.granted_to_user}",
+            )
+
+        # Always commit, because we don't want to grant IAM download unless this insert succeeds.
+        super().insert(session=session, commit=True, compute_etag=compute_etag)
+
+        try:
+            # Grant IAM permission in GCS only if db insert worked
+            grant_download_access(grantee.email, self.trial_id, self.upload_type)
+        except Exception as e:
+            # Delete the just-created permissions record
+            super().delete()
+            raise IAMException("IAM grant failed.") from e
+
+    @with_default_session
+    def delete(self, session: Session, commit: bool = True):
+        """
+        Delete this permission record from the database and revoke the corresponding IAM policy binding
+        on the GCS data bucket.
+
+        NOTE: values provided to the `commit` argument will be ignored. This method always commits.
+        """
+        grantee = Users.find_by_id(self.granted_to_user)
+        if grantee is None:
+            raise NoResultFound(f"no user with id {self.granted_to_user}")
+
+        try:
+            # Revoke IAM permission in GCS
+            revoke_download_access(grantee.email, self.trial_id, self.upload_type)
+        except Exception as e:
+            raise IAMException(
+                "IAM revoke failed, and permission db record not removed."
+            ) from e
+
+        super().delete(session=session, commit=True)
+
     @staticmethod
     @with_default_session
     def find_for_user(user_id: int, session: Session) -> List:
@@ -347,6 +405,22 @@ class Permissions(CommonColumns):
             .filter_by(granted_to_user=user_id, trial_id=trial_id, upload_type=type_)
             .first()
         )
+
+    @staticmethod
+    @with_default_session
+    def grant_all_iam_permissions(session: Session):
+        perms = Permissions.list(session=session)
+        for perm in perms:
+            user_email = Users.find_by_id(perm.granted_to_user).email
+            grant_download_access(user_email, perm.trial_id, perm.upload_type)
+
+    @staticmethod
+    @with_default_session
+    def revoke_all_iam_permissions(session: Session):
+        perms = Permissions.list(session=session)
+        for perm in perms:
+            user_email = Users.find_by_id(perm.granted_to_user).email
+            revoke_download_access(user_email, perm.trial_id, perm.upload_type)
 
 
 class ValidationMultiError(Exception):
@@ -781,6 +855,10 @@ class DownloadableFiles(CommonColumns):
     @data_category.expression
     def data_category(cls):
         return DATA_CATEGORY_CASE_CLAUSE
+
+    @property
+    def flat_object_url(self):
+        return self.object_url.replace("/", "_")
 
     @staticmethod
     def build_file_filter(

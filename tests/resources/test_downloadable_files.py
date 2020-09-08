@@ -9,11 +9,16 @@ from cidc_api.models import (
     Permissions,
     CIDCRole,
 )
+from cidc_api.config.settings import GOOGLE_DATA_BUCKET
 
-from ..utils import mock_current_user, make_admin
+from ..utils import mock_current_user, make_admin, mock_gcloud_client
 
 
 def setup_user(cidc_api, monkeypatch) -> int:
+    # this is necessary for adding/removing permissions from this user
+    # without trying to contact GCP
+    mock_gcloud_client(monkeypatch)
+
     current_user = Users(
         email="test@email.com",
         role=CIDCRole.CIMAC_USER.value,
@@ -162,6 +167,49 @@ def test_get_downloadable_file(cidc_api, clean_db, monkeypatch):
     # Non-existent files yield 404
     res = client.get(f"/downloadable_files/123212321")
     assert res.status_code == 404
+
+
+def test_get_filelist(cidc_api, clean_db, monkeypatch):
+    """Check that getting a filelist.tsv works as expected"""
+    user_id = setup_user(cidc_api, monkeypatch)
+    file_id_1, file_id_2 = setup_downloadable_files(cidc_api)
+
+    client = cidc_api.test_client()
+
+    # The file_ids query param must be provided
+    res = client.get("/downloadable_files/filelist")
+    assert res.status_code == 422
+
+    url = f"/downloadable_files/filelist?file_ids={file_id_1},{file_id_2}"
+
+    # User has no permissions, so no files should be found
+    res = client.get(url)
+    assert res.status_code == 404
+
+    # Give the user one permission
+    with cidc_api.app_context():
+        perm = Permissions(
+            granted_to_user=user_id, trial_id=trial_id, upload_type=upload_types[0]
+        )
+        perm.insert()
+
+    # User has one permission, so the filelist should contain a single file
+    res = client.get(url)
+    assert res.status_code == 200
+    assert "text/tsv" in res.headers["Content-Type"]
+    assert "filename=filelist.tsv" in res.headers["Content-Disposition"]
+    assert res.data.decode("utf-8") == (
+        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/wes/.../reads_123.bam\t{trial_id}_wes_..._reads_123.bam\n"
+    )
+
+    # Admins can get a filelist containing all files
+    make_admin(user_id, cidc_api)
+    res = client.get(url)
+    assert res.status_code == 200
+    assert res.data.decode("utf-8") == (
+        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/wes/.../reads_123.bam\t{trial_id}_wes_..._reads_123.bam\n"
+        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/cytof/.../analysis.zip\t{trial_id}_cytof_..._analysis.zip\n"
+    )
 
 
 def test_get_filter_facets(cidc_api, clean_db, monkeypatch):

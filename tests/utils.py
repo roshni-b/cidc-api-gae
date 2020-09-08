@@ -1,4 +1,5 @@
 """Shortcuts that are useful across API tests."""
+from unittest.mock import MagicMock
 
 from cidc_api.models import Users, CIDCRole
 
@@ -22,3 +23,31 @@ def make_role(user_id, role, app):
         user = Users.find_by_id(user_id)
         user.role = role
         user.update()
+
+
+def mock_gcloud_client(monkeypatch) -> MagicMock:
+    """
+    Mock `grant_download_permission` and `revoke_download_permission` methods on gcloud_client.
+
+    NOTE: only mocks usages of these methods within the `cidc_api.models.models` module.
+    """
+    gcloud_client = MagicMock()
+    gcloud_client.revoke_download_access = MagicMock()
+    gcloud_client.grant_download_access = MagicMock()
+
+    def reset_mocks():
+        gcloud_client.grant_download_access.reset_mock()
+        gcloud_client.revoke_download_access.reset_mock()
+
+    gcloud_client.reset_mocks = reset_mocks
+
+    monkeypatch.setattr(
+        "cidc_api.models.models.grant_download_access",
+        gcloud_client.grant_download_access,
+    )
+    monkeypatch.setattr(
+        "cidc_api.models.models.revoke_download_access",
+        gcloud_client.revoke_download_access,
+    )
+
+    return gcloud_client
