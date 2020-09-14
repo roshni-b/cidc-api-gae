@@ -50,6 +50,7 @@ from ..config.settings import (
     MAX_PAGINATION_PAGE_SIZE,
     TESTING,
     INACTIVE_USER_DAYS,
+    GOOGLE_MAX_DOWNLOAD_PERMISSIONS,
 )
 from ..shared import emails
 from ..shared.gcloud_client import (
@@ -244,6 +245,10 @@ class Users(CommonColumns):
         """Returns true if this user is a CIDC admin."""
         return self.role == CIDCRole.ADMIN.value
 
+    def is_nci_user(self) -> bool:
+        """Returns true if this user is an NCI Biobank user."""
+        return self.role == CIDCRole.NCI_BIOBANK_USER.value
+
     @with_default_session
     def update_accessed(self, session: Session, commit: bool = True):
         """Set this user's last system access to now."""
@@ -355,6 +360,17 @@ class Permissions(CommonColumns):
                 orig=f"`granted_to_user` user must exist, but no user found with id {self.granted_to_user}",
             )
 
+        # A user can only have 20 granular permissions at a time, due to GCS constraints
+        if (
+            len(Permissions.find_for_user(self.granted_to_user))
+            >= GOOGLE_MAX_DOWNLOAD_PERMISSIONS
+        ):
+            raise IntegrityError(
+                params=None,
+                statement=None,
+                orig=f"{grantee.email} has greater than or equal to the maximum number of allowed granular permissions ({GOOGLE_MAX_DOWNLOAD_PERMISSIONS}). Remove unused permissions to add others.",
+            )
+
         # Always commit, because we don't want to grant IAM download unless this insert succeeds.
         super().insert(session=session, commit=True, compute_etag=compute_etag)
 
@@ -409,18 +425,25 @@ class Permissions(CommonColumns):
     @staticmethod
     @with_default_session
     def grant_all_iam_permissions(session: Session):
-        perms = Permissions.list(session=session)
-        for perm in perms:
-            user_email = Users.find_by_id(perm.granted_to_user).email
-            grant_download_access(user_email, perm.trial_id, perm.upload_type)
+        Permissions._change_all_iam_permissions(grant=True, session=session)
 
     @staticmethod
     @with_default_session
     def revoke_all_iam_permissions(session: Session):
-        perms = Permissions.list(session=session)
+        Permissions._change_all_iam_permissions(grant=False, session=session)
+
+    @staticmethod
+    @with_default_session
+    def _change_all_iam_permissions(grant: bool, session: Session):
+        perms = Permissions.list(page_size=Permissions.count(), session=session)
         for perm in perms:
-            user_email = Users.find_by_id(perm.granted_to_user).email
-            revoke_download_access(user_email, perm.trial_id, perm.upload_type)
+            user = Users.find_by_id(perm.granted_to_user)
+            if user.is_admin() or user.is_nci_user():
+                continue
+            if grant:
+                grant_download_access(user.email, perm.trial_id, perm.upload_type)
+            else:
+                revoke_download_access(user.email, perm.trial_id, perm.upload_type)
 
 
 class ValidationMultiError(Exception):
@@ -884,7 +907,8 @@ class DownloadableFiles(CommonColumns):
         if facets:
             facet_groups = get_facet_groups_for_paths(facets)
             file_filters.append(DownloadableFiles.facet_group.in_(facet_groups))
-        if user and not user.is_admin():
+        # Admins and NCI biobank users can view all files
+        if user and not user.is_admin() and not user.is_nci_user():
             permissions = Permissions.find_for_user(user.id)
             perm_set = [(p.trial_id, p.upload_type) for p in permissions]
             file_tuples = tuple_(

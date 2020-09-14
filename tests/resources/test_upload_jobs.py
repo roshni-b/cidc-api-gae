@@ -610,19 +610,8 @@ def test_upload_manifest(cidc_api, clean_db, monkeypatch, capsys):
 
     client = cidc_api.test_client()
 
-    # Try to upload manifest without permission
+    # NCI users can upload manifests without explicit permission
     make_nci_biobank_user(user_id, cidc_api)
-    res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
-    )
-    assert res.status_code == 401
-    assert "not authorized to upload pbmc data" in str(res.json["_error"]["message"])
-
-    # Add permission and retry the upload
-    grant_upload_permission(user_id, "pbmc", cidc_api)
-
-    mocks.clear_all()
-
     res = client.post(
         MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
     )

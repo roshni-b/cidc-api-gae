@@ -7,29 +7,17 @@ from functools import wraps
 from marshmallow import Schema, INCLUDE
 from webargs import fields
 from webargs.flaskparser import use_args
-from flask import Blueprint, request, Request, Response, jsonify
+from flask import Blueprint, request, jsonify
 from jsonschema.exceptions import ValidationError
 from sqlalchemy.orm.session import Session
-from sqlalchemy.orm.exc import NoResultFound
-from werkzeug.exceptions import (
-    BadRequest,
-    InternalServerError,
-    NotFound,
-    Unauthorized,
-    PreconditionRequired,
-)
+from werkzeug.exceptions import BadRequest, NotFound, Unauthorized, PreconditionRequired
 
-from cidc_schemas import constants, prism, json_validation
+from cidc_schemas import prism, json_validation
 from cidc_schemas.template import Template
 from cidc_schemas.template_reader import XlTemplateReader
 
 from ..shared import gcloud_client
-from ..shared.auth import (
-    public,
-    requires_auth,
-    get_current_user,
-    authenticate_and_get_user,
-)
+from ..shared.auth import requires_auth, get_current_user, authenticate_and_get_user
 from ..shared.rest_utils import (
     with_lookup,
     lookup,
@@ -44,7 +32,6 @@ from ..models import (
     UploadJobListSchema,
     UploadJobStatus,
     TrialMetadata,
-    DownloadableFiles,
     UploadJobs,
     Permissions,
     CIDCRole,
@@ -249,13 +236,19 @@ def validate(template, xlsx):
 
 def check_permissions(user, trial_id, template_type):
     """
-    Check that the given user has permissions to access the given trial / template type.
+    Check that the given user has permissions to upload to the given trial / template type.
 
     If no trial exists with this ID, raise a 404.
     If no permission exists for this user-trial-template_type trio, raise a 401.
     """
     perm = Permissions.find_for_user_trial_type(user.id, trial_id, template_type)
-    if not perm and user.role != CIDCRole.ADMIN.value:
+    # Admins don't need permissions
+    if user.is_admin():
+        return
+    # NCI users don't need permissions on manifest uploads
+    if user.is_nci_user() and template_type in prism.SUPPORTED_MANIFESTS:
+        return
+    if not perm:
         print(f"Unauthorized attempt to access trial {trial_id} by {user.email!r}")
         raise Unauthorized(
             f"{user.email} is not authorized to upload {template_type} data to {trial_id}. "

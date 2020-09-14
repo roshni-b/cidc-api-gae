@@ -16,12 +16,7 @@ from ..models import (
 )
 from ..shared import gcloud_client
 from ..shared.auth import get_current_user, requires_auth
-from ..shared.rest_utils import (
-    with_lookup,
-    marshal_response,
-    unmarshal_request,
-    use_args_with_pagination,
-)
+from ..shared.rest_utils import with_lookup, marshal_response, use_args_with_pagination
 from ..config.settings import GOOGLE_DATA_BUCKET
 
 downloadable_files_bp = Blueprint("downloadable_files", __name__)

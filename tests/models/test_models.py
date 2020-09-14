@@ -1,5 +1,4 @@
 import io
-import sys
 from copy import deepcopy
 from functools import wraps
 from datetime import datetime, timedelta
@@ -20,6 +19,7 @@ from cidc_api.models import (
     UploadJobStatus,
     NoResultFound,
     ValidationMultiError,
+    CIDCRole,
 )
 from cidc_api.config.settings import (
     PAGINATION_PAGE_SIZE,
@@ -29,7 +29,7 @@ from cidc_api.config.settings import (
 from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 from cidc_schemas import prism
 
-from ..utils import mock_gcloud_client
+from ..utils import make_admin, mock_gcloud_client
 
 
 def db_test(test):
@@ -707,6 +707,14 @@ def test_permissions_grant_all_iam_permissions(clean_db, monkeypatch):
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
     )
 
+    # not called on admins or nci biobank users
+    gcloud_client.grant_download_access.reset_mock()
+    for role in [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]:
+        user.role = role
+        user.update()
+        Permissions.grant_all_iam_permissions()
+        gcloud_client.grant_download_access.assert_not_called()
+
 
 @db_test
 def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
@@ -729,3 +737,11 @@ def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
     gcloud_client.revoke_download_access.assert_has_calls(
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
     )
+
+    # not called on admins or nci biobank users
+    gcloud_client.revoke_download_access.reset_mock()
+    for role in [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]:
+        user.role = role
+        user.update()
+        Permissions.revoke_all_iam_permissions()
+        gcloud_client.revoke_download_access.assert_not_called()
