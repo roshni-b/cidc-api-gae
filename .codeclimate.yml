@@ -2,3 +2,7 @@ version: "2"
 exclude_patterns:
   - "migrations/"
   - "tests/"
+checks:
+  method-complexity:
+    config:
+      threshold: 10
