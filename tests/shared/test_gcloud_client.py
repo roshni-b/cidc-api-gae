@@ -98,7 +98,7 @@ def test_grant_download_access(monkeypatch):
         EMAIL,
         'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/wes")',
     )
-
+  
     def set_iam_policy(policy):
         bindings = policy.bindings
         assert len(bindings) == 2
@@ -145,11 +145,17 @@ def test_revoke_download_access(monkeypatch):
         )
 
     # revocation on well-formed bindings
-    _mock_gcloud_storage(list(bindings), set_iam_policy, monkeypatch)
+    _mock_gcloud_storage([binding, other_binding], set_iam_policy, monkeypatch)
     revoke_download_access(EMAIL, "10021", "wes")
 
     # revocation when target binding doesn't exist
-    _mock_gcloud_storage(bindings[1:], set_iam_policy, monkeypatch)
+    binding["condition"]["expression"] = _build_download_expression(
+        [
+            'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/cytof")'
+        ],
+        'request.time < timestamp("2020-10-26T00:00:00Z")',
+    )
+    _mock_gcloud_storage([binding, other_binding], set_iam_policy, monkeypatch)
     revoke_download_access(EMAIL, "10021", "wes")
 
     # revocation when target binding is duplicated

@@ -176,7 +176,6 @@ def revoke_download_access(user_email: str, trial_id: str, upload_type: str):
 # Arbitrary upper bound on the number of GCS bindings we expect a user to have
 MAX_REVOKE_ALL_ITERATIONS = 250
 
-
 def revoke_all_download_access(user_email: str):
     """
     Completely revoke a user's download access to all objects in the data bucket.
