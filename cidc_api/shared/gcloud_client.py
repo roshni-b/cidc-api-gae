@@ -21,6 +21,7 @@ from ..config.settings import (
     GOOGLE_EMAILS_TOPIC,
     GOOGLE_PATIENT_SAMPLE_TOPIC,
     GOOGLE_ARTIFACT_UPLOAD_TOPIC,
+    GOOGLE_MAX_DOWNLOAD_PERMISSIONS,
     TESTING,
     ENV,
     DEV_CFUNCTIONS_SERVER,
@@ -122,8 +123,7 @@ def grant_download_access(user_email: str, trial_id: str, upload_type: str):
     """
     Give a user download access to all objects in a trial of a particular upload type.
     """
-    url_prefix, prefix_expression = _get_prefix_expression(trial_id, upload_type)
-    ttl_expression = _get_ttl_expression()
+    url_prefix, prefix_expression = _build_prefix_clause(trial_id, upload_type)
 
     print(f"Granting download access on {url_prefix}* to {user_email}")
 
@@ -133,25 +133,13 @@ def grant_download_access(user_email: str, trial_id: str, upload_type: str):
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.version = 3
 
-    # find the policy binding for this user if one exists
-    binding = _find_and_pop_download_binding(
-        policy, user_email
-    ) or _create_empty_download_binding(user_email)
+    # try to find the policy binding for this user if one exists
+    binding = _find_and_pop_download_binding(policy, user_email, prefix_expression)
+    # build a new binding if no existing binding was found
+    if binding is None:
+        binding = _build_download_binding(user_email, prefix_expression)
 
-    # add the permission clause in the binding condition expression if it isn't already included
-    expression = binding["condition"]["expression"]
-    if prefix_expression not in expression:
-        if expression:
-            prefix_clauses, _ = _unpack_download_expression(expression)
-            prefix_clauses.append(prefix_expression)
-        else:
-            # This is a new binding with no prefix other clauses
-            prefix_clauses = [prefix_expression]
-        binding["condition"]["expression"] = _build_download_expression(
-            prefix_clauses, ttl_expression
-        )
-
-    # add the updated binding to the policy
+    # (re)insert the binding into the policy
     policy.bindings.append(binding)
     bucket.set_iam_policy(policy)
 
@@ -160,7 +148,7 @@ def revoke_download_access(user_email: str, trial_id: str, upload_type: str):
     """
     Revoke a user's download access to all objects in a trial of a particular upload type.
     """
-    url_prefix, prefix_expression = _get_prefix_expression(trial_id, upload_type)
+    url_prefix, prefix_expression = _build_prefix_clause(trial_id, upload_type)
 
     print(f"Revoking download access on {url_prefix}* from {user_email}")
 
@@ -170,35 +158,23 @@ def revoke_download_access(user_email: str, trial_id: str, upload_type: str):
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.version = 3
 
-    # find the policy binding for this user if one exists
-    binding = _find_and_pop_download_binding(policy, user_email)
-
-    # remove the relevant clause from the condition if it exists
-    if binding is not None:
-        expression = binding["condition"]["expression"]
-        if prefix_expression in expression:
-            prefix_clauses, ttl_clause = _unpack_download_expression(expression)
-            filtered_clauses = [
-                clause for clause in prefix_clauses if prefix_expression not in clause
-            ]
-            binding["condition"]["expression"] = _build_download_expression(
-                filtered_clauses, ttl_clause
-            )
-        else:
-            warnings.warn(
-                f"Tried to revoke a non-existent download IAM permission for {user_email}/{trial_id}/{upload_type}"
-            )
-
-        # add the updated binding to the policy
-        policy.bindings.append(binding)
+    # find and remove all matching policy bindings for this user if any exist
+    for i in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS):
+        removed_binding = _find_and_pop_download_binding(
+            policy, user_email, prefix_expression
+        )
+        if removed_binding is None:
+            if i == 0:
+                warnings.warn(
+                    f"Tried to revoke a non-existent download IAM permission for {user_email}/{trial_id}/{upload_type}"
+                )
+            break
 
     bucket.set_iam_policy(policy)
 
 
-# This is a limit set by GCP - there will never be more than this many
-# conditional bindings for a single member-role combo.
-# See: https://cloud.google.com/iam/docs/conditions-overview
-MAX_DOWNLOAD_BINDINGS = 20
+# Arbitrary upper bound on the number of GCS bindings we expect a user to have
+MAX_REVOKE_ALL_ITERATIONS = 250
 
 
 def revoke_all_download_access(user_email: str):
@@ -212,14 +188,15 @@ def revoke_all_download_access(user_email: str):
     policy.version = 3
 
     # find and pop all download role policy bindings for this user
-    for _ in range(MAX_DOWNLOAD_BINDINGS):
-        if _find_and_pop_download_binding(policy, user_email) is None:
+    for _ in range(MAX_REVOKE_ALL_ITERATIONS):
+        # this finds and removes *any* download binding for the given user_email
+        if _find_and_pop_download_binding(policy, user_email, "") is None:
             break
 
     bucket.set_iam_policy(policy)
 
 
-def _get_prefix_expression(trial_id: str, upload_type: str) -> Tuple[str, str]:
+def _build_prefix_clause(trial_id: str, upload_type: str) -> Tuple[str, str]:
     """
     Build the object URL prefix and CEL IAM condition for restricting downloads to objects 
     belonging to the given trial_id and upload_type.
@@ -236,7 +213,7 @@ def _get_prefix_expression(trial_id: str, upload_type: str) -> Tuple[str, str]:
     return url_prefix, prefix_expression
 
 
-def _get_ttl_expression(days_until_expiry: int = INACTIVE_USER_DAYS) -> str:
+def _build_ttl_clause(days_until_expiry: int = INACTIVE_USER_DAYS) -> str:
     """
     Build the time-to-live CEL IAM condition for restricting GCS download permissions' lifetimes
     to `days_until_expiry` days.
@@ -250,22 +227,12 @@ def _get_ttl_expression(days_until_expiry: int = INACTIVE_USER_DAYS) -> str:
     return ttl_expression
 
 
-_GCS_CEL_AND = " && "
-_GCS_CEL_OR = " || "
-
-
-def _build_download_expression(prefix_clauses: List[str], ttl_clause: str) -> str:
-    return f"({_GCS_CEL_OR.join(prefix_clauses)}){_GCS_CEL_AND}{ttl_clause}"
-
-
-def _unpack_download_expression(download_expression: str) -> Tuple[List[str], str]:
-    prefix_clauses, ttl_clause = download_expression.split(_GCS_CEL_AND)
-    prefix_clauses = prefix_clauses[1:-1]  # trim parentheses
-    return prefix_clauses.split(_GCS_CEL_OR), ttl_clause
+def _build_download_expression(prefix_clause: str, ttl_clause: str) -> str:
+    return " && ".join([prefix_clause, ttl_clause])
 
 
 def _find_and_pop_download_binding(
-    policy: storage.bucket.Policy, user_email: str
+    policy: storage.bucket.Policy, user_email: str, prefix_clause: str
 ) -> Optional[dict]:
     """
     Find a download policy binding for the given `user_email` on `policy`, and pop
@@ -278,11 +245,12 @@ def _find_and_pop_download_binding(
     for i, binding in enumerate(policy.bindings):
         user_is_member = binding.get("members") == {member_id}
         role_is_download = binding.get("role") == GOOGLE_DOWNLOAD_ROLE
-        if user_is_member and role_is_download:
+        has_prefix = prefix_clause in binding.get("condition", {}).get("expression", "")
+        if user_is_member and role_is_download and has_prefix:
             # a user should be a member of no more than one conditional download binding
             if user_binding_index is not None:
                 warnings.warn(
-                    f"Found multiple conditional download bindings for {user_email}. This is an invariant violation - "
+                    f"Found multiple conditional download bindings for {user_email}/{prefix_clause}. This is an invariant violation - "
                     "check out permissions on the CIDC data bucket in the GCS console to debug."
                 )
                 break
@@ -297,8 +265,9 @@ def _find_and_pop_download_binding(
     return binding
 
 
-def _create_empty_download_binding(user_email: str) -> dict:
+def _build_download_binding(user_email: str, prefix_clause: str) -> dict:
     member_id = f"user:{user_email}"
+    ttl_clause = _build_ttl_clause()
 
     return {
         "role": GOOGLE_DOWNLOAD_ROLE,
@@ -306,7 +275,7 @@ def _create_empty_download_binding(user_email: str) -> dict:
         "condition": {
             "title": f"Conditional download access for {user_email}",
             "description": f"Auto-updated by the CIDC API on {datetime.datetime.now()}",
-            "expression": "",
+            "expression": _build_download_expression(prefix_clause, ttl_clause),
         },
     }
 

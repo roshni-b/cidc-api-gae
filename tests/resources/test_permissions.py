@@ -9,6 +9,7 @@ from cidc_api.models import (
     TrialMetadata,
     CIDCRole,
 )
+from cidc_api.config.settings import GOOGLE_MAX_DOWNLOAD_PERMISSIONS
 
 from ..utils import mock_current_user, make_admin, mock_gcloud_client
 
@@ -185,6 +186,25 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     assert "user must exist, but no user found" in res.json["_error"]["message"]
     gcloud_client.grant_download_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
+
+    # The permission grantee must have <= GOOGLE_MAX_DOWNLOAD_PERMISSIONS
+    perm["granted_to_user"] = current_user_id
+    inserts_fail_eventually = False
+    for i in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS):
+        gcloud_client.reset_mocks()
+        perm["upload_type"] = f"upload-type-{str(i)}"
+        res = client.post("permissions", json=perm)
+        if res.status_code != 201:
+            assert res.status_code == 400
+            assert (
+                "greater than or equal to the maximum number of allowed granular permissions"
+                in res.json["_error"]["message"]
+            )
+            gcloud_client.grant_download_access.assert_not_called()
+            gcloud_client.revoke_download_access.assert_not_called()
+            inserts_fail_eventually = True
+            break
+    assert inserts_fail_eventually
 
 
 def test_delete_permission(cidc_api, clean_db, monkeypatch):

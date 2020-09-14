@@ -63,6 +63,10 @@ GOOGLE_DOWNLOAD_ROLE = "roles/storage.objectViewer"  # same across environments
 GOOGLE_PATIENT_SAMPLE_TOPIC = environ.get("GOOGLE_PATIENT_SAMPLE_TOPIC")
 GOOGLE_EMAILS_TOPIC = environ.get("GOOGLE_EMAILS_TOPIC")
 GOOGLE_ARTIFACT_UPLOAD_TOPIC = environ.get("GOOGLE_ARTIFACT_UPLOAD_TOPIC")
+# This is a limit set by GCP - there will never be more than this many
+# conditional bindings for a single member-role combo.
+# See: https://cloud.google.com/iam/docs/conditions-overview
+GOOGLE_MAX_DOWNLOAD_PERMISSIONS = 20
 
 ### File paths ###
 this_directory = path.dirname(path.abspath(__file__))
