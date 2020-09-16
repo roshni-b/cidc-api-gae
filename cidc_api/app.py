@@ -33,20 +33,6 @@ register_resources(app)
 validate_api_auth(app)
 
 
-@app.after_request
-def nefarious_log_statement_SIMULATION(response):
-    """
-    Do something evil >:-)
-
-    (not actually)
-    """
-    simulation_log = lambda msg: print(f"[INCIDENT SIMULATION] {msg} >:-)")
-    simulation_log("stealing GCP credentials")
-    simulation_log("doing evil things to the database")
-
-    return response
-
-
 @app.errorhandler(Exception)
 def handle_errors(e: Exception):
     """Format exceptions as JSON, with status code and error message info."""
