@@ -164,7 +164,10 @@ def build_facet_group_name_change():
         else:
             raise Exception("whoops! migration misconfigured")
 
-    return sa.case(cases)
+    # Some facet groups don't need to be renamed, so default to
+    # not changing a file's facet_group if the facet_group doesn't
+    # show up in the renaming map.
+    return sa.case(cases, else_=DownloadableFiles.facet_group)
 
 
 facet_group_updates = build_facet_group_name_change()
