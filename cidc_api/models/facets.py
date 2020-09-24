@@ -205,16 +205,10 @@ assay_facets: Facets = {
 
 clinical_facets: Facets = {
     "Participants Info": FacetConfig(
-        [
-            "Clinical Type|Participants Info|participants.csv",
-            "csv|participants info",
-        ]
+        ["Clinical Type|Participants Info|participants.csv", "csv|participants info"]
     ),
     "Samples Info": FacetConfig(
-        [
-            "Clinical Type|Samples Info|samples.csv",
-            "csv|samples info",
-        ]
+        ["Clinical Type|Samples Info|samples.csv", "csv|samples info"]
     ),
 }
 
