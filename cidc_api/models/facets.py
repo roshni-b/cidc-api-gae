@@ -205,9 +205,17 @@ assay_facets: Facets = {
 
 clinical_facets: Facets = {
     "Participants Info": FacetConfig(
-        ["Clinical Type|Participants Info|participants.csv"]
+        [
+            "Clinical Type|Participants Info|participants.csv",
+            "csv|participants info",
+        ]
     ),
-    "Samples Info": FacetConfig(["Clinical Type|Samples Info|samples.csv"]),
+    "Samples Info": FacetConfig(
+        [
+            "Clinical Type|Samples Info|samples.csv",
+            "csv|samples info",
+        ]
+    ),
 }
 
 facets: Dict[str, Facets] = {
