@@ -212,14 +212,17 @@ clinical_facets: Facets = {
     ),
 }
 
-facets: Dict[str, Facets] = {
+facets_dict: Dict[str, Facets] = {
     "Assay Type": assay_facets,
     "Clinical Type": clinical_facets,
 }
 
 
-def _build_facet_groups_to_names(_facets=facets):
-    path_to_name = lambda path: "|".join(path)
+FACET_NAME_DELIM = "|"
+
+
+def _build_facet_groups_to_names(_facets=facets_dict):
+    path_to_name = lambda path: FACET_NAME_DELIM.join(path)
 
     facet_names = {}
 
@@ -258,7 +261,7 @@ def get_facet_groups_for_paths(paths: List[List[str]]) -> List[str]:
     for path in paths:
         try:
             assert len(path) in (2, 3)
-            facet_config: Any = facets
+            facet_config: Any = facets_dict
             for key in path:
                 facet_config = facet_config[key]
             assert isinstance(facet_config, FacetConfig)

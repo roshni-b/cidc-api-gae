@@ -213,6 +213,26 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
         f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/cytof/.../analysis.zip\t{trial_id}_cytof_..._analysis.zip\n"
     )
 
+    # Filelists don't get truncated (i.e., paginated)
+    new_ids = range(1000, 1300)
+    with cidc_api.app_context():
+        for id in new_ids:
+            DownloadableFiles(
+                id=id,
+                trial_id=trial_id,
+                object_url=str(id),
+                upload_type="",
+                file_name="",
+                data_format="",
+                file_size_bytes=0,
+                uploaded_timestamp=datetime.now(),
+            ).insert()
+
+    res = client.get(f"{url},{','.join([str(id) for id in new_ids])}")
+    assert res.status_code == 200
+    # newly inserted files + already inserted files + EOF newline
+    assert len(res.data.decode("utf-8").split("\n")) == len(new_ids) + 2 + 1
+
 
 def test_get_filter_facets(cidc_api, clean_db, monkeypatch):
     """Check that getting filter facets works as expected"""

@@ -17,7 +17,7 @@ from ..models import (
 from ..shared import gcloud_client
 from ..shared.auth import get_current_user, requires_auth
 from ..shared.rest_utils import with_lookup, marshal_response, use_args_with_pagination
-from ..config.settings import GOOGLE_DATA_BUCKET
+from ..config.settings import GOOGLE_DATA_BUCKET, MAX_PAGINATION_PAGE_SIZE
 
 downloadable_files_bp = Blueprint("downloadable_files", __name__)
 
@@ -80,27 +80,26 @@ def get_filelist(args):
     Return a file `filelist.tsv` mapping GCS URIs to flat filenames for the
     provided set of file ids.
     """
-    # Build query filter
+    # Build the permissions filter
     current_user = get_current_user()
     user_perms_filter = DownloadableFiles.build_file_filter(user=current_user)
-    file_ids = args["file_ids"]
-    batch_id_filter = lambda q: user_perms_filter(
-        q.filter(DownloadableFiles.id.in_(file_ids))
+
+    # Get request object_urls
+    urls = DownloadableFiles.list_object_urls(
+        args["file_ids"], filter_=user_perms_filter
     )
 
-    # Get requested files
-    files = DownloadableFiles.list(filter_=batch_id_filter)
-
     # If the query returned no files, respond with 404
-    if len(files) == 0:
+    if len(urls) == 0:
         raise NotFound()
 
     # Build TSV mapping GCS URIs to flat filenames
     # (bytes because that's what send_file knows how to send)
     tsv = b""
-    for f in files:
-        full_gcs_uri = f"gs://{GOOGLE_DATA_BUCKET}/{f.object_url}"
-        tsv += bytes(f"{full_gcs_uri}\t{f.flat_object_url}\n", "utf-8")
+    for url in urls:
+        flat_url = url.replace("/", "_")
+        full_gcs_uri = f"gs://{GOOGLE_DATA_BUCKET}/{url}"
+        tsv += bytes(f"{full_gcs_uri}\t{flat_url}\n", "utf-8")
 
     buffer = BytesIO(tsv)
 

@@ -3,11 +3,10 @@ from unittest.mock import MagicMock
 import pytest
 from werkzeug.exceptions import BadRequest
 
-from cidc_api.models.facets import (
-    facets,
+from cidc_api.models.files.facets import (
+    facets_dict,
     get_facet_info,
     get_facet_groups_for_paths,
-    FacetConfig,
 )
 
 
@@ -44,9 +43,9 @@ def test_get_facet_groups_for_paths():
     ]
     facets_for_paths = get_facet_groups_for_paths(good_paths)
     assert facets_for_paths == [
-        *facets["Assay Type"]["WES"]["Somatic"].match_clauses,
-        *facets["Assay Type"]["RNA"]["Quality"].match_clauses,
-        *facets["Clinical Type"]["Participants Info"].match_clauses,
+        *facets_dict["Assay Type"]["WES"]["Somatic"].match_clauses,
+        *facets_dict["Assay Type"]["RNA"]["Quality"].match_clauses,
+        *facets_dict["Clinical Type"]["Participants Info"].match_clauses,
     ]
 
     # Non-existent paths
