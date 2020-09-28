@@ -87,5 +87,7 @@ class TrialMetadataSchema(BaseSchema):
     class Meta(BaseSchema.Meta):
         model = TrialMetadata
 
+    file_bundle = fields.Dict(dump_only=True)
+
 
 TrialMetadataListSchema = _make_list_schema(TrialMetadataSchema())
