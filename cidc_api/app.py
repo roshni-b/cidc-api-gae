@@ -43,6 +43,9 @@ def handle_errors(e: Exception):
             _error["message"] = e.data["messages"]
         else:
             _error["message"] = e.description
+
+        # general HTTP error log
+        print(f"HTTP {status_code}: {_error['message']}")
     else:
         status_code = 500
         # This is an internal server error, so log the traceback for debugging purposes.
@@ -55,6 +58,7 @@ def handle_errors(e: Exception):
     eve_style_error_json = {"_status": "ERR", "_error": _error}
     response = jsonify(eve_style_error_json)
     response.status_code = status_code
+
     return response
 
 

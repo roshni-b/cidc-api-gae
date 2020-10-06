@@ -272,8 +272,8 @@ class Users(CommonColumns):
     @with_default_session
     def find_by_email(email: str, session: Session) -> Optional:
         """
-            Search for a record in the Users table with the given email.
-            If found, return the record. If not found, return None.
+        Search for a record in the Users table with the given email.
+        If found, return the record. If not found, return None.
         """
         user = session.query(Users).filter_by(email=email).first()
         return user
@@ -282,9 +282,9 @@ class Users(CommonColumns):
     @with_default_session
     def create(profile: dict, session: Session):
         """
-            Create a new record for a user if one doesn't exist
-            for the given email. Return the user record associated
-            with that email.
+        Create a new record for a user if one doesn't exist
+        for the given email. Return the user record associated
+        with that email.
         """
         email = profile.get("email")
         first_n = profile.get("given_name")
@@ -461,8 +461,10 @@ class ValidationMultiError(Exception):
     pass
 
 
-trial_metadata_validator: json_validation._Validator = json_validation.load_and_validate_schema(
-    "clinical_trial.json", return_validator=True
+trial_metadata_validator: json_validation._Validator = (
+    json_validation.load_and_validate_schema(
+        "clinical_trial.json", return_validator=True
+    )
 )
 
 FileBundle = Dict[str, Dict[FilePurpose, List[int]]]
@@ -489,7 +491,7 @@ class TrialMetadata(CommonColumns):
     @with_default_session
     def find_by_trial_id(trial_id: str, session: Session):
         """
-            Find a trial by its CIMAC id.
+        Find a trial by its CIMAC id.
         """
         return session.query(TrialMetadata).filter_by(trial_id=trial_id).first()
 
@@ -497,7 +499,7 @@ class TrialMetadata(CommonColumns):
     @with_default_session
     def select_for_update_by_trial_id(trial_id: str, session: Session):
         """
-            Find a trial by its CIMAC id.
+        Find a trial by its CIMAC id.
         """
         try:
             trial = (
@@ -516,9 +518,9 @@ class TrialMetadata(CommonColumns):
         trial_id: str, assay_patch: dict, session: Session, commit: bool = False
     ):
         """
-            Applies assay updates to the metadata object from the trial with id `trial_id`.
+        Applies assay updates to the metadata object from the trial with id `trial_id`.
 
-            TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
+        TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
         """
         return TrialMetadata._patch_trial_metadata(
             trial_id, assay_patch, session=session, commit=commit
@@ -530,9 +532,9 @@ class TrialMetadata(CommonColumns):
         trial_id: str, manifest_patch: dict, session: Session, commit: bool = False
     ):
         """
-            Applies manifest updates to the metadata object from the trial with id `trial_id`.
+        Applies manifest updates to the metadata object from the trial with id `trial_id`.
 
-            TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
+        TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
         """
         return TrialMetadata._patch_trial_metadata(
             trial_id, manifest_patch, session=session, commit=commit
@@ -544,11 +546,11 @@ class TrialMetadata(CommonColumns):
         trial_id: str, json_patch: dict, session: Session, commit: bool = False
     ):
         """
-            Applies updates to the metadata object from the trial with id `trial_id`
-            and commits current session.
+        Applies updates to the metadata object from the trial with id `trial_id`
+        and commits current session.
 
-            TODO: remove this function and dependency on it, in favor of separate assay
-            and manifest patch strategies.
+        TODO: remove this function and dependency on it, in favor of separate assay
+        and manifest patch strategies.
         """
 
         trial = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
@@ -575,7 +577,7 @@ class TrialMetadata(CommonColumns):
         trial_id: str, metadata_json: dict, session: Session, commit: bool = True
     ):
         """
-            Create a new clinical trial metadata record.
+        Create a new clinical trial metadata record.
         """
 
         print(f"Creating new trial metadata with id {trial_id}")
@@ -822,15 +824,34 @@ class UploadJobs(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def merge_extra_metadata(job_id, files, session):
+    def merge_extra_metadata(job_id: int, files: dict, session: Session):
+        """
+        Args:
+            job_id: the ID of the UploadJob to merge
+            files: mapping from uuid of the artifact-to-update to metadata file-to-update-from
+            session: the current session; uses default if not passed
+        Returns:
+            None
+        Raises:
+            ValueError
+                if `job_id` doesn't exist or is already merged
+                from prism.merge_artifact_extra_metadata
+        """
 
         job = UploadJobs.find_by_id(job_id, session=session)
+
+        if job is None or job.status == UploadJobStatus.MERGE_COMPLETED:
+            raise ValueError(f"Upload job {job_id} doesn't exist or is already merged")
 
         print(f"About to merge extra md to {job.id}/{job.status}")
 
         for uuid, file in files.items():
             print(f"About to parse/merge extra md on {uuid}")
-            job.metadata_patch, updated_artifact, _ = prism.merge_artifact_extra_metadata(
+            (
+                job.metadata_patch,
+                updated_artifact,
+                _,
+            ) = prism.merge_artifact_extra_metadata(
                 job.metadata_patch, uuid, job.upload_type, file
             )
             print(f"Updated md for {uuid}: {updated_artifact.keys()}")
@@ -874,7 +895,7 @@ class UploadJobs(CommonColumns):
 
 class DownloadableFiles(CommonColumns):
     """
-    Store required fields from: 
+    Store required fields from:
     https://github.com/CIMAC-CIDC/cidc-schemas/blob/master/cidc_schemas/schemas/artifacts/artifact_core.json
     """
 
@@ -957,12 +978,12 @@ class DownloadableFiles(CommonColumns):
         Build a file filter function based on the provided parameters. The resultant
         filter can then be passed as the `filter_` argument of `DownloadableFiles.list`
         or `DownloadableFiles.count`.
-        
+
         Args:
             trial_ids: if provided, the filter will include only files with these trial IDs.
             upload_types: if provided, the filter will include only files with these upload types.
             analysis_friendly: if True, the filter will include only files that are "analysis-friendly".
-            non_admin_user_id: if provided, the filter will include only files that satisfy 
+            non_admin_user_id: if provided, the filter will include only files that satisfy
                 this user's data access permissions.
         Returns:
             A function that adds filters to a query against the DownloadableFiles table.
@@ -1086,7 +1107,7 @@ class DownloadableFiles(CommonColumns):
     @with_default_session
     def get_by_object_url(object_url: str, session: Session):
         """
-        Look up the downloadable file record associated with 
+        Look up the downloadable file record associated with
         the given GCS object url.
         """
         return session.query(DownloadableFiles).filter_by(object_url=object_url).one()
