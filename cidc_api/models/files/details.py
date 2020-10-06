@@ -118,8 +118,8 @@ details_dict = {
     "/olink/chip_/assay_npx.xlsx": FileDetails("analysis"),
     "/olink/chip_/assay_raw_ct.csv": FileDetails("source"),
     # IHC
-    "Assay Type|IHC|All IHC Files|/ihc": FileDetails("source"),
     "/ihc/ihc_image.": FileDetails("source"),
+    "csv|ihc marker combined": FileDetails("analysis"),
     # Clinical
     "csv|participants info": FileDetails("clinical"),
     "csv|samples info": FileDetails("clinical"),
