@@ -510,6 +510,15 @@ def test_create_downloadable_file_from_metadata(clean_db, monkeypatch):
 
     # Create the trial (to avoid violating foreign-key constraint)
     TrialMetadata.create(TRIAL_ID, METADATA)
+
+    # Create files with empty or "null" additional metadata
+    for nullish_value in ["null", None, {}]:
+        df = DownloadableFiles.create_from_metadata(
+            TRIAL_ID, "wes", file_metadata, additional_metadata=nullish_value
+        )
+        clean_db.refresh(df)
+        assert df.additional_metadata == {}
+
     # Create the file
     DownloadableFiles.create_from_metadata(
         TRIAL_ID, "wes", file_metadata, additional_metadata=additional_metadata

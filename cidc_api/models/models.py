@@ -914,7 +914,7 @@ class DownloadableFiles(CommonColumns):
     facet_group = Column(String, nullable=False)
     # NOTE: this column actually has type CITEXT.
     data_format = Column(String, nullable=False)
-    additional_metadata = Column(JSONB, nullable=True)
+    additional_metadata = Column(JSONB, nullable=False)
     # TODO rename upload_type, because we store manifests in there too.
     # NOTE: this column actually has type CITEXT.
     upload_type = Column(String, nullable=False)
@@ -1025,11 +1025,10 @@ class DownloadableFiles(CommonColumns):
 
         # Filter out keys that aren't columns
         supported_columns = DownloadableFiles.__table__.columns.keys()
-        filtered_metadata = {
-            "trial_id": trial_id,
-            "upload_type": upload_type,
-            "additional_metadata": additional_metadata,
-        }
+        filtered_metadata = {"trial_id": trial_id, "upload_type": upload_type}
+        if additional_metadata not in ("null", None, {}):
+            filtered_metadata["additional_metadata"] = additional_metadata
+
         for key, value in file_metadata.items():
             if key in supported_columns:
                 filtered_metadata[key] = value
