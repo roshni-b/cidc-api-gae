@@ -114,6 +114,7 @@ permissions = {
     "json": {
         "id": TEST_RECORD_ID,
         "granted_to_user": TEST_RECORD_ID,
+        "granted_by_user": TEST_RECORD_ID,
         "trial_id": trial_metadata["json"]["trial_id"],
         "upload_type": downloadable_files["json"]["upload_type"],
     },

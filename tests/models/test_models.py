@@ -10,6 +10,7 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from cidc_api.app import app
 from cidc_api.models import (
+    CommonColumns,
     Users,
     TrialMetadata,
     UploadJobs,
@@ -662,29 +663,91 @@ def test_assay_upload_status():
 
 
 @db_test
-def test_permissions_delete(clean_db, monkeypatch):
+def test_permissions_insert(clean_db, monkeypatch, capsys):
+    gcloud_client = mock_gcloud_client(monkeypatch)
+    user = Users(email="test@user.com")
+    user.insert()
+    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
+    trial.insert()
+
+    _insert = MagicMock()
+    monkeypatch.setattr(CommonColumns, "insert", _insert)
+
+    # if don't give granted_by_user
+    perm = Permissions(
+        granted_to_user=user.id, trial_id=trial.trial_id, upload_type="wes"
+    )
+    with pytest.raises(IntegrityError, match="`granted_by_user` user must be given"):
+        perm.insert()
+    _insert.assert_not_called()
+
+    # if give bad granted_by_user
+    _insert.reset_mock()
+    perm = Permissions(
+        granted_to_user=user.id,
+        trial_id=trial.trial_id,
+        upload_type="wes",
+        granted_by_user=999999,
+    )
+    with pytest.raises(IntegrityError, match="`granted_by_user` user must exist"):
+        perm.insert()
+    _insert.assert_not_called()
+
+    # if give bad granted_to_user
+    _insert.reset_mock()
+    perm = Permissions(
+        granted_to_user=999999,
+        trial_id=trial.trial_id,
+        upload_type="wes",
+        granted_by_user=user.id,
+    )
+    with pytest.raises(IntegrityError, match="`granted_to_user` user must exist"):
+        perm.insert()
+    _insert.assert_not_called()
+
+    # This one will work
+    _insert.reset_mock()
+    perm = Permissions(
+        granted_to_user=user.id,
+        trial_id=trial.trial_id,
+        upload_type="wes",
+        granted_by_user=user.id,
+    )
+    perm.insert()
+    _insert.assert_called_once()
+    captured = capsys.readouterr()
+    assert (
+        captured.out.strip()
+        == f"admin-action: {user.email} gave {user.email} the permission wes on {trial.trial_id}"
+    )
+
+
+@db_test
+def test_permissions_delete(clean_db, monkeypatch, capsys):
     gcloud_client = mock_gcloud_client(monkeypatch)
     user = Users(email="test@user.com")
     user.insert()
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
     perm = Permissions(
-        granted_to_user=user.id, trial_id=trial.trial_id, upload_type="wes"
+        granted_to_user=user.id,
+        trial_id=trial.trial_id,
+        upload_type="wes",
+        granted_by_user=user.id,
     )
-    perm.insert()
-
-    # Failing to provide a deleted_by user throws ValueError
-    gcloud_client.reset_mocks()
-    with pytest.raises(ValueError, match="must provide a deleted_by"):
-        perm.delete()
-    gcloud_client.revoke_download_access.assert_not_called()
-    gcloud_client.grant_download_access.assert_not_called()
+    with capsys.disabled():
+        perm.insert()
 
     # Deletion of an existing permission leads to no error
     gcloud_client.reset_mocks()
     perm.delete(deleted_by=user.id)
     gcloud_client.revoke_download_access.assert_called_once()
     gcloud_client.grant_download_access.assert_not_called()
+    captured = capsys.readouterr()
+    assert (
+        captured.out.strip()
+        == f"admin-action: {user.email} removed from {user.email} the permission wes on {trial.trial_id}"
+    )
 
     # Deleting an already-deleted record is idempotent
     gcloud_client.reset_mocks()
@@ -715,7 +778,10 @@ def test_permissions_grant_all_iam_permissions(clean_db, monkeypatch):
     upload_types = ["wes", "cytof", "rna", "plasma"]
     for upload_type in upload_types:
         Permissions(
-            granted_to_user=user.id, trial_id=trial.trial_id, upload_type=upload_type
+            granted_to_user=user.id,
+            trial_id=trial.trial_id,
+            upload_type=upload_type,
+            granted_by_user=user.id,
         ).insert()
 
     Permissions.grant_all_iam_permissions()
@@ -746,7 +812,10 @@ def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
     upload_types = ["wes", "cytof", "rna", "plasma"]
     for upload_type in upload_types:
         Permissions(
-            granted_to_user=user.id, trial_id=trial.trial_id, upload_type=upload_type
+            granted_to_user=user.id,
+            trial_id=trial.trial_id,
+            upload_type=upload_type,
+            granted_by_user=user.id,
         ).insert()
 
     Permissions.revoke_all_iam_permissions()

@@ -369,6 +369,22 @@ class Permissions(CommonColumns):
                 orig=f"`granted_to_user` user must exist, but no user found with id {self.granted_to_user}",
             )
 
+        grantor = None
+        if self.granted_by_user is not None:
+            grantor = Users.find_by_id(self.granted_by_user)
+        else:
+            raise IntegrityError(
+                params=None,
+                statement=None,
+                orig=f"`granted_by_user` user must be given",
+            )
+        if grantor is None:
+            raise IntegrityError(
+                params=None,
+                statement=None,
+                orig=f"`granted_by_user` user must exist, but no user found with id {self.granted_by_user}",
+            )
+
         # A user can only have 20 granular permissions at a time, due to GCS constraints
         if (
             len(Permissions.find_for_user(self.granted_to_user))
@@ -380,9 +396,8 @@ class Permissions(CommonColumns):
                 orig=f"{grantee.email} has greater than or equal to the maximum number of allowed granular permissions ({GOOGLE_MAX_DOWNLOAD_PERMISSIONS}). Remove unused permissions to add others.",
             )
 
-        grantor = Users.find_by_id(self.granted_by_user)
         print(
-            "admin-action: {grantor.email} gave {grantee.email} the permission {self.upload_type} on {self.trial_id}"
+            f"admin-action: {grantor.email} gave {grantee.email} the permission {self.upload_type} on {self.trial_id}"
         )
 
         # Always commit, because we don't want to grant IAM download unless this insert succeeds.
@@ -398,10 +413,7 @@ class Permissions(CommonColumns):
 
     @with_default_session
     def delete(
-        self,
-        session: Session,
-        commit: bool = True,
-        deleted_by: Union[Users, int] = None,
+        self, deleted_by: Union[Users, int], session: Session, commit: bool = True
     ):
         """
         Delete this permission record from the database and revoke the corresponding IAM policy binding
@@ -413,11 +425,12 @@ class Permissions(CommonColumns):
         if grantee is None:
             raise NoResultFound(f"no user with id {self.granted_to_user}")
 
-        if deleted_by is None:
-            print(
-                f"something tried to delete {grantee.email} permission {self.upload_type} on {self.trial_id}"
-            )
-            raise ValueError("must provide a deleted_by")
+        if not isinstance(deleted_by, Users):
+            deleted_by_user = Users.find_by_id(deleted_by)
+        else:
+            deleted_by_user = deleted_by
+        if deleted_by_user is None:
+            raise NoResultFound(f"no user with id {deleted_by}")
 
         try:
             # Revoke IAM permission in GCS
@@ -427,10 +440,8 @@ class Permissions(CommonColumns):
                 "IAM revoke failed, and permission db record not removed."
             ) from e
 
-        if not isinstance(deleted_by, Users):
-            deleted_by = Users.find_by_id(deleted_by)
         print(
-            f"admin-action: {deleted_by.email} removed from {grantee.email} the permission {self.upload_type} on {self.trial_id}"
+            f"admin-action: {deleted_by_user.email} removed from {grantee.email} the permission {self.upload_type} on {self.trial_id}"
         )
         super().delete(session=session, commit=True)
 

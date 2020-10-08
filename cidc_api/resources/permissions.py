@@ -82,8 +82,9 @@ def get_permission(permission: Permissions) -> Permissions:
 @marshal_response(permission_schema, 201)
 def create_permission(permission: Permissions) -> Permissions:
     """Create a new permission record."""
-    granter = get_current_user()
-    permission.granted_by_user = granter.id
+    if permission.granted_by_user is None:
+        granter = get_current_user()
+        permission.granted_by_user = granter.id
     try:
         permission.insert()
     except IntegrityError as e:
