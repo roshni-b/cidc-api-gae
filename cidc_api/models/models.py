@@ -958,6 +958,8 @@ class DownloadableFiles(CommonColumns):
         The overarching data category for a file. E.g., files with `upload_type` of
         "cytof"` and `"cytof_analyis"` should both have a `data_category_prefix` of `"CyTOF"`.
         """
+        if self.data_category is None:
+            return None
         return self.data_category.split(FACET_NAME_DELIM, 1)[0]
 
     @data_category_prefix.expression

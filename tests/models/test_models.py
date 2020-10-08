@@ -624,6 +624,15 @@ def test_create_downloadable_file_from_blob(clean_db, monkeypatch):
     publisher.assert_called_once_with(fake_blob.name)
 
 
+def test_downloadable_files_data_category_prefix():
+    """Check that data_category_prefix's are derived as expected"""
+    file_w_category = DownloadableFiles(facet_group="/wes/r1_.fastq.gz")
+    assert file_w_category.data_category_prefix == "WES"
+
+    file_no_category = DownloadableFiles()
+    assert file_no_category.data_category_prefix == None
+
+
 @db_test
 def test_downloadable_files_get_related_files(clean_db):
     # Create a trial to avoid constraint errors
