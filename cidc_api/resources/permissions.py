@@ -101,7 +101,8 @@ def create_permission(permission: Permissions) -> Permissions:
 def delete_permission(permission: Permissions):
     """Delete a permission record."""
     try:
-        permission.delete()
+        deleter = get_current_user()
+        permission.delete(deleted_by=deleter)
     except NoResultFound as e:
         raise NotFound(str(e.orig))
     except IAMException as e:

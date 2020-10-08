@@ -380,6 +380,11 @@ class Permissions(CommonColumns):
                 orig=f"{grantee.email} has greater than or equal to the maximum number of allowed granular permissions ({GOOGLE_MAX_DOWNLOAD_PERMISSIONS}). Remove unused permissions to add others.",
             )
 
+        grantor = Users.find_by_id(self.granted_by_user)
+        print(
+            "admin-action: {grantor.email} gave {grantee.email} the permission {self.upload_type} on {self.trial_id}"
+        )
+
         # Always commit, because we don't want to grant IAM download unless this insert succeeds.
         super().insert(session=session, commit=True, compute_etag=compute_etag)
 
@@ -392,7 +397,12 @@ class Permissions(CommonColumns):
             raise IAMException("IAM grant failed.") from e
 
     @with_default_session
-    def delete(self, session: Session, commit: bool = True):
+    def delete(
+        self,
+        session: Session,
+        commit: bool = True,
+        deleted_by: Union[Users, int] = None,
+    ):
         """
         Delete this permission record from the database and revoke the corresponding IAM policy binding
         on the GCS data bucket.
@@ -403,6 +413,12 @@ class Permissions(CommonColumns):
         if grantee is None:
             raise NoResultFound(f"no user with id {self.granted_to_user}")
 
+        if deleted_by is None:
+            print(
+                f"something tried to delete {grantee.email} permission {self.upload_type} on {self.trial_id}"
+            )
+            raise ValueError("must provide a deleted_by")
+
         try:
             # Revoke IAM permission in GCS
             revoke_download_access(grantee.email, self.trial_id, self.upload_type)
@@ -411,6 +427,11 @@ class Permissions(CommonColumns):
                 "IAM revoke failed, and permission db record not removed."
             ) from e
 
+        if not isinstance(deleted_by, Users):
+            deleted_by = Users.find_by_id(deleted_by)
+        print(
+            f"admin-action: {deleted_by.email} removed from {grantee.email} the permission {self.upload_type} on {self.trial_id}"
+        )
         super().delete(session=session, commit=True)
 
     @staticmethod

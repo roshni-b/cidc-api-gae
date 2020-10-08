@@ -673,22 +673,29 @@ def test_permissions_delete(clean_db, monkeypatch):
     )
     perm.insert()
 
+    # Failing to provide a deleted_by user throws ValueError
+    gcloud_client.reset_mocks()
+    with pytest.raises(ValueError, match="must provide a deleted_by"):
+        perm.delete()
+    gcloud_client.revoke_download_access.assert_not_called()
+    gcloud_client.grant_download_access.assert_not_called()
+
     # Deletion of an existing permission leads to no error
     gcloud_client.reset_mocks()
-    perm.delete()
+    perm.delete(deleted_by=user)
     gcloud_client.revoke_download_access.assert_called_once()
     gcloud_client.grant_download_access.assert_not_called()
 
     # Deleting an already-deleted record is idempotent
     gcloud_client.reset_mocks()
-    perm.delete()
+    perm.delete(deleted_by=user)
     gcloud_client.revoke_download_access.assert_called_once()
     gcloud_client.grant_download_access.assert_not_called()
 
     # Deleting a record whose user doesn't exist leads to an error
     gcloud_client.reset_mocks()
     with pytest.raises(NoResultFound, match="no user with id"):
-        Permissions(granted_to_user=999999).delete()
+        Permissions(granted_to_user=999999).delete(deleted_by=user)
 
     gcloud_client.revoke_download_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
