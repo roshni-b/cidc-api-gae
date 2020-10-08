@@ -682,7 +682,7 @@ def test_permissions_delete(clean_db, monkeypatch):
 
     # Deletion of an existing permission leads to no error
     gcloud_client.reset_mocks()
-    perm.delete(deleted_by=user)
+    perm.delete(deleted_by=user.id)
     gcloud_client.revoke_download_access.assert_called_once()
     gcloud_client.grant_download_access.assert_not_called()
 
