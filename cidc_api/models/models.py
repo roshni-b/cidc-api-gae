@@ -27,6 +27,7 @@ from sqlalchemy import (
     case,
     select,
     literal_column,
+    not_,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -37,6 +38,7 @@ from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.query import Query
 from sqlalchemy.sql import expression, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.engine import ResultProxy
 from sqlalchemy.engine.interfaces import ExecutionContext
 
 from cidc_schemas import prism, unprism, json_validation
@@ -983,15 +985,17 @@ class DownloadableFiles(CommonColumns):
         return DATA_CATEGORY_CASE_CLAUSE
 
     @hybrid_property
-    def consolidated_upload_type(self):
+    def data_category_prefix(self):
         """
         The overarching data category for a file. E.g., files with `upload_type` of
-        "cytof"` and `"cytof_analyis"` should both have a `consolidated_upload_type` of `"CyTOF"`.
+        "cytof"` and `"cytof_analyis"` should both have a `data_category_prefix` of `"CyTOF"`.
         """
+        if self.data_category is None:
+            return None
         return self.data_category.split(FACET_NAME_DELIM, 1)[0]
 
-    @consolidated_upload_type.expression
-    def consolidated_upload_type(cls):
+    @data_category_prefix.expression
+    def data_category_prefix(cls):
         return func.split_part(DATA_CATEGORY_CASE_CLAUSE, FACET_NAME_DELIM, 1)
 
     @hybrid_property
@@ -1001,6 +1005,61 @@ class DownloadableFiles(CommonColumns):
     @file_purpose.expression
     def file_purpose(cls):
         return FILE_PURPOSE_CASE_CLAUSE
+
+    @property
+    def cimac_id(self):
+        """
+        Extract the `cimac_id` associated with this file, if any, by searching the file's 
+        additional metadata for a field with a key like `<some>.<path>.cimac_id`.
+
+        NOTE: this is not a sqlalchemy hybrid_property, and it can't be used directly in queries.
+        """
+        for key, value in self.additional_metadata.items():
+            if key.endswith("cimac_id"):
+                return value
+        return None
+
+    @with_default_session
+    def get_related_files(self, session: Session) -> list:
+        """
+        Return a list of file records related to this file. We could define "related"
+        in any number of ways, but currently, a related file:
+            * is sample-specific, and relates to the same sample as this file if this file 
+              has an associated `cimac_id`.
+            * isn't sample-specific, and relates to the same `data_category_prefix`.
+        """
+        # If this file has an associated sample, get other files associated with that sample.
+        # Otherwise, get other non-sample-specific files for this trial and data category.
+        if self.cimac_id is not None:
+            query = text(
+                "SELECT DISTINCT downloadable_files.* "
+                "FROM downloadable_files, LATERAL jsonb_each_text(additional_metadata) addm_kv "
+                "WHERE addm_kv.value LIKE :cimac_id AND trial_id = :trial_id AND id != :id"
+            )
+            params = {
+                "cimac_id": f"%{self.cimac_id}",
+                "trial_id": self.trial_id,
+                "id": self.id,
+            }
+            related_files = result_proxy_to_models(
+                session.execute(query, params), DownloadableFiles
+            )
+        else:
+            not_sample_specific = not_(
+                literal_column("additional_metadata::text").like('%.cimac_id":%')
+            )
+            related_files = (
+                session.query(DownloadableFiles)
+                .filter(
+                    DownloadableFiles.trial_id == self.trial_id,
+                    DownloadableFiles.data_category_prefix == self.data_category_prefix,
+                    DownloadableFiles.id != self.id,
+                    not_sample_specific,
+                )
+                .all()
+            )
+
+        return related_files
 
     @staticmethod
     def build_file_filter(
@@ -1182,12 +1241,12 @@ class DownloadableFiles(CommonColumns):
             select(
                 [
                     cls.trial_id,
-                    cls.consolidated_upload_type.label(type_col.key),
+                    cls.data_category_prefix.label(type_col.key),
                     cls.file_purpose.label(purp_col.key),
                     func.json_agg(cls.id).label(ids_col.key),
                 ]
             )
-            .group_by(cls.trial_id, cls.consolidated_upload_type, cls.file_purpose)
+            .group_by(cls.trial_id, cls.data_category_prefix, cls.file_purpose)
             .alias("id_bundles")
         )
         purpose_bundles = (
@@ -1234,3 +1293,10 @@ FILE_PURPOSE_CASE_CLAUSE = case(
         for facet_group, file_details in details_dict.items()
     ]
 )
+
+
+def result_proxy_to_models(
+    result_proxy: ResultProxy, model: BaseModel
+) -> List[BaseModel]:
+    """Materialize a sqlalchemy `result_proxy` iterable as a list of `model` instances"""
+    return [model(**dict(row_proxy.items())) for row_proxy in result_proxy]
