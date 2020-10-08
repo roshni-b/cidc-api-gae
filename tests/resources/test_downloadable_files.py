@@ -204,7 +204,10 @@ def test_get_related_files(cidc_api, clean_db, monkeypatch):
     # Give the user one permission
     with cidc_api.app_context():
         perm = Permissions(
-            granted_to_user=user_id, trial_id=trial_id, upload_type=upload_types[0]
+            granted_to_user=user_id,
+            trial_id=trial_id,
+            upload_type=upload_types[0],
+            granted_by_user=user_id,
         )
         perm.insert()
 
