@@ -36,7 +36,6 @@ upload_types = ["wes", "cytof"]
 
 def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
     """Insert two downloadable files into the database."""
-    trial_id = "test-trial"
     metadata_json = {
         "protocol_identifier": trial_id,
         "allowed_collection_event_names": [],
@@ -144,9 +143,9 @@ def test_get_downloadable_file(cidc_api, clean_db, monkeypatch):
 
     client = cidc_api.test_client()
 
-    # Non-admins get 404s for single files they don't have permision to view
+    # Non-admins get 401s for single files they don't have permision to view
     res = client.get(f"/downloadable_files/{file_id_1}")
-    assert res.status_code == 404
+    assert res.status_code == 401
 
     # Give the user one permission
     with cidc_api.app_context():
@@ -169,6 +168,51 @@ def test_get_downloadable_file(cidc_api, clean_db, monkeypatch):
     # Non-existent files yield 404
     res = client.get(f"/downloadable_files/123212321")
     assert res.status_code == 404
+
+
+def test_get_related_files(cidc_api, clean_db, monkeypatch):
+    """Check that the related_files endpoint calls `get_related_files`"""
+    user_id = setup_user(cidc_api, monkeypatch)
+    file_id_1, file_id_2 = setup_downloadable_files(cidc_api)
+
+    client = cidc_api.test_client()
+
+    # Add an additional file that is related to file 1
+    object_url = "/foo/bar"
+    with cidc_api.app_context():
+        DownloadableFiles(
+            trial_id=trial_id,
+            upload_type="wes",
+            object_url=object_url,
+            data_format="",
+            facet_group="/wes/r2_.fastq.gz",  # this is what makes this file "related"
+            uploaded_timestamp=datetime.now(),
+            file_size_bytes=0,
+            file_name="",
+        ).insert()
+
+    # Non-admins get 401s when requesting related files they don't have permission to view
+    res = client.get(f"/downloadable_files/{file_id_1}/related_files")
+    assert res.status_code == 401
+
+    # Give the user one permission
+    with cidc_api.app_context():
+        perm = Permissions(
+            granted_to_user=user_id, trial_id=trial_id, upload_type=upload_types[0]
+        )
+        perm.insert()
+
+    # Non-admins can get related files that they have permision to view
+    res = client.get(f"/downloadable_files/{file_id_1}/related_files")
+    assert res.status_code == 200
+    assert len(res.json["_items"]) == 1  # file 1 has 1 related file
+    assert res.json["_items"][0]["object_url"] == object_url
+
+    # Admins can get related files without permissions
+    make_admin(user_id, cidc_api)
+    res = client.get(f"/downloadable_files/{file_id_2}/related_files")
+    assert res.status_code == 200
+    assert len(res.json["_items"]) == 0  # file 2 has 0 related file
 
 
 def test_get_filelist(cidc_api, clean_db, monkeypatch):

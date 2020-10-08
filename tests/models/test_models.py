@@ -624,6 +624,64 @@ def test_create_downloadable_file_from_blob(clean_db, monkeypatch):
     publisher.assert_called_once_with(fake_blob.name)
 
 
+@db_test
+def test_downloadable_files_get_related_files(clean_db):
+    # Create a trial to avoid constraint errors
+    TrialMetadata.create(trial_id=TRIAL_ID, metadata_json=METADATA)
+
+    # Convenience function for building file records
+    def create_df(facet_group, additional_metadata={}) -> DownloadableFiles:
+        df = DownloadableFiles(
+            facet_group=facet_group,
+            additional_metadata=additional_metadata,
+            trial_id=TRIAL_ID,
+            uploaded_timestamp=datetime.now(),
+            file_size_bytes=0,
+            file_name="",
+            data_format="",
+            object_url=facet_group,  # just filler, not relevant to the test
+            upload_type="",
+        )
+        df.insert()
+        clean_db.refresh(df)
+        return df
+
+    # Set up test data
+    cimac_id_1 = "CTTTPPP01.01"
+    cimac_id_2 = "CTTTPPP02.01"
+    files = [
+        create_df(
+            "/cytof/normalized_and_debarcoded.fcs", {"some.path.cimac_id": cimac_id_1}
+        ),
+        create_df(
+            "/cytof_analysis/assignment.csv",
+            # NOTE: this isn't realistic - assignment files aren't sample-specific - but
+            # it serves the purpose of the test.
+            {"path.cimac_id": cimac_id_1, "another.path.cimac_id": cimac_id_1},
+        ),
+        create_df("/cytof_analysis/source.fcs", {"path.to.cimac_id": cimac_id_2}),
+        create_df("/cytof_analysis/reports.zip"),
+        create_df("/cytof_analysis/analysis.zip"),
+        create_df("/wes/r1_.fastq.gz"),
+    ]
+
+    # Based on setup, we expect the following disjoint sets of related files:
+    related_file_groups = [
+        [files[0], files[1]],
+        [files[2]],
+        [files[3], files[4]],
+        [files[5]],
+    ]
+
+    # Check that get_related_files returns what we expect
+    for file_group in related_file_groups:
+        for file_record in file_group:
+            other_ids = [f.id for f in file_group if f.id != file_record.id]
+            related_files = file_record.get_related_files()
+            assert set([f.id for f in related_files]) == set(other_ids)
+            assert len(related_files) == len(other_ids)
+
+
 def test_with_default_session(cidc_api, clean_db):
     """Test that the with_default_session decorator provides defaults as expected"""
 
