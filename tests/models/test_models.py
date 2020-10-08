@@ -738,6 +738,11 @@ def test_permissions_delete(clean_db, monkeypatch, capsys):
     with capsys.disabled():
         perm.insert()
 
+    # Deleting a record by a user doesn't exist leads to an error
+    gcloud_client.reset_mocks()
+    with pytest.raises(NoResultFound, match="no user with id"):
+        perm.delete(deleted_by=999999)
+
     # Deletion of an existing permission leads to no error
     gcloud_client.reset_mocks()
     perm.delete(deleted_by=user.id)
