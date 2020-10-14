@@ -82,8 +82,9 @@ def get_permission(permission: Permissions) -> Permissions:
 @marshal_response(permission_schema, 201)
 def create_permission(permission: Permissions) -> Permissions:
     """Create a new permission record."""
-    granter = get_current_user()
-    permission.granted_by_user = granter.id
+    if permission.granted_by_user is None:
+        granter = get_current_user()
+        permission.granted_by_user = granter.id
     try:
         permission.insert()
     except IntegrityError as e:
@@ -101,7 +102,8 @@ def create_permission(permission: Permissions) -> Permissions:
 def delete_permission(permission: Permissions):
     """Delete a permission record."""
     try:
-        permission.delete()
+        deleter = get_current_user()
+        permission.delete(deleted_by=deleter)
     except NoResultFound as e:
         raise NotFound(str(e.orig))
     except IAMException as e:

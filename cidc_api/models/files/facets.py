@@ -197,9 +197,8 @@ assay_facets: Facets = {
         )
     },
     "IHC": {
-        "All IHC Files": FacetConfig(
-            ["Assay Type|IHC|All IHC Files|/ihc", "/ihc/ihc_image."]
-        )
+        "Images": FacetConfig(["/ihc/ihc_image."]),
+        "Combined Markers": FacetConfig(["csv|ihc marker combined"]),
     },
 }
 

@@ -42,10 +42,16 @@ def setup_trial_metadata(cidc_api, user_id=None) -> Tuple[int, int]:
         trial.insert()
         if grant_perm and user_id:
             Permissions(
-                granted_to_user=user_id, trial_id=trial.trial_id, upload_type="wes"
+                granted_to_user=user_id,
+                trial_id=trial.trial_id,
+                upload_type="wes",
+                granted_by_user=user_id,
             ).insert()
             Permissions(
-                granted_to_user=user_id, trial_id=trial.trial_id, upload_type="cytof"
+                granted_to_user=user_id,
+                trial_id=trial.trial_id,
+                upload_type="cytof",
+                granted_by_user=user_id,
             ).insert()
         return trial.id
 

@@ -114,6 +114,7 @@ permissions = {
     "json": {
         "id": TEST_RECORD_ID,
         "granted_to_user": TEST_RECORD_ID,
+        "granted_by_user": TEST_RECORD_ID,
         "trial_id": trial_metadata["json"]["trial_id"],
         "upload_type": downloadable_files["json"]["upload_type"],
     },
@@ -414,6 +415,7 @@ def test_endpoint_urls(cidc_api):
         "/downloadable_files/download_url",
         "/downloadable_files/filter_facets",
         "/downloadable_files/<int:downloadable_file>",
+        "/downloadable_files/<int:downloadable_file>/related_files",
         "/info/assays",
         "/info/analyses",
         "/info/manifests",

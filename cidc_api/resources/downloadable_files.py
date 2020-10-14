@@ -4,7 +4,7 @@ from typing import List
 from flask import Blueprint, jsonify, send_file
 from webargs import fields
 from webargs.flaskparser import use_args
-from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import NotFound, Unauthorized
 
 
 from ..models import (
@@ -65,9 +65,25 @@ def get_downloadable_file(downloadable_file: DownloadableFiles) -> DownloadableF
     )
 
     if not perm:
-        raise NotFound()
+        raise Unauthorized()
 
     return downloadable_file
+
+
+@downloadable_files_bp.route("/<int:downloadable_file>/related_files", methods=["GET"])
+@requires_auth("downloadable_files")
+@with_lookup(DownloadableFiles, "downloadable_file")
+@marshal_response(downloadable_files_list_schema)
+def get_related_files(downloadable_file: DownloadableFiles):
+    """Get files related to the given `downloadable_file`."""
+    user = get_current_user()
+
+    if not user.is_admin() and not Permissions.find_for_user_trial_type(
+        user.id, downloadable_file.trial_id, downloadable_file.upload_type
+    ):
+        raise Unauthorized()
+
+    return {"_items": downloadable_file.get_related_files()}
 
 
 @downloadable_files_bp.route("/filelist", methods=["GET"])

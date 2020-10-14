@@ -27,6 +27,7 @@ from sqlalchemy import (
     case,
     select,
     literal_column,
+    not_,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -37,6 +38,7 @@ from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.query import Query
 from sqlalchemy.sql import expression, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.engine import ResultProxy
 from sqlalchemy.engine.interfaces import ExecutionContext
 
 from cidc_schemas import prism, unprism, json_validation
@@ -272,8 +274,8 @@ class Users(CommonColumns):
     @with_default_session
     def find_by_email(email: str, session: Session) -> Optional:
         """
-            Search for a record in the Users table with the given email.
-            If found, return the record. If not found, return None.
+        Search for a record in the Users table with the given email.
+        If found, return the record. If not found, return None.
         """
         user = session.query(Users).filter_by(email=email).first()
         return user
@@ -282,9 +284,9 @@ class Users(CommonColumns):
     @with_default_session
     def create(profile: dict, session: Session):
         """
-            Create a new record for a user if one doesn't exist
-            for the given email. Return the user record associated
-            with that email.
+        Create a new record for a user if one doesn't exist
+        for the given email. Return the user record associated
+        with that email.
         """
         email = profile.get("email")
         first_n = profile.get("given_name")
@@ -369,6 +371,22 @@ class Permissions(CommonColumns):
                 orig=f"`granted_to_user` user must exist, but no user found with id {self.granted_to_user}",
             )
 
+        grantor = None
+        if self.granted_by_user is not None:
+            grantor = Users.find_by_id(self.granted_by_user)
+        else:
+            raise IntegrityError(
+                params=None,
+                statement=None,
+                orig=f"`granted_by_user` user must be given",
+            )
+        if grantor is None:
+            raise IntegrityError(
+                params=None,
+                statement=None,
+                orig=f"`granted_by_user` user must exist, but no user found with id {self.granted_by_user}",
+            )
+
         # A user can only have 20 granular permissions at a time, due to GCS constraints
         if (
             len(Permissions.find_for_user(self.granted_to_user))
@@ -379,6 +397,10 @@ class Permissions(CommonColumns):
                 statement=None,
                 orig=f"{grantee.email} has greater than or equal to the maximum number of allowed granular permissions ({GOOGLE_MAX_DOWNLOAD_PERMISSIONS}). Remove unused permissions to add others.",
             )
+
+        print(
+            f"admin-action: {grantor.email} gave {grantee.email} the permission {self.upload_type} on {self.trial_id}"
+        )
 
         # Always commit, because we don't want to grant IAM download unless this insert succeeds.
         super().insert(session=session, commit=True, compute_etag=compute_etag)
@@ -392,7 +414,9 @@ class Permissions(CommonColumns):
             raise IAMException("IAM grant failed.") from e
 
     @with_default_session
-    def delete(self, session: Session, commit: bool = True):
+    def delete(
+        self, deleted_by: Union[Users, int], session: Session, commit: bool = True
+    ):
         """
         Delete this permission record from the database and revoke the corresponding IAM policy binding
         on the GCS data bucket.
@@ -403,6 +427,13 @@ class Permissions(CommonColumns):
         if grantee is None:
             raise NoResultFound(f"no user with id {self.granted_to_user}")
 
+        if not isinstance(deleted_by, Users):
+            deleted_by_user = Users.find_by_id(deleted_by)
+        else:
+            deleted_by_user = deleted_by
+        if deleted_by_user is None:
+            raise NoResultFound(f"no user with id {deleted_by}")
+
         try:
             # Revoke IAM permission in GCS
             revoke_download_access(grantee.email, self.trial_id, self.upload_type)
@@ -411,6 +442,9 @@ class Permissions(CommonColumns):
                 "IAM revoke failed, and permission db record not removed."
             ) from e
 
+        print(
+            f"admin-action: {deleted_by_user.email} removed from {grantee.email} the permission {self.upload_type} on {self.trial_id}"
+        )
         super().delete(session=session, commit=True)
 
     @staticmethod
@@ -461,8 +495,10 @@ class ValidationMultiError(Exception):
     pass
 
 
-trial_metadata_validator: json_validation._Validator = json_validation.load_and_validate_schema(
-    "clinical_trial.json", return_validator=True
+trial_metadata_validator: json_validation._Validator = (
+    json_validation.load_and_validate_schema(
+        "clinical_trial.json", return_validator=True
+    )
 )
 
 FileBundle = Dict[str, Dict[FilePurpose, List[int]]]
@@ -489,7 +525,7 @@ class TrialMetadata(CommonColumns):
     @with_default_session
     def find_by_trial_id(trial_id: str, session: Session):
         """
-            Find a trial by its CIMAC id.
+        Find a trial by its CIMAC id.
         """
         return session.query(TrialMetadata).filter_by(trial_id=trial_id).first()
 
@@ -497,7 +533,7 @@ class TrialMetadata(CommonColumns):
     @with_default_session
     def select_for_update_by_trial_id(trial_id: str, session: Session):
         """
-            Find a trial by its CIMAC id.
+        Find a trial by its CIMAC id.
         """
         try:
             trial = (
@@ -516,9 +552,9 @@ class TrialMetadata(CommonColumns):
         trial_id: str, assay_patch: dict, session: Session, commit: bool = False
     ):
         """
-            Applies assay updates to the metadata object from the trial with id `trial_id`.
+        Applies assay updates to the metadata object from the trial with id `trial_id`.
 
-            TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
+        TODO: apply this update directly to the not-yet-existent TrialMetadata.manifest field
         """
         return TrialMetadata._patch_trial_metadata(
             trial_id, assay_patch, session=session, commit=commit
@@ -530,9 +566,9 @@ class TrialMetadata(CommonColumns):
         trial_id: str, manifest_patch: dict, session: Session, commit: bool = False
     ):
         """
-            Applies manifest updates to the metadata object from the trial with id `trial_id`.
+        Applies manifest updates to the metadata object from the trial with id `trial_id`.
 
-            TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
+        TODO: apply this update directly to the not-yet-existent TrialMetadata.assays field
         """
         return TrialMetadata._patch_trial_metadata(
             trial_id, manifest_patch, session=session, commit=commit
@@ -544,11 +580,11 @@ class TrialMetadata(CommonColumns):
         trial_id: str, json_patch: dict, session: Session, commit: bool = False
     ):
         """
-            Applies updates to the metadata object from the trial with id `trial_id`
-            and commits current session.
+        Applies updates to the metadata object from the trial with id `trial_id`
+        and commits current session.
 
-            TODO: remove this function and dependency on it, in favor of separate assay
-            and manifest patch strategies.
+        TODO: remove this function and dependency on it, in favor of separate assay
+        and manifest patch strategies.
         """
 
         trial = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
@@ -575,7 +611,7 @@ class TrialMetadata(CommonColumns):
         trial_id: str, metadata_json: dict, session: Session, commit: bool = True
     ):
         """
-            Create a new clinical trial metadata record.
+        Create a new clinical trial metadata record.
         """
 
         print(f"Creating new trial metadata with id {trial_id}")
@@ -822,15 +858,34 @@ class UploadJobs(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def merge_extra_metadata(job_id, files, session):
+    def merge_extra_metadata(job_id: int, files: dict, session: Session):
+        """
+        Args:
+            job_id: the ID of the UploadJob to merge
+            files: mapping from uuid of the artifact-to-update to metadata file-to-update-from
+            session: the current session; uses default if not passed
+        Returns:
+            None
+        Raises:
+            ValueError
+                if `job_id` doesn't exist or is already merged
+                from prism.merge_artifact_extra_metadata
+        """
 
         job = UploadJobs.find_by_id(job_id, session=session)
+
+        if job is None or job.status == UploadJobStatus.MERGE_COMPLETED:
+            raise ValueError(f"Upload job {job_id} doesn't exist or is already merged")
 
         print(f"About to merge extra md to {job.id}/{job.status}")
 
         for uuid, file in files.items():
             print(f"About to parse/merge extra md on {uuid}")
-            job.metadata_patch, updated_artifact, _ = prism.merge_artifact_extra_metadata(
+            (
+                job.metadata_patch,
+                updated_artifact,
+                _,
+            ) = prism.merge_artifact_extra_metadata(
                 job.metadata_patch, uuid, job.upload_type, file
             )
             print(f"Updated md for {uuid}: {updated_artifact.keys()}")
@@ -874,7 +929,7 @@ class UploadJobs(CommonColumns):
 
 class DownloadableFiles(CommonColumns):
     """
-    Store required fields from: 
+    Store required fields from:
     https://github.com/CIMAC-CIDC/cidc-schemas/blob/master/cidc_schemas/schemas/artifacts/artifact_core.json
     """
 
@@ -893,7 +948,7 @@ class DownloadableFiles(CommonColumns):
     facet_group = Column(String, nullable=False)
     # NOTE: this column actually has type CITEXT.
     data_format = Column(String, nullable=False)
-    additional_metadata = Column(JSONB, nullable=True)
+    additional_metadata = Column(JSONB, nullable=False)
     # TODO rename upload_type, because we store manifests in there too.
     # NOTE: this column actually has type CITEXT.
     upload_type = Column(String, nullable=False)
@@ -930,15 +985,17 @@ class DownloadableFiles(CommonColumns):
         return DATA_CATEGORY_CASE_CLAUSE
 
     @hybrid_property
-    def consolidated_upload_type(self):
+    def data_category_prefix(self):
         """
         The overarching data category for a file. E.g., files with `upload_type` of
-        "cytof"` and `"cytof_analyis"` should both have a `consolidated_upload_type` of `"CyTOF"`.
+        "cytof"` and `"cytof_analyis"` should both have a `data_category_prefix` of `"CyTOF"`.
         """
+        if self.data_category is None:
+            return None
         return self.data_category.split(FACET_NAME_DELIM, 1)[0]
 
-    @consolidated_upload_type.expression
-    def consolidated_upload_type(cls):
+    @data_category_prefix.expression
+    def data_category_prefix(cls):
         return func.split_part(DATA_CATEGORY_CASE_CLAUSE, FACET_NAME_DELIM, 1)
 
     @hybrid_property
@@ -949,6 +1006,61 @@ class DownloadableFiles(CommonColumns):
     def file_purpose(cls):
         return FILE_PURPOSE_CASE_CLAUSE
 
+    @property
+    def cimac_id(self):
+        """
+        Extract the `cimac_id` associated with this file, if any, by searching the file's 
+        additional metadata for a field with a key like `<some>.<path>.cimac_id`.
+
+        NOTE: this is not a sqlalchemy hybrid_property, and it can't be used directly in queries.
+        """
+        for key, value in self.additional_metadata.items():
+            if key.endswith("cimac_id"):
+                return value
+        return None
+
+    @with_default_session
+    def get_related_files(self, session: Session) -> list:
+        """
+        Return a list of file records related to this file. We could define "related"
+        in any number of ways, but currently, a related file:
+            * is sample-specific, and relates to the same sample as this file if this file 
+              has an associated `cimac_id`.
+            * isn't sample-specific, and relates to the same `data_category_prefix`.
+        """
+        # If this file has an associated sample, get other files associated with that sample.
+        # Otherwise, get other non-sample-specific files for this trial and data category.
+        if self.cimac_id is not None:
+            query = text(
+                "SELECT DISTINCT downloadable_files.* "
+                "FROM downloadable_files, LATERAL jsonb_each_text(additional_metadata) addm_kv "
+                "WHERE addm_kv.value LIKE :cimac_id AND trial_id = :trial_id AND id != :id"
+            )
+            params = {
+                "cimac_id": f"%{self.cimac_id}",
+                "trial_id": self.trial_id,
+                "id": self.id,
+            }
+            related_files = result_proxy_to_models(
+                session.execute(query, params), DownloadableFiles
+            )
+        else:
+            not_sample_specific = not_(
+                literal_column("additional_metadata::text").like('%.cimac_id":%')
+            )
+            related_files = (
+                session.query(DownloadableFiles)
+                .filter(
+                    DownloadableFiles.trial_id == self.trial_id,
+                    DownloadableFiles.data_category_prefix == self.data_category_prefix,
+                    DownloadableFiles.id != self.id,
+                    not_sample_specific,
+                )
+                .all()
+            )
+
+        return related_files
+
     @staticmethod
     def build_file_filter(
         trial_ids: List[str] = [], facets: List[List[str]] = [], user: Users = None
@@ -957,12 +1069,12 @@ class DownloadableFiles(CommonColumns):
         Build a file filter function based on the provided parameters. The resultant
         filter can then be passed as the `filter_` argument of `DownloadableFiles.list`
         or `DownloadableFiles.count`.
-        
+
         Args:
             trial_ids: if provided, the filter will include only files with these trial IDs.
             upload_types: if provided, the filter will include only files with these upload types.
             analysis_friendly: if True, the filter will include only files that are "analysis-friendly".
-            non_admin_user_id: if provided, the filter will include only files that satisfy 
+            non_admin_user_id: if provided, the filter will include only files that satisfy
                 this user's data access permissions.
         Returns:
             A function that adds filters to a query against the DownloadableFiles table.
@@ -1004,11 +1116,10 @@ class DownloadableFiles(CommonColumns):
 
         # Filter out keys that aren't columns
         supported_columns = DownloadableFiles.__table__.columns.keys()
-        filtered_metadata = {
-            "trial_id": trial_id,
-            "upload_type": upload_type,
-            "additional_metadata": additional_metadata,
-        }
+        filtered_metadata = {"trial_id": trial_id, "upload_type": upload_type}
+        if additional_metadata not in ("null", None, {}):
+            filtered_metadata["additional_metadata"] = additional_metadata
+
         for key, value in file_metadata.items():
             if key in supported_columns:
                 filtered_metadata[key] = value
@@ -1086,7 +1197,7 @@ class DownloadableFiles(CommonColumns):
     @with_default_session
     def get_by_object_url(object_url: str, session: Session):
         """
-        Look up the downloadable file record associated with 
+        Look up the downloadable file record associated with
         the given GCS object url.
         """
         return session.query(DownloadableFiles).filter_by(object_url=object_url).one()
@@ -1130,12 +1241,12 @@ class DownloadableFiles(CommonColumns):
             select(
                 [
                     cls.trial_id,
-                    cls.consolidated_upload_type.label(type_col.key),
+                    cls.data_category_prefix.label(type_col.key),
                     cls.file_purpose.label(purp_col.key),
                     func.json_agg(cls.id).label(ids_col.key),
                 ]
             )
-            .group_by(cls.trial_id, cls.consolidated_upload_type, cls.file_purpose)
+            .group_by(cls.trial_id, cls.data_category_prefix, cls.file_purpose)
             .alias("id_bundles")
         )
         purpose_bundles = (
@@ -1182,3 +1293,10 @@ FILE_PURPOSE_CASE_CLAUSE = case(
         for facet_group, file_details in details_dict.items()
     ]
 )
+
+
+def result_proxy_to_models(
+    result_proxy: ResultProxy, model: BaseModel
+) -> List[BaseModel]:
+    """Materialize a sqlalchemy `result_proxy` iterable as a list of `model` instances"""
+    return [model(**dict(row_proxy.items())) for row_proxy in result_proxy]

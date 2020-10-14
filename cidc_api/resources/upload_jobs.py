@@ -90,8 +90,8 @@ def get_upload_job(upload_job: UploadJobs):
 
 def requires_upload_token_auth(endpoint):
     """
-    Decorator that adds "upload token" authentication to an endpoint. 
-    The provided endpoint must include the upload job id as a URL param, i.e., 
+    Decorator that adds "upload token" authentication to an endpoint.
+    The provided endpoint must include the upload job id as a URL param, i.e.,
     `<int:upload_job>`. This upload job ID is used to look up the relevant upload_job
     and check its `token` field against the user-provided `token` query parameter.
     If authentication and upload job record lookup succeeds, pass the upload job record
@@ -170,7 +170,7 @@ def is_xlsx(filename: str) -> bool:
 
 def extract_schema_and_xlsx(allowed_types: List[str]) -> Tuple[str, BinaryIO]:
     """
-    Validate that a request has the required structure, then extract 
+    Validate that a request has the required structure, then extract
     the schema id and template file from the request. The request must
     have a multipart/form body with one field "schema" referencing a valid schema id
     and another field "template" with an attached .xlsx file.
@@ -474,7 +474,7 @@ def upload_data_files(
         extra_metadata: files with extra metadata information (only applicable to few assays), else None
         token: the unique token identifier for this upload job - possession of this token
             gives a user the right to update the corresponding upload job (no other authentication required).
-    
+
     # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
     """
     print(f"upload_assay started")
@@ -590,9 +590,15 @@ def extra_assay_metadata():
 
     try:
         UploadJobs.merge_extra_metadata(job_id, files)
-    except Exception as e:
-        # TODO see if it's validation sort of error and return BadRequest
-        raise e
+    except ValueError as e:
+        # thrown by parser itself if file cannot be parsed, e.g. wrong file uploaded
+        # wrapped by merger to include uuid / assay_hint information, just use that message
+        # thrown by UploadJobs.merge_extra_metadata if job_id doesn't exist or is already merged
+        # thrown by getting artifact if uuid doesn't exist in the trial
+        raise BadRequest(f"{e!s}")
+
+    # Uncaught i.e. internal errors
+    # TypeError thrown by parser itself if file is not the right type
 
     # TODO: return something here?
     return jsonify({})

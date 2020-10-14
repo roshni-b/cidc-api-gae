@@ -10,6 +10,7 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from cidc_api.app import app
 from cidc_api.models import (
+    CommonColumns,
     Users,
     TrialMetadata,
     UploadJobs,
@@ -510,6 +511,15 @@ def test_create_downloadable_file_from_metadata(clean_db, monkeypatch):
 
     # Create the trial (to avoid violating foreign-key constraint)
     TrialMetadata.create(TRIAL_ID, METADATA)
+
+    # Create files with empty or "null" additional metadata
+    for nullish_value in ["null", None, {}]:
+        df = DownloadableFiles.create_from_metadata(
+            TRIAL_ID, "wes", file_metadata, additional_metadata=nullish_value
+        )
+        clean_db.refresh(df)
+        assert df.additional_metadata == {}
+
     # Create the file
     DownloadableFiles.create_from_metadata(
         TRIAL_ID, "wes", file_metadata, additional_metadata=additional_metadata
@@ -615,6 +625,73 @@ def test_create_downloadable_file_from_blob(clean_db, monkeypatch):
     publisher.assert_called_once_with(fake_blob.name)
 
 
+def test_downloadable_files_data_category_prefix():
+    """Check that data_category_prefix's are derived as expected"""
+    file_w_category = DownloadableFiles(facet_group="/wes/r1_.fastq.gz")
+    assert file_w_category.data_category_prefix == "WES"
+
+    file_no_category = DownloadableFiles()
+    assert file_no_category.data_category_prefix == None
+
+
+@db_test
+def test_downloadable_files_get_related_files(clean_db):
+    # Create a trial to avoid constraint errors
+    TrialMetadata.create(trial_id=TRIAL_ID, metadata_json=METADATA)
+
+    # Convenience function for building file records
+    def create_df(facet_group, additional_metadata={}) -> DownloadableFiles:
+        df = DownloadableFiles(
+            facet_group=facet_group,
+            additional_metadata=additional_metadata,
+            trial_id=TRIAL_ID,
+            uploaded_timestamp=datetime.now(),
+            file_size_bytes=0,
+            file_name="",
+            data_format="",
+            object_url=facet_group,  # just filler, not relevant to the test
+            upload_type="",
+        )
+        df.insert()
+        clean_db.refresh(df)
+        return df
+
+    # Set up test data
+    cimac_id_1 = "CTTTPPP01.01"
+    cimac_id_2 = "CTTTPPP02.01"
+    files = [
+        create_df(
+            "/cytof/normalized_and_debarcoded.fcs", {"some.path.cimac_id": cimac_id_1}
+        ),
+        create_df(
+            "/cytof_analysis/assignment.csv",
+            # NOTE: this isn't realistic - assignment files aren't sample-specific - but
+            # it serves the purpose of the test.
+            {"path.cimac_id": cimac_id_1, "another.path.cimac_id": cimac_id_1},
+        ),
+        create_df("/cytof_analysis/source.fcs", {"path.to.cimac_id": cimac_id_2}),
+        create_df("/cytof_analysis/reports.zip"),
+        create_df("/cytof_analysis/analysis.zip"),
+        create_df("/wes/r1_.fastq.gz"),
+    ]
+
+    # Based on setup, we expect the following disjoint sets of related files:
+    related_file_groups = [
+        [files[0], files[1]],
+        [files[2]],
+        [files[3], files[4]],
+        [files[5]],
+    ]
+
+    # Check that get_related_files returns what we expect
+    for file_group in related_file_groups:
+        for file_record in file_group:
+            other_ids = [f.id for f in file_group if f.id != file_record.id]
+            related_files = file_record.get_related_files()
+            assert set([f.id for f in related_files]) == set(other_ids)
+            assert len(related_files) == len(other_ids)
+
+
 def test_with_default_session(cidc_api, clean_db):
     """Test that the with_default_session decorator provides defaults as expected"""
 
@@ -653,33 +730,107 @@ def test_assay_upload_status():
 
 
 @db_test
-def test_permissions_delete(clean_db, monkeypatch):
+def test_permissions_insert(clean_db, monkeypatch, capsys):
+    gcloud_client = mock_gcloud_client(monkeypatch)
+    user = Users(email="test@user.com")
+    user.insert()
+    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
+    trial.insert()
+
+    _insert = MagicMock()
+    monkeypatch.setattr(CommonColumns, "insert", _insert)
+
+    # if don't give granted_by_user
+    perm = Permissions(
+        granted_to_user=user.id, trial_id=trial.trial_id, upload_type="wes"
+    )
+    with pytest.raises(IntegrityError, match="`granted_by_user` user must be given"):
+        perm.insert()
+    _insert.assert_not_called()
+
+    # if give bad granted_by_user
+    _insert.reset_mock()
+    perm = Permissions(
+        granted_to_user=user.id,
+        trial_id=trial.trial_id,
+        upload_type="wes",
+        granted_by_user=999999,
+    )
+    with pytest.raises(IntegrityError, match="`granted_by_user` user must exist"):
+        perm.insert()
+    _insert.assert_not_called()
+
+    # if give bad granted_to_user
+    _insert.reset_mock()
+    perm = Permissions(
+        granted_to_user=999999,
+        trial_id=trial.trial_id,
+        upload_type="wes",
+        granted_by_user=user.id,
+    )
+    with pytest.raises(IntegrityError, match="`granted_to_user` user must exist"):
+        perm.insert()
+    _insert.assert_not_called()
+
+    # This one will work
+    _insert.reset_mock()
+    perm = Permissions(
+        granted_to_user=user.id,
+        trial_id=trial.trial_id,
+        upload_type="wes",
+        granted_by_user=user.id,
+    )
+    perm.insert()
+    _insert.assert_called_once()
+    captured = capsys.readouterr()
+    assert (
+        captured.out.strip()
+        == f"admin-action: {user.email} gave {user.email} the permission wes on {trial.trial_id}"
+    )
+
+
+@db_test
+def test_permissions_delete(clean_db, monkeypatch, capsys):
     gcloud_client = mock_gcloud_client(monkeypatch)
     user = Users(email="test@user.com")
     user.insert()
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
     perm = Permissions(
-        granted_to_user=user.id, trial_id=trial.trial_id, upload_type="wes"
+        granted_to_user=user.id,
+        trial_id=trial.trial_id,
+        upload_type="wes",
+        granted_by_user=user.id,
     )
-    perm.insert()
+    with capsys.disabled():
+        perm.insert()
+
+    # Deleting a record by a user doesn't exist leads to an error
+    gcloud_client.reset_mocks()
+    with pytest.raises(NoResultFound, match="no user with id"):
+        perm.delete(deleted_by=999999)
 
     # Deletion of an existing permission leads to no error
     gcloud_client.reset_mocks()
-    perm.delete()
+    perm.delete(deleted_by=user.id)
     gcloud_client.revoke_download_access.assert_called_once()
     gcloud_client.grant_download_access.assert_not_called()
+    captured = capsys.readouterr()
+    assert (
+        captured.out.strip()
+        == f"admin-action: {user.email} removed from {user.email} the permission wes on {trial.trial_id}"
+    )
 
     # Deleting an already-deleted record is idempotent
     gcloud_client.reset_mocks()
-    perm.delete()
+    perm.delete(deleted_by=user)
     gcloud_client.revoke_download_access.assert_called_once()
     gcloud_client.grant_download_access.assert_not_called()
 
     # Deleting a record whose user doesn't exist leads to an error
     gcloud_client.reset_mocks()
     with pytest.raises(NoResultFound, match="no user with id"):
-        Permissions(granted_to_user=999999).delete()
+        Permissions(granted_to_user=999999).delete(deleted_by=user)
 
     gcloud_client.revoke_download_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
@@ -699,7 +850,10 @@ def test_permissions_grant_all_iam_permissions(clean_db, monkeypatch):
     upload_types = ["wes", "cytof", "rna", "plasma"]
     for upload_type in upload_types:
         Permissions(
-            granted_to_user=user.id, trial_id=trial.trial_id, upload_type=upload_type
+            granted_to_user=user.id,
+            trial_id=trial.trial_id,
+            upload_type=upload_type,
+            granted_by_user=user.id,
         ).insert()
 
     Permissions.grant_all_iam_permissions()
@@ -730,7 +884,10 @@ def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
     upload_types = ["wes", "cytof", "rna", "plasma"]
     for upload_type in upload_types:
         Permissions(
-            granted_to_user=user.id, trial_id=trial.trial_id, upload_type=upload_type
+            granted_to_user=user.id,
+            trial_id=trial.trial_id,
+            upload_type=upload_type,
+            granted_by_user=user.id,
         ).insert()
 
     Permissions.revoke_all_iam_permissions()
