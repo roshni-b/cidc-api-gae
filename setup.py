@@ -11,8 +11,13 @@ setup(
     python_requires=">=3.6",
     install_requires=requirements,
     license="MIT license",
-    packages=["cidc_api.config", "cidc_api.models", "cidc_api.shared", "cidc_api.models.files"],
+    packages=[
+        "cidc_api.config",
+        "cidc_api.models",
+        "cidc_api.shared",
+        "cidc_api.models.files",
+    ],
     url="https://github.com/CIMAC-CIDC/cidc_api-gae",
-    version="0.20.5",
+    version="0.20.6",
     zip_safe=False,
 )

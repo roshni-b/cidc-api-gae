@@ -560,6 +560,36 @@ def test_create_downloadable_file_from_metadata(clean_db, monkeypatch):
 
 
 @db_test
+def test_downloadable_files_additional_metadata_default(clean_db):
+    TrialMetadata.create(TRIAL_ID, METADATA)
+    df = DownloadableFiles(
+        trial_id=TRIAL_ID,
+        upload_type="wes",
+        object_url="10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
+        file_name="wes_forward.fastq",
+        file_size_bytes=1,
+        md5_hash="hash1234",
+        uploaded_timestamp=datetime.now(),
+        data_format="FASTQ",
+    )
+
+    # Check no value passed
+    df.insert()
+    assert df.additional_metadata == {}
+
+    for nullish_value in [None, "null", {}]:
+        df.additional_metadata = nullish_value
+        df.update()
+        assert df.additional_metadata == {}
+
+    # Non-nullish value doesn't get overridden
+    non_nullish_value = {"foo": "bar"}
+    df.additional_metadata = non_nullish_value
+    df.update()
+    assert df.additional_metadata == non_nullish_value
+
+
+@db_test
 def test_create_downloadable_file_from_blob(clean_db, monkeypatch):
     """Try to create a downloadable file from a GCS blob"""
     fake_blob = MagicMock()
