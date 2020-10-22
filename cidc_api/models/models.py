@@ -1019,6 +1019,10 @@ class DownloadableFiles(CommonColumns):
                 return value
         return None
 
+    @validates("additional_metadata")
+    def check_additional_metadata_default(self, key, value):
+        return {} if value in ["null", None, {}] else value
+
     @with_default_session
     def get_related_files(self, session: Session) -> list:
         """
@@ -1116,9 +1120,11 @@ class DownloadableFiles(CommonColumns):
 
         # Filter out keys that aren't columns
         supported_columns = DownloadableFiles.__table__.columns.keys()
-        filtered_metadata = {"trial_id": trial_id, "upload_type": upload_type}
-        if additional_metadata not in ("null", None, {}):
-            filtered_metadata["additional_metadata"] = additional_metadata
+        filtered_metadata = {
+            "trial_id": trial_id,
+            "upload_type": upload_type,
+            "additional_metadata": additional_metadata,
+        }
 
         for key, value in file_metadata.items():
             if key in supported_columns:

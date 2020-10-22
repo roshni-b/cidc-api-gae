@@ -123,4 +123,10 @@ details_dict = {
     # Clinical
     "csv|participants info": FileDetails("clinical"),
     "csv|samples info": FileDetails("clinical"),
+    # TCR
+    "/tcr/replicate_/r1.fastq.gz": FileDetails("source"),
+    "/tcr/replicate_/r2.fastq.gz": FileDetails("source"),
+    "/tcr/replicate_/i1.fastq.gz": FileDetails("source"),
+    "/tcr/replicate_/i2.fastq.gz": FileDetails("source"),
+    "/tcr/SampleSheet.csv": FileDetails("miscellaneous"),
 }
