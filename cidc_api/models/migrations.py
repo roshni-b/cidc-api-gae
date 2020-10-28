@@ -1,4 +1,4 @@
-import os
+import os, traceback
 from contextlib import contextmanager
 from functools import partial
 from typing import Callable, List, NamedTuple, Any, Tuple
@@ -96,9 +96,13 @@ def run_metadata_migration(
 ):
     """Migrate trial metadata, upload job patches, and downloadable files according to `metadata_migration`"""
     with migration_session() as (session, task_queue):
-        _run_metadata_migration(
-            metadata_migration, use_upload_jobs_table, task_queue, session
-        )
+        try:
+            _run_metadata_migration(
+                metadata_migration, use_upload_jobs_table, task_queue, session
+            )
+        except: 
+            traceback.print_exc()
+            raise
 
 
 def _select_trials(session: Session) -> List[TrialMetadata]:
