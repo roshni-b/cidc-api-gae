@@ -405,6 +405,24 @@ def test_create_assay_upload(clean_db):
         ),
     ]
 
+@db_test
+def test_upload_job_no_file_map(clean_db):
+    """Try to create an assay upload"""
+    new_user = Users.create(PROFILE)
+
+    metadata_patch = {PROTOCOL_ID_FIELD_NAME: TRIAL_ID}
+    gcs_xlsx_uri = "xlsx/assays/wes/12:0:1.5123095"
+
+    TrialMetadata.create(TRIAL_ID, METADATA)
+
+    new_job = UploadJobs.create(
+        prism.SUPPORTED_MANIFESTS[0], EMAIL, None, metadata_patch, gcs_xlsx_uri
+    )
+    assert list(new_job.upload_uris_with_data_uris_with_uuids()) == []
+    
+    job = UploadJobs.find_by_id_and_email(new_job.id, PROFILE["email"])
+    assert list(job.upload_uris_with_data_uris_with_uuids()) == []
+
 
 @db_test
 def test_assay_upload_merge_extra_metadata(clean_db, monkeypatch):
