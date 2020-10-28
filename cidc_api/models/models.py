@@ -806,7 +806,7 @@ class UploadJobs(CommonColumns):
         emails.new_upload_alert(self, trial.metadata_json, send_email=True)
 
     def upload_uris_with_data_uris_with_uuids(self):
-        for upload_uri, uuid in self.gcs_file_map.items():
+        for upload_uri, uuid in (self.gcs_file_map or {}).items():
             # URIs in the upload bucket have a structure like (see ingestion.upload_assay)
             # [trial id]/{prismify_generated_path}/[timestamp].
             # We strip off the /[timestamp] suffix from the upload url,
