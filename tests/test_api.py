@@ -420,6 +420,7 @@ def test_endpoint_urls(cidc_api):
         "/info/analyses",
         "/info/manifests",
         "/info/extra_data_types",
+        "/info/data_overview",
         "/info/templates/<template_family>/<template_type>",
         "/ingestion/validate",
         "/ingestion/upload_manifest",

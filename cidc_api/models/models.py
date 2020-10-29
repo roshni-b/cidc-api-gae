@@ -692,6 +692,38 @@ class TrialMetadata(CommonColumns):
         # possible TODO: filter by assays in a trial
         return lambda q: q.filter(*filters)
 
+    @classmethod
+    @with_default_session
+    def get_metadata_counts(cls, session: Session) -> dict:
+        """
+        Return a dictionary with the following structure:
+        ```
+            {
+                "num_trials": <count of all trials>,
+                "num_participants": <count of all participants across all trials>,
+                "num_samples": <count of all samples across all participants across all trials>
+            }
+        ```
+        """
+        # Count all trials, participants, and samples in the database
+        [(num_trials, num_participants, num_samples)] = session.execute(
+            """
+            SELECT
+                COUNT(DISTINCT trial_id),
+                COUNT(participants),
+                SUM(jsonb_array_length(participants->'samples'))
+            FROM
+                trial_metadata,
+                LATERAL jsonb_array_elements(metadata_json->'participants') participants;
+            """
+        )
+
+        return {
+            "num_trials": num_trials,
+            "num_participants": num_participants,
+            "num_samples": num_samples,
+        }
+
 
 class UploadJobStatus(EnumBaseClass):
     STARTED = "started"
@@ -1283,6 +1315,13 @@ class DownloadableFiles(CommonColumns):
             .alias("file_bundles")
         )
         return file_bundles
+
+    @classmethod
+    @with_default_session
+    def get_total_bytes(cls, session: Session) -> int:
+        """Get the total number of bytes of data stored across all files."""
+        total_bytes = session.query(func.sum(cls.file_size_bytes)).one()[0]
+        return int(total_bytes)
 
 
 # Query clause for computing a downloadable file's data category.
