@@ -1,7 +1,8 @@
 import os
+from datetime import datetime
 
-import pytest
-from werkzeug.exceptions import BadRequest, NotFound
+from cidc_schemas import prism
+from cidc_api.models import DownloadableFiles, TrialMetadata
 
 INFO_ENDPOINT = "/info"
 
@@ -36,6 +37,71 @@ def test_info_extra_types(cidc_api):
     res = client.get(f"{INFO_ENDPOINT}/extra_data_types")
     assert type(res.json) == list
     assert "participants info" in res.json
+
+
+def test_info_data_overview(cidc_api, clean_db):
+    """Check that the data overview has expected structure and values"""
+
+    def insert_trial(trial_id, num_participants, num_samples):
+        TrialMetadata(
+            trial_id=trial_id,
+            metadata_json={
+                prism.PROTOCOL_ID_FIELD_NAME: trial_id,
+                "allowed_cohort_names": [""],
+                "allowed_collection_event_names": [""],
+                "participants": [
+                    {
+                        "cimac_participant_id": f"CTTTPP{p}",
+                        "participant_id": "x",
+                        "samples": [
+                            {
+                                "cimac_id": f"CTTTPP1SS.0{s}",
+                                "sample_location": "",
+                                "type_of_primary_container": "Other",
+                                "type_of_sample": "Other",
+                                "collection_event_name": "",
+                                "parent_sample_id": "",
+                            }
+                            for s in range(num_samples[p])
+                        ],
+                    }
+                    for p in range(num_participants)
+                ],
+            },
+        ).insert()
+
+    # 3 trials
+    # 15 participants
+    # 40 samples
+    # 3 files
+    with cidc_api.app_context():
+        insert_trial("1", 6, [0] * 6)
+        insert_trial("2", 4, [5, 6, 7, 8])
+        insert_trial("3", 5, [3, 2, 1, 1, 7])
+        for i in range(3):
+            DownloadableFiles(
+                trial_id="1",
+                upload_type="wes",
+                object_url=str(i),
+                data_format="",
+                facet_group="/wes/r2_.fastq.gz",  # this is what makes this file "related"
+                uploaded_timestamp=datetime.now(),
+                file_size_bytes=2,
+                file_name="",
+            ).insert()
+
+    client = cidc_api.test_client()
+
+    res = client.get("/info/data_overview")
+    assert res.status_code == 200
+    assert res.json == {
+        "num_assays": len(prism.SUPPORTED_ASSAYS),
+        "num_trials": 3,
+        "num_participants": 15,
+        "num_samples": 40,
+        "num_files": 3,
+        "num_bytes": 6,
+    }
 
 
 def test_templates(cidc_api):
