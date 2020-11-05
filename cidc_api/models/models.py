@@ -65,6 +65,7 @@ from ..shared.gcloud_client import (
     publish_upload_success,
     grant_download_access,
     revoke_download_access,
+    send_email,
 )
 
 
@@ -251,6 +252,14 @@ class Users(CommonColumns):
     approval_date = Column(DateTime)
     role = Column(Enum(*ROLES, name="role"))
     disabled = Column(Boolean, default=False, server_default="false")
+
+    @validates("approval_date")
+    def send_approval_confirmation(self, key, new_approval_date):
+        """Send this user an approval email if their account has just been approved"""
+        if self.approval_date is None and new_approval_date is not None:
+            emails.confirm_account_approval(self, send_email=True)
+
+        return new_approval_date
 
     def is_admin(self) -> bool:
         """Returns true if this user is a CIDC admin."""
