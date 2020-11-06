@@ -209,17 +209,9 @@ assay_facets: Facets = {
                 "/tcr/replicate_/i2.fastq.gz",
             ]
         ),
-        "Misc.": FacetConfig(
-            [
-                "/tcr/SampleSheet.csv"
-                "/tcr/summary_info.csv"
-            ]
-        ),
+        "Misc.": FacetConfig(["/tcr/SampleSheet.csv" "/tcr/summary_info.csv"]),
         "Analysis Data": FacetConfig(
-            [
-                "/tcr/tra_clone.csv",
-                "/tcr/trb_clone.csv",
-            ],
+            ["/tcr/tra_clone.csv", "/tcr/trb_clone.csv"],
             "Data files from TCRseq analysis indicating TRA & TRB clones UMI counts",
         ),
     },
