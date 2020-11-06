@@ -38,6 +38,14 @@ assay_facets: Facets = {
             ],
             "Summary cell count expression of individual cell types in each sample",
         ),
+        "Combined Cell Counts": FacetConfig(
+            [
+                "csv|cell counts compartment",
+                "csv|cell counts assignment",
+                "csv|cell counts profiling",
+            ],
+            "Summary cell counts, combined across all samples in the trial",
+        ),
         "Labeled Source": FacetConfig(
             ["/cytof_analysis/source.fcs"],
             "FCS file with enumerations for compartment, assignment and profiling cell labels",
