@@ -38,6 +38,14 @@ assay_facets: Facets = {
             ],
             "Summary cell count expression of individual cell types in each sample",
         ),
+        "Combined Cell Counts": FacetConfig(
+            [
+                "csv|cell counts compartment",
+                "csv|cell counts assignment",
+                "csv|cell counts profiling",
+            ],
+            "Summary cell counts, combined across all samples in the trial",
+        ),
         "Labeled Source": FacetConfig(
             ["/cytof_analysis/source.fcs"],
             "FCS file with enumerations for compartment, assignment and profiling cell labels",
@@ -209,7 +217,11 @@ assay_facets: Facets = {
                 "/tcr/replicate_/i2.fastq.gz",
             ]
         ),
-        "Misc.": FacetConfig(["/tcr/SampleSheet.csv"]),
+        "Misc.": FacetConfig(["/tcr/SampleSheet.csv" "/tcr/summary_info.csv"]),
+        "Analysis Data": FacetConfig(
+            ["/tcr/tra_clone.csv", "/tcr/trb_clone.csv"],
+            "Data files from TCRseq analysis indicating TRA & TRB clones UMI counts",
+        ),
     },
 }
 
