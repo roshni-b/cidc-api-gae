@@ -129,4 +129,7 @@ details_dict = {
     "/tcr/replicate_/i1.fastq.gz": FileDetails("source"),
     "/tcr/replicate_/i2.fastq.gz": FileDetails("source"),
     "/tcr/SampleSheet.csv": FileDetails("miscellaneous"),
+    "/tcr/summary_info.csv": FileDetails("miscellaneous"),
+    "/tcr/tra_clone.csv": FileDetails("analysis"),
+    "/tcr/trb_clone.csv": FileDetails("analysis"),
 }
