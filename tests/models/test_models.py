@@ -407,6 +407,25 @@ def test_create_assay_upload(clean_db):
 
 
 @db_test
+def test_upload_job_no_file_map(clean_db):
+    """Try to create an assay upload"""
+    new_user = Users.create(PROFILE)
+
+    metadata_patch = {PROTOCOL_ID_FIELD_NAME: TRIAL_ID}
+    gcs_xlsx_uri = "xlsx/assays/wes/12:0:1.5123095"
+
+    TrialMetadata.create(TRIAL_ID, METADATA)
+
+    new_job = UploadJobs.create(
+        prism.SUPPORTED_MANIFESTS[0], EMAIL, None, metadata_patch, gcs_xlsx_uri
+    )
+    assert list(new_job.upload_uris_with_data_uris_with_uuids()) == []
+
+    job = UploadJobs.find_by_id_and_email(new_job.id, PROFILE["email"])
+    assert list(job.upload_uris_with_data_uris_with_uuids()) == []
+
+
+@db_test
 def test_assay_upload_merge_extra_metadata(clean_db, monkeypatch):
     """Try to create an assay upload"""
     new_user = Users.create(PROFILE)
@@ -932,3 +951,23 @@ def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
         user.update()
         Permissions.revoke_all_iam_permissions()
         gcloud_client.revoke_download_access.assert_not_called()
+
+
+@db_test
+def test_user_confirm_approval(clean_db, monkeypatch):
+    """Ensure that users are notified when their account goes from pending to approved."""
+    confirm_account_approval = MagicMock()
+    monkeypatch.setattr(
+        "cidc_api.shared.emails.confirm_account_approval", confirm_account_approval
+    )
+
+    user = Users(email="test@user.com")
+    user.insert()
+
+    # The confirmation email shouldn't be sent for updates unrelated to account approval
+    user.update(changes={"first_n": "foo"})
+    confirm_account_approval.assert_not_called()
+
+    # The confirmation email should be sent for updates related to account approval
+    user.update(changes={"approval_date": datetime.now()})
+    confirm_account_approval.assert_called_once_with(user, send_email=True)

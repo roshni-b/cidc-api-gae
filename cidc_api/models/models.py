@@ -65,6 +65,7 @@ from ..shared.gcloud_client import (
     publish_upload_success,
     grant_download_access,
     revoke_download_access,
+    send_email,
 )
 
 
@@ -251,6 +252,14 @@ class Users(CommonColumns):
     approval_date = Column(DateTime)
     role = Column(Enum(*ROLES, name="role"))
     disabled = Column(Boolean, default=False, server_default="false")
+
+    @validates("approval_date")
+    def send_approval_confirmation(self, key, new_approval_date):
+        """Send this user an approval email if their account has just been approved"""
+        if self.approval_date is None and new_approval_date is not None:
+            emails.confirm_account_approval(self, send_email=True)
+
+        return new_approval_date
 
     def is_admin(self) -> bool:
         """Returns true if this user is a CIDC admin."""
@@ -692,6 +701,38 @@ class TrialMetadata(CommonColumns):
         # possible TODO: filter by assays in a trial
         return lambda q: q.filter(*filters)
 
+    @classmethod
+    @with_default_session
+    def get_metadata_counts(cls, session: Session) -> dict:
+        """
+        Return a dictionary with the following structure:
+        ```
+            {
+                "num_trials": <count of all trials>,
+                "num_participants": <count of all participants across all trials>,
+                "num_samples": <count of all samples across all participants across all trials>
+            }
+        ```
+        """
+        # Count all trials, participants, and samples in the database
+        [(num_trials, num_participants, num_samples)] = session.execute(
+            """
+            SELECT
+                COUNT(DISTINCT trial_id),
+                COUNT(participants),
+                SUM(jsonb_array_length(participants->'samples'))
+            FROM
+                trial_metadata,
+                LATERAL jsonb_array_elements(metadata_json->'participants') participants;
+            """
+        )
+
+        return {
+            "num_trials": num_trials,
+            "num_participants": num_participants,
+            "num_samples": num_samples,
+        }
+
 
 class UploadJobStatus(EnumBaseClass):
     STARTED = "started"
@@ -806,7 +847,7 @@ class UploadJobs(CommonColumns):
         emails.new_upload_alert(self, trial.metadata_json, send_email=True)
 
     def upload_uris_with_data_uris_with_uuids(self):
-        for upload_uri, uuid in self.gcs_file_map.items():
+        for upload_uri, uuid in (self.gcs_file_map or {}).items():
             # URIs in the upload bucket have a structure like (see ingestion.upload_assay)
             # [trial id]/{prismify_generated_path}/[timestamp].
             # We strip off the /[timestamp] suffix from the upload url,
@@ -1283,6 +1324,13 @@ class DownloadableFiles(CommonColumns):
             .alias("file_bundles")
         )
         return file_bundles
+
+    @classmethod
+    @with_default_session
+    def get_total_bytes(cls, session: Session) -> int:
+        """Get the total number of bytes of data stored across all files."""
+        total_bytes = session.query(func.sum(cls.file_size_bytes)).one()[0]
+        return int(total_bytes)
 
 
 # Query clause for computing a downloadable file's data category.

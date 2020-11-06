@@ -24,7 +24,7 @@ def test_confirm_account_approval():
     assert user.first_n in email["html_content"]
     assert email["to_emails"] == [user.email]
     assert "Approval" in email["subject"]
-    assert "has now been approved" in email["html_content"]
+    assert "has been approved" in email["html_content"]
 
 
 def test_new_upload_alert(monkeypatch):

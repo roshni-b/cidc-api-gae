@@ -8,6 +8,7 @@ from werkzeug.exceptions import NotFound, BadRequest
 from cidc_schemas import prism
 
 from ..shared.auth import public
+from ..models import TrialMetadata, DownloadableFiles
 
 info_bp = Blueprint("info", __name__)
 
@@ -41,6 +42,23 @@ EXTRA_DATA_TYPES = ["participants info", "samples info"]
 def extra_data_types():
     """List all extra data types on which permissions can be granted"""
     return jsonify(EXTRA_DATA_TYPES)
+
+
+@info_bp.route("data_overview", methods=["GET"])
+@public
+def data_overview():
+    """Return an overview of data ingested into the system"""
+    metadata_counts = TrialMetadata.get_metadata_counts()
+    num_files = DownloadableFiles.count()
+    num_bytes = DownloadableFiles.get_total_bytes()
+    return jsonify(
+        {
+            **metadata_counts,
+            "num_files": num_files,
+            "num_bytes": num_bytes,
+            "num_assays": len(prism.SUPPORTED_ASSAYS),
+        }
+    )
 
 
 _al_under = re.compile("^\w+$")  # alpha or underscore
