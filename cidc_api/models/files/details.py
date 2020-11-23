@@ -29,7 +29,7 @@ details_dict = {
     "/wes/r1_.fastq.gz": FileDetails("source"),
     "/wes/r2_.fastq.gz": FileDetails("source"),
     "/wes/reads_.bam": FileDetails("source"),
-    ## see: https://github.com/CIMAC-CIDC/cidc-ngs-pipeline-api/blob/master/wes/wes_output_API.json
+    ## see: https://github.com/CIMAC-CIDC/cidc-ngs-pipeline-api/blob/master/cidc_ngs_pipeline_api/wes/wes_output_API.json
     "/wes/analysis/vcfcompare.txt": FileDetails("miscellaneous"),
     "/wes/analysis/optimalpurityvalue.txt": FileDetails("miscellaneous"),
     "/wes/analysis/clonality_pyclone.tsv": FileDetails("miscellaneous"),

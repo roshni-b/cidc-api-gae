@@ -78,13 +78,13 @@ assay_facets: Facets = {
         ),
         "Somatic": FacetConfig(
             [
-                "/wes/analysis/vcf_tnscope_output.vcf",
+                "/wes/analysis/vcf_gz_tnscope_output.vcf.gz",
                 "/wes/analysis/maf_tnscope_output.maf",
-                "/wes/analysis/vcf_tnscope_filter.vcf",
+                "/wes/analysis/vcf_gz_tnscope_filter.vcf.gz",
                 "/wes/analysis/maf_tnscope_filter.maf",
-                "/wes/analysis/tnscope_exons_broad.gz",
-                "/wes/analysis/tnscope_exons_mda.gz",
-                "/wes/analysis/tnscope_exons_mocha.gz",
+                "/wes/analysis/tnscope_exons_broad.vcf.gz",
+                "/wes/analysis/tnscope_exons_mda.vcf.gz",
+                "/wes/analysis/tnscope_exons_mocha.vcf.gz",
             ]
         ),
         "Alignment": FacetConfig(
