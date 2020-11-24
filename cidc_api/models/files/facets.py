@@ -70,12 +70,17 @@ assay_facets: Facets = {
         "Germline": FacetConfig(
             [
                 "/wes/analysis/vcfcompare.txt",
-                "wes/analysis/tumor/haplotyper_targets.vcf.gz",
-                "wes/analysis/normal/haplotyper_targets.vcf.gz",
+                "/wes/analysis/tumor/haplotyper_targets.vcf.gz",
+                "/wes/analysis/normal/haplotyper_targets.vcf.gz",
             ]
         ),
         "Purity": FacetConfig(["/wes/analysis/optimalpurityvalue.txt"]),
-        "Clonality": FacetConfig(["/wes/analysis/clonality_pyclone.tsv"]),
+        "Clonality": FacetConfig(
+            [
+                "/wes/analysis/clonality_pyclone.tsv",
+                "/wes/analysis/clonality_table.tsv"
+            ]
+        ),
         "Copy Number": FacetConfig(
             [
                 "/wes/analysis/copynumber_cnvcalls.txt",
@@ -83,7 +88,10 @@ assay_facets: Facets = {
             ]
         ),
         "Neoantigen": FacetConfig(
-            ["wes/analysis/HLA_results.tsv", "analysis/combined_filtered.tsv"]
+            [
+                "/wes/analysis/HLA_results.tsv",
+                "/wes/analysis/combined_filtered.tsv"
+            ]
         ),
         "Somatic": FacetConfig(
             [
@@ -123,12 +131,12 @@ assay_facets: Facets = {
         "Report": FacetConfig(
             [
                 "/wes/analysis/wes_version.txt",
-                "wes/analysis/tumor_mutational_burden.tsv",
-                "wes/analysis/report.tar.gz",
-                "wes/analysis/wes_run_version.tsv",
-                "wes/analysis/config.yaml",
-                "wes/analysis/metasheet.csv",
-                "wes/analysis/wes_sample.json",
+                "/wes/analysis/tumor_mutational_burden.tsv",
+                "/wes/analysis/report.tar.gz",
+                "/wes/analysis/wes_run_version.tsv",
+                "/wes/analysis/config.yaml",
+                "/wes/analysis/metasheet.csv",
+                "/wes/analysis/wes_sample.json",
             ]
         ),
     },
