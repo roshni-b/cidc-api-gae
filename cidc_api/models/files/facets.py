@@ -70,10 +70,8 @@ assay_facets: Facets = {
         ),
         "Neoantigen": FacetConfig(
             [
-                "/wes/analysis/MHC_Class_I_all_epitopes.tsv",
-                "/wes/analysis/MHC_Class_I_filtered_condensed_ranked.tsv",
-                "/wes/analysis/MHC_Class_II_all_epitopes.tsv",
-                "/wes/analysis/MHC_Class_II_filtered_condensed_ranked.tsv",
+                "wes/analysis/HLA_results.tsv",
+                "analysis/combined_filtered.tsv"
             ]
         ),
         "Somatic": FacetConfig(
@@ -117,7 +115,6 @@ assay_facets: Facets = {
             [
                 "/wes/analysis/tumor/optitype_result.tsv",
                 "/wes/analysis/normal/optitype_result.tsv",
-                "wes/analysis/HLA_results.tsv"
             ]
         ),
         "Report": FacetConfig(
