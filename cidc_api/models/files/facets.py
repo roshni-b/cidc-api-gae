@@ -125,7 +125,17 @@ assay_facets: Facets = {
                 "/wes/analysis/normal/optitype_result.tsv",
             ]
         ),
-        "Report": FacetConfig(["/wes/analysis/wes_version.txt"]),
+        "Report": FacetConfig(
+            [
+                "/wes/analysis/wes_version.txt",
+                "wes/analysis/tumor_mutational_burden.tsv",
+                "wes/analysis/report.tar.gz",
+                "wes/analysis/wes_run_version.tsv",
+                "wes/analysis/config.yaml",
+                "wes/analysis/metasheet.csv",
+                "wes/analysis/wes_sample.json"
+            ]
+        ),
     },
     "RNA": {
         "Source": FacetConfig(
