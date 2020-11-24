@@ -89,14 +89,8 @@ assay_facets: Facets = {
         ),
         "Alignment": FacetConfig(
             [
-                "/wes/analysis/tn_corealigned.bam",
-                "/wes/analysis/tn_corealigned.bam.bai",
-                "/wes/analysis/tumor/recalibrated.bam",
-                "/wes/analysis/tumor/recalibrated.bam.bai",
                 "/wes/analysis/tumor/sorted.dedup.bam",
                 "/wes/analysis/tumor/sorted.dedup.bam.bai",
-                "/wes/analysis/normal/recalibrated.bam",
-                "/wes/analysis/normal/recalibrated.bam.bai",
                 "/wes/analysis/normal/sorted.dedup.bam",
                 "/wes/analysis/normal/sorted.dedup.bam.bai",
             ]
@@ -123,6 +117,7 @@ assay_facets: Facets = {
             [
                 "/wes/analysis/tumor/optitype_result.tsv",
                 "/wes/analysis/normal/optitype_result.tsv",
+                "wes/analysis/HLA_results.tsv"
             ]
         ),
         "Report": FacetConfig(
