@@ -59,7 +59,13 @@ assay_facets: Facets = {
         "Source": FacetConfig(
             ["/wes/r1_.fastq.gz", "/wes/r2_.fastq.gz", "/wes/reads_.bam"]
         ),
-        "Germline": FacetConfig(["/wes/analysis/vcfcompare.txt"]),
+        "Germline": FacetConfig(
+            [
+                "/wes/analysis/vcfcompare.txt",
+                "wes/analysis/tumor/haplotyper_targets.vcf.gz",
+                "wes/analysis/normal/haplotyper_targets.vcf.gz"
+            ]
+        ),
         "Purity": FacetConfig(["/wes/analysis/optimalpurityvalue.txt"]),
         "Clonality": FacetConfig(["/wes/analysis/clonality_pyclone.tsv"]),
         "Copy Number": FacetConfig(
@@ -98,17 +104,9 @@ assay_facets: Facets = {
                 "/wes/analysis/tumor/coverage_metrics.txt",
                 "/wes/analysis/tumor/target_metrics.txt",
                 "/wes/analysis/tumor/coverage_metrics_summary.txt",
-                "/wes/analysis/tumor/target_metrics_summary.txt",
-                "/wes/analysis/tumor/mosdepth_region_dist_broad.txt",
-                "/wes/analysis/tumor/mosdepth_region_dist_mda.txt",
-                "/wes/analysis/tumor/mosdepth_region_dist_mocha.txt",
                 "/wes/analysis/normal/coverage_metrics.txt",
                 "/wes/analysis/normal/target_metrics.txt",
                 "/wes/analysis/normal/coverage_metrics_summary.txt",
-                "/wes/analysis/normal/target_metrics_summary.txt",
-                "/wes/analysis/normal/mosdepth_region_dist_broad.txt",
-                "/wes/analysis/normal/mosdepth_region_dist_mda.txt",
-                "/wes/analysis/normal/mosdepth_region_dist_mocha.txt",
             ]
         ),
         "HLA Type": FacetConfig(
