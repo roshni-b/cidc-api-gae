@@ -100,7 +100,7 @@ def run_metadata_migration(
             _run_metadata_migration(
                 metadata_migration, use_upload_jobs_table, task_queue, session
             )
-        except: 
+        except:
             traceback.print_exc()
             raise
 

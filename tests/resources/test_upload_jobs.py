@@ -1,4 +1,5 @@
 import io
+import logging
 from datetime import datetime
 from contextlib import contextmanager
 from collections import namedtuple
@@ -603,7 +604,7 @@ def test_admin_upload(cidc_api, clean_db, monkeypatch):
     assert res.status_code == 200
 
 
-def test_upload_manifest(cidc_api, clean_db, monkeypatch, capsys):
+def test_upload_manifest(cidc_api, clean_db, monkeypatch, caplog):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
     user_id = setup_trial_and_user(cidc_api, monkeypatch)
     mocks = UploadMocks(monkeypatch)
@@ -612,13 +613,14 @@ def test_upload_manifest(cidc_api, clean_db, monkeypatch, capsys):
 
     # NCI users can upload manifests without explicit permission
     make_nci_biobank_user(user_id, cidc_api)
-    res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
-    )
+    with caplog.at_level(logging.DEBUG):
+        res = client.post(
+            MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
+        )
     assert res.status_code == 200
 
     # Check that upload alert email was "sent"
-    assert "Would send email with subject '[UPLOAD SUCCESS]" in capsys.readouterr()[0]
+    assert "Would send email with subject '[UPLOAD SUCCESS]" in caplog.text
 
     # Check that we tried to publish a patient/sample update
     mocks.publish_patient_sample_update.assert_called_once()
