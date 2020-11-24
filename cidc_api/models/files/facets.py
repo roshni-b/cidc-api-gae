@@ -74,16 +74,9 @@ assay_facets: Facets = {
                 "/wes/analysis/normal/haplotyper_targets.vcf.gz",
             ]
         ),
-        "Purity": FacetConfig(
-            [
-                "/wes/analysis/optimal_purity_value.txt"
-            ]
-        ),
+        "Purity": FacetConfig(["/wes/analysis/optimal_purity_value.txt"]),
         "Clonality": FacetConfig(
-            [
-                "/wes/analysis/clonality_pyclone.tsv",
-                "/wes/analysis/clonality_table.tsv"
-            ]
+            ["/wes/analysis/clonality_pyclone.tsv", "/wes/analysis/clonality_table.tsv"]
         ),
         "Copy Number": FacetConfig(
             [
@@ -92,10 +85,7 @@ assay_facets: Facets = {
             ]
         ),
         "Neoantigen": FacetConfig(
-            [
-                "/wes/analysis/HLA_results.tsv",
-                "/wes/analysis/combined_filtered.tsv"
-            ]
+            ["/wes/analysis/HLA_results.tsv", "/wes/analysis/combined_filtered.tsv"]
         ),
         "Somatic": FacetConfig(
             [
@@ -141,6 +131,7 @@ assay_facets: Facets = {
                 "/wes/analysis/config.yaml",
                 "/wes/analysis/metasheet.csv",
                 "/wes/analysis/wes_sample.json",
+                "/wes/analysis/xhla_report_hla.json",
             ]
         ),
     },
