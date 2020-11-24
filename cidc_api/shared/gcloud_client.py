@@ -8,9 +8,9 @@ from typing import List, Tuple, Optional
 from typing.io import BinaryIO
 
 import requests
-
 from google.cloud import storage, pubsub
 
+from ..config.logging import logger
 from ..config.settings import (
     GOOGLE_DOWNLOAD_ROLE,
     GOOGLE_UPLOAD_ROLE,
@@ -70,7 +70,7 @@ def upload_xlsx_to_gcs(
     )
 
     if ENV == "dev":
-        print(
+        logger().info(
             f"Would've saved {blob_name} to {GOOGLE_UPLOAD_BUCKET} and {GOOGLE_DATA_BUCKET}"
         )
         return _pseudo_blob(
@@ -95,13 +95,15 @@ def grant_upload_access(user_email: str):
     means a user can write objects to the bucket but cannot delete,
     overwrite, or read objects from this bucket.
     """
-    print(f"granting upload to {user_email}")
+    logger().info(f"granting upload to {user_email}")
     bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
 
     # Update the bucket IAM policy to include the user as an uploader.
     policy = bucket.get_iam_policy()
     policy[GOOGLE_UPLOAD_ROLE] = {*policy[GOOGLE_UPLOAD_ROLE], f"user:{user_email}"}
-    print(f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}")
+    logger().info(
+        f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}"
+    )
     bucket.set_iam_policy(policy)
 
 
@@ -109,13 +111,15 @@ def revoke_upload_access(user_email: str):
     """
     Revoke a user's upload access for the given bucket.
     """
-    print(f"revoking upload from {user_email}")
+    logger().info(f"revoking upload from {user_email}")
     bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
 
     # Update the bucket IAM policy to remove the user's uploader privileges.
     policy = bucket.get_iam_policy()
     policy[GOOGLE_UPLOAD_ROLE].discard(f"user:{user_email}")
-    print(f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}")
+    logger().info(
+        f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}"
+    )
     bucket.set_iam_policy(policy)
 
 
@@ -125,7 +129,7 @@ def grant_download_access(user_email: str, trial_id: str, upload_type: str):
     """
     url_prefix, prefix_expression = _build_prefix_clause(trial_id, upload_type)
 
-    print(f"Granting download access on {url_prefix}* to {user_email}")
+    logger().info(f"Granting download access on {url_prefix}* to {user_email}")
 
     # get the current IAM policy for the data bucket
     bucket = _get_bucket(GOOGLE_DATA_BUCKET)
@@ -150,7 +154,7 @@ def revoke_download_access(user_email: str, trial_id: str, upload_type: str):
     """
     url_prefix, prefix_expression = _build_prefix_clause(trial_id, upload_type)
 
-    print(f"Revoking download access on {url_prefix}* from {user_email}")
+    logger().info(f"Revoking download access on {url_prefix}* from {user_email}")
 
     # get the current IAM policy for the data bucket
     bucket = _get_bucket(GOOGLE_DATA_BUCKET)
@@ -305,7 +309,7 @@ def get_signed_url(
         method=method,
         response_disposition=f'attachment; filename="{full_filename}"',
     )
-    print(f"generated signed URL for {object_name}: {url}")
+    logger().info(f"generated signed URL for {object_name}: {url}")
 
     return url
 
@@ -319,7 +323,7 @@ def _encode_and_publish(content: str, topic: str) -> Future:
     # Don't actually publish to Pub/Sub if running locally
     if ENV == "dev":
         if DEV_CFUNCTIONS_SERVER:
-            print(
+            logger().info(
                 f"Publishing message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}"
             )
             import base64
@@ -334,13 +338,13 @@ def _encode_and_publish(content: str, topic: str) -> Future:
                     f"Couldn't publish message {content!r} to topic {DEV_CFUNCTIONS_SERVER}/{topic}"
                 ) from e
             else:
-                print(f"Got {res}")
+                logger().info(f"Got {res}")
                 if res.status_code != 200:
                     raise Exception(
                         f"Couldn't publish message {content!r} to {DEV_CFUNCTIONS_SERVER}/{topic}: {res!r}"
                     )
         else:
-            print(f"Would've published message {content} to topic {topic}")
+            logger().info(f"Would've published message {content} to topic {topic}")
         return
 
     # The Pub/Sub publisher client returns a concurrent.futures.Future
@@ -385,7 +389,7 @@ def send_email(to_emails: List[str], subject: str, html_content: str, **kw):
     """
     # Don't actually send an email if this is a test
     if TESTING or ENV == "dev":
-        print(f"Would send email with subject '{subject}' to {to_emails}")
+        logger().info(f"Would send email with subject '{subject}' to {to_emails}")
         return
 
     email_json = json.dumps(
