@@ -63,7 +63,7 @@ assay_facets: Facets = {
             [
                 "/wes/analysis/vcfcompare.txt",
                 "wes/analysis/tumor/haplotyper_targets.vcf.gz",
-                "wes/analysis/normal/haplotyper_targets.vcf.gz"
+                "wes/analysis/normal/haplotyper_targets.vcf.gz",
             ]
         ),
         "Purity": FacetConfig(["/wes/analysis/optimalpurityvalue.txt"]),
@@ -75,10 +75,7 @@ assay_facets: Facets = {
             ]
         ),
         "Neoantigen": FacetConfig(
-            [
-                "wes/analysis/HLA_results.tsv",
-                "analysis/combined_filtered.tsv"
-            ]
+            ["wes/analysis/HLA_results.tsv", "analysis/combined_filtered.tsv"]
         ),
         "Somatic": FacetConfig(
             [
@@ -123,7 +120,7 @@ assay_facets: Facets = {
                 "wes/analysis/wes_run_version.tsv",
                 "wes/analysis/config.yaml",
                 "wes/analysis/metasheet.csv",
-                "wes/analysis/wes_sample.json"
+                "wes/analysis/wes_sample.json",
             ]
         ),
     },
