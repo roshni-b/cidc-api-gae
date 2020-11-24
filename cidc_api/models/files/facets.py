@@ -74,7 +74,11 @@ assay_facets: Facets = {
                 "/wes/analysis/normal/haplotyper_targets.vcf.gz",
             ]
         ),
-        "Purity": FacetConfig(["/wes/analysis/optimalpurityvalue.txt"]),
+        "Purity": FacetConfig(
+            [
+                "/wes/analysis/optimal_purity_value.txt"
+            ]
+        ),
         "Clonality": FacetConfig(
             [
                 "/wes/analysis/clonality_pyclone.tsv",
