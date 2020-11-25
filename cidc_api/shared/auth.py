@@ -9,6 +9,9 @@ from werkzeug.exceptions import Unauthorized, BadRequest, PreconditionFailed
 
 from ..models import Users, UserSchema
 from ..config.settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID, TESTING
+from ..config.logging import get_logger
+
+logger = get_logger(__name__)
 
 ### Main auth utility functions ###
 def validate_api_auth(app: Flask):
@@ -291,7 +294,10 @@ def _log_user_and_request_details(is_authorized: bool):
     user = get_current_user()
     log_msg += f" (user:{user.id}:{user.email})"
 
-    print(log_msg)
+    if is_authorized:
+        logger.info(log_msg)
+    else:
+        logger.error(log_msg)
 
 
 def _enforce_cli_version():
@@ -308,7 +314,7 @@ def _enforce_cli_version():
     try:
         client, client_version = user_agent.split("/", 1)
     except ValueError:
-        print(f"Unrecognized user-agent string format: {user_agent}")
+        logger.error(f"Unrecognized user-agent string format: {user_agent}")
         raise BadRequest("could not parse User-Agent string")
 
     # Old CLI versions don't update the User-Agent header, so we (perhaps dangerously)
@@ -323,7 +329,7 @@ def _enforce_cli_version():
     )
 
     if is_very_old_cli or is_old_cli:
-        print("cancelling request: detected outdated CLI")
+        logger.info("cancelling request: detected outdated CLI")
         message = (
             "You appear to be using an out-of-date version of the CIDC CLI. "
             "Please upgrade to the most recent version:\n"

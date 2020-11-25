@@ -117,7 +117,7 @@ If you're updating `models.py`, you should create a migration and commit the res
 
 Once you have a development database set up and running, run the API server:
 ```bash
-python cidc_api/app.py
+ENV=dev gunicorn cidc_api.app:app
 ```
 
 ## Testing

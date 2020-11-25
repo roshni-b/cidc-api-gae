@@ -5,7 +5,7 @@ from enum import Enum as EnumBaseClass
 from functools import wraps
 from typing import Dict, Optional, List, Union, Callable
 
-from flask import current_app as app, Flask
+from flask import current_app as app
 from google.cloud.storage import Blob
 from sqlalchemy import (
     Column,
@@ -51,6 +51,7 @@ from .files import (
     FilePurpose,
     FACET_NAME_DELIM,
 )
+
 from ..config.db import BaseModel
 from ..config.settings import (
     PAGINATION_PAGE_SIZE,
@@ -67,6 +68,9 @@ from ..shared.gcloud_client import (
     revoke_download_access,
     send_email,
 )
+from ..config.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def with_default_session(f):
@@ -303,7 +307,7 @@ class Users(CommonColumns):
 
         user = Users.find_by_email(email)
         if not user:
-            print(f"Creating new user with email {email}")
+            logger.info(f"Creating new user with email {email}")
             user = Users(email=email)
             user.insert(session=session)
         return user
@@ -407,7 +411,7 @@ class Permissions(CommonColumns):
                 orig=f"{grantee.email} has greater than or equal to the maximum number of allowed granular permissions ({GOOGLE_MAX_DOWNLOAD_PERMISSIONS}). Remove unused permissions to add others.",
             )
 
-        print(
+        logger.info(
             f"admin-action: {grantor.email} gave {grantee.email} the permission {self.upload_type} on {self.trial_id}"
         )
 
@@ -451,7 +455,7 @@ class Permissions(CommonColumns):
                 "IAM revoke failed, and permission db record not removed."
             ) from e
 
-        print(
+        logger.info(
             f"admin-action: {deleted_by_user.email} removed from {grantee.email} the permission {self.upload_type} on {self.trial_id}"
         )
         super().delete(session=session, commit=True)
@@ -623,7 +627,7 @@ class TrialMetadata(CommonColumns):
         Create a new clinical trial metadata record.
         """
 
-        print(f"Creating new trial metadata with id {trial_id}")
+        logger.info(f"Creating new trial metadata with id {trial_id}")
         trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
         trial.insert(session=session, commit=commit)
 
@@ -918,10 +922,10 @@ class UploadJobs(CommonColumns):
         if job is None or job.status == UploadJobStatus.MERGE_COMPLETED:
             raise ValueError(f"Upload job {job_id} doesn't exist or is already merged")
 
-        print(f"About to merge extra md to {job.id}/{job.status}")
+        logger.info(f"About to merge extra md to {job.id}/{job.status}")
 
         for uuid, file in files.items():
-            print(f"About to parse/merge extra md on {uuid}")
+            logger.info(f"About to parse/merge extra md on {uuid}")
             (
                 job.metadata_patch,
                 updated_artifact,
@@ -929,14 +933,14 @@ class UploadJobs(CommonColumns):
             ) = prism.merge_artifact_extra_metadata(
                 job.metadata_patch, uuid, job.upload_type, file
             )
-            print(f"Updated md for {uuid}: {updated_artifact.keys()}")
+            logger.info(f"Updated md for {uuid}: {updated_artifact.keys()}")
 
         # A workaround fix for JSON field modifications not being tracked
         # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)
         # in the model doesn't seem to help.
         flag_modified(job, "metadata_patch")
 
-        print(f"Updated {job.id}/{job.status} patch: {job.metadata_patch}")
+        logger.info(f"Updated {job.id}/{job.status} patch: {job.metadata_patch}")
         session.commit()
 
     @classmethod
