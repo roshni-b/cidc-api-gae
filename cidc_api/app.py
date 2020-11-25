@@ -10,15 +10,14 @@ from cidc_schemas.template import generate_all_templates
 
 from .config.db import init_db
 from .config.settings import SETTINGS
-from .config.logging import init_logger, logger
+from .config.logging import get_logger
 from .shared.auth import validate_api_auth
 from .resources import register_resources
 
+logger = get_logger(__name__)
+
 app = Flask(__name__, static_folder=None)
 app.config.update(SETTINGS)
-
-# Set up logging
-init_logger(app)
 
 # Enable CORS
 CORS(app, resources={r"*": {"origins": app.config["ALLOWED_CLIENT_URL"]}})
@@ -48,7 +47,7 @@ def handle_errors(e: Exception):
             _error["message"] = e.description
 
         # general HTTP error log
-        logger().info(f"HTTP {status_code}: {_error['message']}")
+        logger.error(f"HTTP {status_code}: {_error['message']}")
     else:
         status_code = 500
         # This is an internal server error, so log the traceback for debugging purposes.

@@ -8,3 +8,5 @@ port = os.environ.get("PORT", 8080)
 loglevel = "DEBUG" if is_dev else "INFO"
 reload = is_dev
 timeout = 60
+# Send all logs to stdout (where App Engine reads them from)
+errorlog = "-"

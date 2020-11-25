@@ -1,25 +1,29 @@
 import sys
 import logging
+from typing import Optional
 
-from flask import Flask, current_app, has_app_context
+from .settings import IS_GUNICORN, ENV
 
-from .settings import ENV, TESTING
-
-
-def init_logger(app: Flask):
-    """Configure `app`'s loggers."""
-    gunicorn_logger = logging.getLogger("gunicorn.error")
-    app.logger.handlers = gunicorn_logger.handlers
-    app.logger.setLevel(gunicorn_logger.level)
+# TODO: consider adding custom formatting that automatically adds request context
+# to all logs, like who the requesting user is and what URL they're accessing, e.g.
 
 
-# Configure root logger as a fallback when no current_app is available
-defaultLogger = logging.getLogger()
-defaultLogger.setLevel(logging.DEBUG if ENV == "dev" or TESTING else logging.INFO)
-
-
-def logger():
-    """The current logger, depending on whether a flask app_context has been pushed."""
-    if has_app_context() and not TESTING:
-        return current_app.logger
-    return defaultLogger
+def get_logger(name: Optional[str]) -> logging.Logger:
+    """Get a configured logger with the given `name`."""
+    # If the app is running in gunicorn, inherit all config from gunicorn's loggers.
+    # Otherwise, configure a logger with reasonable defaults.
+    logger = logging.getLogger(name)
+    if IS_GUNICORN:
+        gunicorn_logger = logging.getLogger("gunicorn.error")
+        logger.handlers = gunicorn_logger.handlers
+        logger.setLevel(gunicorn_logger.level)
+    else:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(
+            logging.Formatter(
+                "[%(asctime)s] [%(threadName)s] [%(levelname)s]: %(message)s"
+            )
+        )
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG if ENV == "dev" else logging.INFO)
+    return logger
