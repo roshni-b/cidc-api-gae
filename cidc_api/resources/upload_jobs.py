@@ -11,6 +11,7 @@ from jsonschema.exceptions import ValidationError
 from sqlalchemy.orm.session import Session
 from werkzeug.exceptions import BadRequest, NotFound, Unauthorized, PreconditionRequired
 
+from flask import current_app
 from cidc_schemas import prism, json_validation
 from cidc_schemas.template import Template
 from cidc_schemas.template_reader import XlTemplateReader
@@ -24,7 +25,6 @@ from ..shared.rest_utils import (
     unmarshal_request,
     use_args_with_pagination,
 )
-from ..config.logging import logger
 from ..config.settings import GOOGLE_UPLOAD_BUCKET, PRISM_ENCRYPT_KEY
 from ..models import (
     UploadJobs,
@@ -37,6 +37,9 @@ from ..models import (
     CIDCRole,
     Users,
 )
+from ..config.logging import get_logger
+
+logger = get_logger(__name__)
 
 prism.set_prism_encrypt_key(PRISM_ENCRYPT_KEY)
 
@@ -220,15 +223,15 @@ def validate(template, xlsx):
 
     TODO: add this endpoint to the OpenAPI docs
     """
-    logger().info(f"validate started")
+    logger.info(f"validate started")
     # Validate the .xlsx file with respect to the schema
     error_list = list(xlsx.iter_errors(template))
     json = {"errors": []}
     if not error_list:
-        logger().info(f"validate passed")
+        logger.info(f"validate passed")
         return jsonify(json)
     else:
-        logger().info(f"{len(error_list)} validation errors: [{error_list[0]!r}, ...]")
+        logger.error(f"{len(error_list)} validation errors: [{error_list[0]!r}, ...]")
         # The spreadsheet is invalid
         json["errors"] = error_list
         return jsonify(json)
@@ -249,13 +252,18 @@ def check_permissions(user, trial_id, template_type):
     if user.is_nci_user() and template_type in prism.SUPPORTED_MANIFESTS:
         return
     if not perm:
-        logger().info(
+        logger.error(
             f"Unauthorized attempt to access trial {trial_id} by {user.email!r}"
         )
         raise Unauthorized(
             f"{user.email} is not authorized to upload {template_type} data to {trial_id}. "
             f"Please contact a CIDC administrator if you believe this is a mistake."
         )
+
+
+def log_multiple_errors(errors: list):
+    if errors != []:
+        logger.error("\n".join(errors))
 
 
 def upload_handler(allowed_types: List[str]):
@@ -273,30 +281,27 @@ def upload_handler(allowed_types: List[str]):
     def inner(f):
         @wraps(f)
         def wrapped(*args, **kwargs):
-            logger().info(f"upload_handler({f.__name__}) started")
+            logger.info(f"upload_handler({f.__name__}) started")
             template, xlsx_file = extract_schema_and_xlsx(allowed_types)
 
             errors_so_far = []
 
             xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
-            logger().info(f"xlsx parsed: {len(errors)} errors")
-            for e in errors:
-                logger().info(f"\t{e}")
+            logger.info(f"xlsx parsed: {len(errors)} errors")
+            log_multiple_errors(errors)
             errors_so_far.extend(errors)
 
             # Run basic validations on the provided Excel file
             validations = validate(template, xlsx)
-            logger().info(f"xlsx validated: {len(validations.json['errors'])} errors")
-            for e in validations.json["errors"]:
-                logger().info(f"\t{e}")
+            logger.info(f"xlsx validated: {len(validations.json['errors'])} errors")
+            log_multiple_errors(validations.json["errors"])
             errors_so_far.extend(validations.json["errors"])
 
             md_patch, file_infos, errors = prism.prismify(xlsx, template)
-            logger().info(
+            logger.info(
                 f"prismified: {len(errors)} errors, {len(file_infos)} file_infos"
             )
-            for e in errors:
-                logger().info(f"\t{e}")
+            log_multiple_errors(errors)
             errors_so_far.extend(errors)
 
             try:
@@ -336,18 +341,14 @@ def upload_handler(allowed_types: List[str]):
             except prism.InvalidMergeTargetException as e:
                 # we have an invalid MD stored in db - users can't do anything about it.
                 # So we log it
-                logger().info(
-                    f"Internal error with trial {trial_id!r}", file=sys.stderr
-                )
-                logger().info(e, file=sys.stderr)
+                logger.error(f"Internal error with trial {trial_id!r}\n{e}")
                 # and return an error. Though it's not BadRequest but rather an
                 # Internal Server error we report it like that, so it will be displayed
                 raise BadRequest(
                     f"Internal error with {trial_id!r}. Please contact a CIDC Administrator."
                 ) from e
-            logger().info(f"merged: {len(errors)} errors")
-            for e in errors:
-                logger().info(f"\t{e}")
+            logger.info(f"merged: {len(errors)} errors")
+            log_multiple_errors(errors)
             errors_so_far.extend(errors)
 
             if errors_so_far:
@@ -483,7 +484,7 @@ def upload_data_files(
 
     # TODO: refactor this to be a pre-GET hook on the upload-jobs resource.
     """
-    logger().info(f"upload_assay started")
+    logger.info(f"upload_assay started")
     upload_moment = datetime.datetime.now().isoformat()
     uri2uuid = {}
     url_mapping = {}

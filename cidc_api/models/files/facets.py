@@ -67,9 +67,17 @@ assay_facets: Facets = {
         "Source": FacetConfig(
             ["/wes/r1_.fastq.gz", "/wes/r2_.fastq.gz", "/wes/reads_.bam"]
         ),
-        "Germline": FacetConfig(["/wes/analysis/vcfcompare.txt"]),
-        "Purity": FacetConfig(["/wes/analysis/optimalpurityvalue.txt"]),
-        "Clonality": FacetConfig(["/wes/analysis/clonality_pyclone.tsv"]),
+        "Germline": FacetConfig(
+            [
+                "/wes/analysis/vcfcompare.txt",
+                "/wes/analysis/tumor/haplotyper_targets.vcf.gz",
+                "/wes/analysis/normal/haplotyper_targets.vcf.gz",
+            ]
+        ),
+        "Purity": FacetConfig(["/wes/analysis/optimal_purity_value.txt"]),
+        "Clonality": FacetConfig(
+            ["/wes/analysis/clonality_pyclone.tsv", "/wes/analysis/clonality_table.tsv"]
+        ),
         "Copy Number": FacetConfig(
             [
                 "/wes/analysis/copynumber_cnvcalls.txt",
@@ -77,34 +85,23 @@ assay_facets: Facets = {
             ]
         ),
         "Neoantigen": FacetConfig(
-            [
-                "/wes/analysis/MHC_Class_I_all_epitopes.tsv",
-                "/wes/analysis/MHC_Class_I_filtered_condensed_ranked.tsv",
-                "/wes/analysis/MHC_Class_II_all_epitopes.tsv",
-                "/wes/analysis/MHC_Class_II_filtered_condensed_ranked.tsv",
-            ]
+            ["/wes/analysis/HLA_results.tsv", "/wes/analysis/combined_filtered.tsv"]
         ),
         "Somatic": FacetConfig(
             [
-                "/wes/analysis/vcf_tnscope_output.vcf",
+                "/wes/analysis/vcf_gz_tnscope_output.vcf.gz",
                 "/wes/analysis/maf_tnscope_output.maf",
-                "/wes/analysis/vcf_tnscope_filter.vcf",
+                "/wes/analysis/vcf_gz_tnscope_filter.vcf.gz",
                 "/wes/analysis/maf_tnscope_filter.maf",
-                "/wes/analysis/tnscope_exons_broad.gz",
-                "/wes/analysis/tnscope_exons_mda.gz",
-                "/wes/analysis/tnscope_exons_mocha.gz",
+                "/wes/analysis/tnscope_exons_broad.vcf.gz",
+                "/wes/analysis/tnscope_exons_mda.vcf.gz",
+                "/wes/analysis/tnscope_exons_mocha.vcf.gz",
             ]
         ),
         "Alignment": FacetConfig(
             [
-                "/wes/analysis/tn_corealigned.bam",
-                "/wes/analysis/tn_corealigned.bam.bai",
-                "/wes/analysis/tumor/recalibrated.bam",
-                "/wes/analysis/tumor/recalibrated.bam.bai",
                 "/wes/analysis/tumor/sorted.dedup.bam",
                 "/wes/analysis/tumor/sorted.dedup.bam.bai",
-                "/wes/analysis/normal/recalibrated.bam",
-                "/wes/analysis/normal/recalibrated.bam.bai",
                 "/wes/analysis/normal/sorted.dedup.bam",
                 "/wes/analysis/normal/sorted.dedup.bam.bai",
             ]
@@ -114,17 +111,9 @@ assay_facets: Facets = {
                 "/wes/analysis/tumor/coverage_metrics.txt",
                 "/wes/analysis/tumor/target_metrics.txt",
                 "/wes/analysis/tumor/coverage_metrics_summary.txt",
-                "/wes/analysis/tumor/target_metrics_summary.txt",
-                "/wes/analysis/tumor/mosdepth_region_dist_broad.txt",
-                "/wes/analysis/tumor/mosdepth_region_dist_mda.txt",
-                "/wes/analysis/tumor/mosdepth_region_dist_mocha.txt",
                 "/wes/analysis/normal/coverage_metrics.txt",
                 "/wes/analysis/normal/target_metrics.txt",
                 "/wes/analysis/normal/coverage_metrics_summary.txt",
-                "/wes/analysis/normal/target_metrics_summary.txt",
-                "/wes/analysis/normal/mosdepth_region_dist_broad.txt",
-                "/wes/analysis/normal/mosdepth_region_dist_mda.txt",
-                "/wes/analysis/normal/mosdepth_region_dist_mocha.txt",
             ]
         ),
         "HLA Type": FacetConfig(
@@ -133,7 +122,18 @@ assay_facets: Facets = {
                 "/wes/analysis/normal/optitype_result.tsv",
             ]
         ),
-        "Report": FacetConfig(["/wes/analysis/wes_version.txt"]),
+        "Report": FacetConfig(
+            [
+                "/wes/analysis/wes_version.txt",
+                "/wes/analysis/tumor_mutational_burden.tsv",
+                "/wes/analysis/report.tar.gz",
+                "/wes/analysis/wes_run_version.tsv",
+                "/wes/analysis/config.yaml",
+                "/wes/analysis/metasheet.csv",
+                "/wes/analysis/wes_sample.json",
+                "/wes/analysis/xhla_report_hla.json",
+            ]
+        ),
     },
     "RNA": {
         "Source": FacetConfig(

@@ -26,6 +26,7 @@ DEBUG = environ.get("DEBUG") == "True"
 assert ENV == "dev" if DEBUG else True, "DEBUG mode is only allowed when ENV='dev'"
 TESTING = environ.get("TESTING") == "True"
 ALLOWED_CLIENT_URL = environ.get("ALLOWED_CLIENT_URL")
+IS_GUNICORN = "gunicorn" in environ.get("SERVER_SOFTWARE", "")
 
 ### Configure miscellaneous constants ###
 TEMPLATES_DIR = path.join("/tmp", "templates")
