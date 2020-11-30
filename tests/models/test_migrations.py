@@ -79,7 +79,7 @@ def test_migrations_rollback(monkeypatch):
     select_manifest_uploads.return_value = [MagicMock()]
     monkeypatch.setattr(migrations, "_select_manifest_uploads", select_manifest_uploads)
 
-    monkeypatch.setattr(migrations, "_get_uuid_info", MagicMock())
+    monkeypatch.setattr(migrations, "_get_uuid_path_map", MagicMock())
 
     mock_migration = MagicMock()
     mock_migration.return_value = MigrationResult(

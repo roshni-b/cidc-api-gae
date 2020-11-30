@@ -3,7 +3,7 @@ import hashlib
 from datetime import datetime, timedelta
 from enum import Enum as EnumBaseClass
 from functools import wraps
-from typing import Dict, Optional, List, Union, Callable
+from typing import Dict, Optional, List, Union, Callable, Tuple
 
 from flask import current_app as app
 from google.cloud.storage import Blob
@@ -646,6 +646,26 @@ class TrialMetadata(CommonColumns):
             uploaded_timestamp=gcs_object.time_created.isoformat(),
             md5_hash=gcs_object.md5_hash,
             crc32c_hash=gcs_object.crc32c,
+        )
+
+    @staticmethod
+    def merge_gcs_artifacts(
+        metadata: dict, upload_type: str, uuids_and_gcs_objects: List[Tuple[str, Blob]]
+    ):
+        return prism.merge_artifacts(
+            metadata,
+            [
+                prism.ArtifactInfo(
+                    upload_type=upload_type,
+                    artifact_uuid=uuid,
+                    object_url=gcs_object.name,
+                    file_size_bytes=gcs_object.size,
+                    uploaded_timestamp=gcs_object.time_created.isoformat(),
+                    md5_hash=gcs_object.md5_hash,
+                    crc32c_hash=gcs_object.crc32c,
+                )
+                for uuid, gcs_object in uuids_and_gcs_objects
+            ],
         )
 
     @classmethod
