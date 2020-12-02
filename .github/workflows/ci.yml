@@ -115,11 +115,13 @@ jobs:
           gcloud beta app deploy app.prod.yaml \
             --project cidc-dfci \
             --version "githubactions-${GITHUB_SHA:0:7}-$GITHUB_RUN_NUMBER" \
-            --no-cache
+            --no-cache \
+            --quiet
       - name: Deploy to App Engine (Staging)
         if: ${{ github.ref == 'refs/heads/master' }}
         run: |
           gcloud beta app deploy app.staging.yaml \
             --project cidc-dfci-staging \
             --version "githubactions-${GITHUB_SHA:0:7}-$GITHUB_RUN_NUMBER" \
-            --no-cache
+            --no-cache \
+            --quiet
