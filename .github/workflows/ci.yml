@@ -104,6 +104,7 @@ jobs:
     needs: [build, test]
     if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/production' }}
     steps:
+      - uses: actions/checkout@v2
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@master
         with:
@@ -112,14 +113,14 @@ jobs:
       - name: Deploy to App Engine (Prod)
         if: ${{ github.ref == 'refs/heads/production' }}
         run: |
-          gcloud --quiet beta app deploy app.prod.yaml \
+          gcloud --quiet app deploy app.prod.yaml \
             --project cidc-dfci \
             --version "githubactions-${GITHUB_SHA:0:7}-$GITHUB_RUN_NUMBER" \
             --no-cache
       - name: Deploy to App Engine (Staging)
         if: ${{ github.ref == 'refs/heads/master' }}
         run: |
-          gcloud --quiet beta app deploy app.staging.yaml \
+          gcloud --quiet app deploy app.staging.yaml \
             --project cidc-dfci-staging \
             --version "githubactions-${GITHUB_SHA:0:7}-$GITHUB_RUN_NUMBER" \
             --no-cache
