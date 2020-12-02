@@ -112,16 +112,14 @@ jobs:
       - name: Deploy to App Engine (Prod)
         if: ${{ github.ref == 'refs/heads/production' }}
         run: |
-          gcloud beta app deploy app.prod.yaml \
+          gcloud --quiet beta app deploy app.prod.yaml \
             --project cidc-dfci \
             --version "githubactions-${GITHUB_SHA:0:7}-$GITHUB_RUN_NUMBER" \
-            --no-cache \
-            --quiet
+            --no-cache
       - name: Deploy to App Engine (Staging)
         if: ${{ github.ref == 'refs/heads/master' }}
         run: |
-          gcloud beta app deploy app.staging.yaml \
+          gcloud --quiet beta app deploy app.staging.yaml \
             --project cidc-dfci-staging \
             --version "githubactions-${GITHUB_SHA:0:7}-$GITHUB_RUN_NUMBER" \
-            --no-cache \
-            --quiet
+            --no-cache
