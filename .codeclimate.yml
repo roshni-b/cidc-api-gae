@@ -9,3 +9,6 @@ checks:
   # Don't complain if files are too long
   file-lines:
     enabled: false
+  # This check doesn't work well with python3
+  duplication:
+    enabled: false
