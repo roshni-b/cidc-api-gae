@@ -231,14 +231,15 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
 
     client = cidc_api.test_client()
 
-    # The file_ids query param must be provided
-    res = client.get("/downloadable_files/filelist")
+    # A JSON body containing a file ID list must be provided
+    res = client.post("/downloadable_files/filelist")
     assert res.status_code == 422
 
-    url = f"/downloadable_files/filelist?file_ids={file_id_1},{file_id_2}"
+    url = f"/downloadable_files/filelist"
 
     # User has no permissions, so no files should be found
-    res = client.get(url)
+    short_file_list = {"file_ids": [file_id_1, file_id_2]}
+    res = client.post(url, json=short_file_list)
     assert res.status_code == 404
 
     # Give the user one permission
@@ -252,7 +253,7 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
         perm.insert()
 
     # User has one permission, so the filelist should contain a single file
-    res = client.get(url)
+    res = client.post(url, json=short_file_list)
     assert res.status_code == 200
     assert "text/tsv" in res.headers["Content-Type"]
     assert "filename=filelist.tsv" in res.headers["Content-Disposition"]
@@ -260,19 +261,23 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
         f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/wes/.../reads_123.bam\t{trial_id}_wes_..._reads_123.bam\n"
     )
 
-    # Admins can get a filelist containing all files
+    # Admins don't need permissions to get files
     make_admin(user_id, cidc_api)
-    res = client.get(url)
+    res = client.post(url, json=short_file_list)
     assert res.status_code == 200
     assert res.data.decode("utf-8") == (
         f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/wes/.../reads_123.bam\t{trial_id}_wes_..._reads_123.bam\n"
         f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/cytof/.../analysis.zip\t{trial_id}_cytof_..._analysis.zip\n"
     )
 
-    # Filelists don't get truncated (i.e., paginated)
-    new_ids = range(1000, 1300)
+    # Clear inserted file records
     with cidc_api.app_context():
-        for id in new_ids:
+        clean_db.query(DownloadableFiles).delete()
+
+    # Filelists don't get paginated
+    long_file_list = list(range(1000, 2000))
+    with cidc_api.app_context():
+        for id in long_file_list:
             DownloadableFiles(
                 id=id,
                 trial_id=trial_id,
@@ -284,10 +289,10 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
                 uploaded_timestamp=datetime.now(),
             ).insert()
 
-    res = client.get(f"{url},{','.join([str(id) for id in new_ids])}")
+    res = client.post(url, json={"file_ids": long_file_list})
     assert res.status_code == 200
-    # newly inserted files + already inserted files + EOF newline
-    assert len(res.data.decode("utf-8").split("\n")) == len(new_ids) + 2 + 1
+    # newly inserted files + EOF newline
+    assert len(res.data.decode("utf-8").split("\n")) == len(long_file_list) + 1
 
 
 def test_get_filter_facets(cidc_api, clean_db, monkeypatch):

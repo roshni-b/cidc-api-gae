@@ -86,12 +86,10 @@ def get_related_files(downloadable_file: DownloadableFiles):
     return {"_items": downloadable_file.get_related_files()}
 
 
-@downloadable_files_bp.route("/filelist", methods=["GET"])
+@downloadable_files_bp.route("/filelist", methods=["POST"])
 @requires_auth("filelist")
-@use_args(
-    {"file_ids": fields.DelimitedList(fields.Int, required=True)}, location="query"
-)
-def get_filelist(args):
+@use_args({"file_ids": fields.List(fields.Int, required=True)}, location="json")
+def generate_filelist(args):
     """
     Return a file `filelist.tsv` mapping GCS URIs to flat filenames for the
     provided set of file ids.

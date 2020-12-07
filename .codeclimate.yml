@@ -6,3 +6,6 @@ checks:
   method-complexity:
     config:
       threshold: 10
+  # Don't complain if files are too long
+  file-lines:
+    enabled: false
