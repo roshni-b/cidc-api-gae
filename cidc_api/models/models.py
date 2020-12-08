@@ -1072,6 +1072,14 @@ class DownloadableFiles(CommonColumns):
         return FILE_PURPOSE_CASE_CLAUSE
 
     @property
+    def short_description(self):
+        return details_dict.get(self.facet_group).short_description
+
+    @property
+    def long_description(self):
+        return details_dict.get(self.facet_group).long_description
+
+    @property
     def cimac_id(self):
         """
         Extract the `cimac_id` associated with this file, if any, by searching the file's 
