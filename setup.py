@@ -18,6 +18,6 @@ setup(
         "cidc_api.models.files",
     ],
     url="https://github.com/CIMAC-CIDC/cidc_api-gae",
-    version="0.22.11",
+    version="0.22.12",
     zip_safe=False,
 )
