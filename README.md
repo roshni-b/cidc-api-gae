@@ -49,6 +49,13 @@ To do so, first install and start PostgreSQL:
 brew install postgresql
 brew services start postgresql # launches the postgres service whenever your computer launches
 ```
+or for Ubuntu/Debian
+```bash
+sudo apt install postgresql
+service postgresql start
+sudo update-rc.d postgres defaults # launches the postgres service whenever your computer launches
+sudo -i -u postgres # used to access postgresql user
+```
 
 By default, the postgres service listens on port 5432. Next, create the `cidcdev` user, your local `cidc` development database, and a local `cidctest` database that the unit/integration tests will use:
 
@@ -74,13 +81,13 @@ Now, you should be able to connect to your development database with the URI `po
 psql cidc
 ```
 
-Next, you'll need to set up the appropriate tables, indexes, etc. in your local database. To do so, `cd` into the `cidc_api` directory, then run:
+Next, you'll need to set up the appropriate tables, indexes, etc. in your local database. To do so, `cd` into the `cidc_api` directory (as your local user), then run:
 
 ```bash
-FLASK_APP=app.py flask db upgrade
+FLASK_APP=cidc_api.app:app flask db upgrade
 ```
 
-For more details on creating and running migrations, see [Running Migrations](#Running-Migrations).
+You will also need to set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the local path of the [credentials file](https://cloud.google.com/iam/docs/creating-managing-service-account-keys#iam-service-account-keys-create-console) for the staging environment's App Engine service account.
 
 ### Connecting to a Cloud SQL database instance
 
