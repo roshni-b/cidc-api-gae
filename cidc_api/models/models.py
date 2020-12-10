@@ -250,6 +250,7 @@ class Users(CommonColumns):
 
     _accessed = Column(DateTime, default=func.now(), nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
+    contact_email = Column(String)
     first_n = Column(String)
     last_n = Column(String)
     organization = Column(Enum(*ORGS, name="orgs"))
