@@ -87,7 +87,7 @@ Next, you'll need to set up the appropriate tables, indexes, etc. in your local 
 FLASK_APP=cidc_api.app:app flask db upgrade
 ```
 
-You will also need to have the proper `GOOGLE_APPLICATION_CREDENTIALS` variable set. For more details on creating and running migrations, see [Running Migrations](#Running-Migrations).
+You will also need to set the `GOOGLE_APPLICATION_CREDENTIALS` environment variable to the local path of the [credentials file](https://cloud.google.com/iam/docs/creating-managing-service-account-keys#iam-service-account-keys-create-console) for the staging environment's App Engine service account.
 
 ### Connecting to a Cloud SQL database instance
 
