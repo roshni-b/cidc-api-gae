@@ -1,33 +1,54 @@
-from unittest.mock import MagicMock
-
 import pytest
 from werkzeug.exceptions import BadRequest
 
 from cidc_api.models.files.facets import (
     facets_dict,
-    get_facet_info,
+    build_trial_facets,
+    build_data_category_facets,
     get_facet_groups_for_paths,
 )
 
 
-def test_get_facet_info():
-    """Ensure get_facet_labels returns an object with the expected structure."""
+def test_build_data_category_facets():
+    """Ensure build_data_category_facets works as expected."""
 
-    def test_info_structure(config: dict):
+    wes_count = 5
+    sample_count = 12
+    data_category_file_counts = {"WES|Source": wes_count, "Samples Info": sample_count}
+
+    def assert_expected_facet_structure(config: dict, count: int = 0):
         assert "label" in config
         assert "description" in config
+        assert config["count"] == count
 
-    labels = get_facet_info()
-    for value in labels.values():
+    facet_specs = build_data_category_facets(data_category_file_counts)
+    for value in facet_specs.values():
         if isinstance(value, dict):
-            for subvalue in value.values():
+            for value_key, subvalue in value.items():
                 assert isinstance(subvalue, list)
                 for config in subvalue:
-                    test_info_structure(config)
+                    if value_key == "WES" and config["label"] == "Source":
+                        assert_expected_facet_structure(config, wes_count)
+                    else:
+                        assert_expected_facet_structure(config)
         else:
             assert isinstance(value, list)
             for config in value:
-                test_info_structure(config)
+                if config["label"] == "Samples Info":
+                    assert_expected_facet_structure(config, sample_count)
+                else:
+                    assert_expected_facet_structure(config)
+
+
+def test_build_trial_facets():
+    """Ensure build_trial_facets works as expected."""
+    trial_file_counts = {"t1": 1, "t2": 2, "t3": 3}
+    trial_facets = build_trial_facets(trial_file_counts)
+    assert trial_facets == [
+        {"label": "t1", "count": trial_file_counts["t1"]},
+        {"label": "t2", "count": trial_file_counts["t2"]},
+        {"label": "t3", "count": trial_file_counts["t3"]},
+    ]
 
 
 def test_get_facet_groups_for_paths():

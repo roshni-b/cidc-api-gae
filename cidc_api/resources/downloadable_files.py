@@ -12,7 +12,6 @@ from ..models import (
     DownloadableFileSchema,
     DownloadableFileListSchema,
     Permissions,
-    facets,
 )
 from ..shared import gcloud_client
 from ..shared.auth import get_current_user, requires_auth
@@ -157,7 +156,8 @@ def get_download_url(args):
 
 @downloadable_files_bp.route("/filter_facets", methods=["GET"])
 @requires_auth("filter_facets")
-def get_filter_facets():
+@use_args(file_filter_schema, location="query")
+def get_filter_facets(args):
     """
     Return a list of allowed filter facet values for a user.
     Response will have structure:
@@ -167,6 +167,15 @@ def get_filter_facets():
         ...
     }
     """
-    trial_ids = DownloadableFiles.get_distinct("trial_id")
-
-    return jsonify({"trial_ids": trial_ids, "facets": facets.get_facet_info()})
+    user = get_current_user()
+    trial_ids = DownloadableFiles.get_trial_facets(
+        filter_=DownloadableFiles.build_file_filter(
+            facets=args.get("facets"), user=user
+        )
+    )
+    facets = DownloadableFiles.get_data_category_facets(
+        filter_=DownloadableFiles.build_file_filter(
+            trial_ids=args.get("trial_ids"), user=user
+        )
+    )
+    return jsonify({"trial_ids": trial_ids, "facets": facets})

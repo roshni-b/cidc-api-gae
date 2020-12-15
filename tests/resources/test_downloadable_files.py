@@ -304,10 +304,47 @@ def test_get_filter_facets(cidc_api, clean_db, monkeypatch):
 
     client = cidc_api.test_client()
 
+    def check_facet_counts(facets, wes_count=0, cytof_count=0):
+        for facet, subfacets in facets["Assay Type"].items():
+            for subfacet in subfacets:
+                if facet == "WES" and subfacet["label"] == "Source":
+                    assert subfacet["count"] == wes_count
+                elif facet == "CyTOF" and subfacet["label"] == "Analysis Results":
+                    assert subfacet["count"] == cytof_count
+                else:
+                    assert subfacet["count"] == 0
+
+    # Non-admins' facets take into account their permissions
+    with cidc_api.app_context():
+        perm = Permissions(
+            granted_to_user=user_id,
+            trial_id=trial_id,
+            upload_type=upload_types[0],
+            granted_by_user=user_id,
+        )
+        perm.insert()
     res = client.get("/downloadable_files/filter_facets")
     assert res.status_code == 200
-    assert res.json["trial_ids"] == [trial_id]
-    assert isinstance(res.json["facets"], dict)
+    check_facet_counts(res.json["facets"], wes_count=1, cytof_count=0)
+
+    # Admins' facets include all files, regardless of permissions
+    make_admin(user_id, cidc_api)
+    res = client.get("/downloadable_files/filter_facets")
+    assert res.status_code == 200
+    assert res.json["trial_ids"] == [{"label": trial_id, "count": 2}]
+    check_facet_counts(res.json["facets"], wes_count=1, cytof_count=1)
+
+    # Trial facets are governed by data category facets
+    res = client.get("/downloadable_files/filter_facets?facets=Assay Type|WES|Germline")
+    assert res.status_code == 200
+    assert res.json["trial_ids"] == []
+    check_facet_counts(res.json["facets"], wes_count=1, cytof_count=1)
+
+    # Data category facets are governed by trial facets
+    res = client.get("/downloadable_files/filter_facets?trial_ids=someothertrial")
+    assert res.status_code == 200
+    res.json["trial_ids"] == []
+    check_facet_counts(res.json["facets"], wes_count=0, cytof_count=0)
 
 
 def test_get_download_url(cidc_api, clean_db, monkeypatch):
