@@ -72,6 +72,9 @@ class DownloadableFileSchema(BaseSchema):
     data_category = fields.Str(dump_only=True)
     data_category_prefix = fields.Str(dump_only=True)
     cimac_id = fields.Str(dump_only=True)
+    file_purpose = fields.Str(dump_only=True)
+    short_description = fields.Str(dump_only=True)
+    long_description = fields.Str(dump_only=True)
 
 
 DownloadableFileListSchema = _make_list_schema(DownloadableFileSchema())

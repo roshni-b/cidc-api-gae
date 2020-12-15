@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Union, NamedTuple, Any
+from typing import Dict, List, Optional, Set, Union, NamedTuple, Any
 
 from werkzeug.exceptions import BadRequest
 from sqlalchemy.sql import ClauseElement
@@ -243,7 +243,7 @@ facets_dict: Dict[str, Facets] = {
 FACET_NAME_DELIM = "|"
 
 
-def _build_facet_groups_to_names(_facets=facets_dict):
+def _build_facet_groups_to_names():
     path_to_name = lambda path: FACET_NAME_DELIM.join(path)
 
     facet_names = {}
@@ -263,19 +263,46 @@ def _build_facet_groups_to_names(_facets=facets_dict):
 facet_groups_to_names = _build_facet_groups_to_names()
 
 
-def get_facet_info():
-    extract_facet_info = lambda facet_config_list: [
-        {"label": label, "description": config.description}
+def build_data_category_facets(data_category_file_counts: Dict[str, int]):
+    """
+    Add file counts by data category into the facets defined in the `facets_dict`,
+    and reformat `FacetConfig`s as facet specification dictionaries with the following structure:
+    ```python
+    {
+        "label": <the display name for this facet>,
+        "description": <background info for this facet>,
+        "count": <number of files related to this facet>
+    }
+    ```
+    """
+    extract_facet_info = lambda facet_config_list, prefix: [
+        {
+            "label": label,
+            "description": config.description,
+            "count": data_category_file_counts.get(
+                FACET_NAME_DELIM.join([prefix, label]) if prefix else label, 0
+            ),
+        }
         for label, config in facet_config_list.items()
     ]
 
     return {
         "Assay Type": {
-            assay_name: extract_facet_info(subfacets)
+            assay_name: extract_facet_info(subfacets, assay_name)
             for assay_name, subfacets in assay_facets.items()
         },
-        "Clinical Type": extract_facet_info(clinical_facets),
+        "Clinical Type": extract_facet_info(clinical_facets, None),
     }
+
+
+def build_trial_facets(trial_file_counts: Dict[str, int]):
+    """
+    Convert a mapping from trial ids to file counts into a list of facet specifications.
+    """
+    return [
+        {"label": trial_id, "count": count}
+        for trial_id, count in trial_file_counts.items()
+    ]
 
 
 def get_facet_groups_for_paths(paths: List[List[str]]) -> List[str]:

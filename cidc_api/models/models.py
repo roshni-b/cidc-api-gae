@@ -36,15 +36,15 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.query import Query
-from sqlalchemy.sql import expression, text
+from sqlalchemy.sql import text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.engine import ResultProxy
-from sqlalchemy.engine.interfaces import ExecutionContext
 
 from cidc_schemas import prism, unprism, json_validation
-from sqlalchemy.sql.elements import literal
 
 from .files import (
+    build_trial_facets,
+    build_data_category_facets,
     get_facet_groups_for_paths,
     facet_groups_to_names,
     details_dict,
@@ -63,10 +63,8 @@ from ..config.settings import (
 from ..shared import emails
 from ..shared.gcloud_client import (
     publish_artifact_upload,
-    publish_upload_success,
     grant_download_access,
     revoke_download_access,
-    send_email,
 )
 from ..config.logging import get_logger
 
@@ -207,6 +205,20 @@ class CommonColumns(BaseModel):  # type: ignore
 
     @classmethod
     @with_default_session
+    def count_by(
+        cls, expr, session: Session, filter_: Callable[[Query], Query] = lambda q: q
+    ) -> Dict[str, int]:
+        """
+        Return a dictionary mapping results of `expr` to the number of times each result
+        occurs in the table related to this model. E.g., for the `UploadJobs` model, 
+        `UploadJobs.count_by_column(UploadJobs.upload_type)` would return a dictionary mapping
+        upload types to the number of jobs for each type.
+        """
+        results = filter_(session.query(expr, func.count(cls.id)).group_by(expr)).all()
+        return dict(results)
+
+    @classmethod
+    @with_default_session
     def find_by_id(cls, id: int, session: Session):
         """Find the record with this id"""
         return session.query(cls).get(id)
@@ -250,6 +262,7 @@ class Users(CommonColumns):
 
     _accessed = Column(DateTime, default=func.now(), nullable=False)
     email = Column(String, unique=True, nullable=False, index=True)
+    contact_email = Column(String)
     first_n = Column(String)
     last_n = Column(String)
     organization = Column(Enum(*ORGS, name="orgs"))
@@ -1072,6 +1085,14 @@ class DownloadableFiles(CommonColumns):
         return FILE_PURPOSE_CASE_CLAUSE
 
     @property
+    def short_description(self):
+        return details_dict.get(self.facet_group).short_description
+
+    @property
+    def long_description(self):
+        return details_dict.get(self.facet_group).long_description
+
+    @property
     def cimac_id(self):
         """
         Extract the `cimac_id` associated with this file, if any, by searching the file's 
@@ -1355,6 +1376,31 @@ class DownloadableFiles(CommonColumns):
         """Get the total number of bytes of data stored across all files."""
         total_bytes = session.query(func.sum(cls.file_size_bytes)).one()[0]
         return int(total_bytes)
+
+    @classmethod
+    @with_default_session
+    def get_trial_facets(
+        cls, session: Session, filter_: Callable[[Query], Query] = lambda q: q
+    ):
+        trial_file_counts = cls.count_by(
+            cls.trial_id,
+            session=session,
+            # Apply the provided filter, and also exclude files with null `data_category`s
+            filter_=lambda q: filter_(q).filter(cls.data_category != None),
+        )
+        trial_facets = build_trial_facets(trial_file_counts)
+        return trial_facets
+
+    @classmethod
+    @with_default_session
+    def get_data_category_facets(
+        cls, session: Session, filter_: Callable[[Query], Query] = lambda q: q
+    ):
+        data_category_file_counts = cls.count_by(
+            cls.data_category, session=session, filter_=filter_
+        )
+        data_category_facets = build_data_category_facets(data_category_file_counts)
+        return data_category_facets
 
 
 # Query clause for computing a downloadable file's data category.
