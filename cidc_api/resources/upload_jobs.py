@@ -262,8 +262,11 @@ def check_permissions(user, trial_id, template_type):
 
 
 def log_multiple_errors(errors: list):
-    if errors != []:
-        logger.error("\n".join(errors))
+    if isinstance(errors, list):
+        if errors != []:
+            logger.error("\n".join(str(e) for e in errors))
+    else:
+        logger.error(errors)
 
 
 def upload_handler(allowed_types: List[str]):

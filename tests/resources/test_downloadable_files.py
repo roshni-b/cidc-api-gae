@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 from typing import Tuple
 
 from cidc_api.models import (
@@ -9,6 +10,7 @@ from cidc_api.models import (
     CIDCRole,
 )
 from cidc_api.config.settings import GOOGLE_DATA_BUCKET
+from cidc_api.resources.upload_jobs import log_multiple_errors
 
 from ..utils import mock_current_user, make_admin, make_role, mock_gcloud_client
 
@@ -347,3 +349,25 @@ def test_get_download_url(cidc_api, clean_db, monkeypatch):
     res = client.get(f"/downloadable_files/download_url?id={file_id}")
     assert res.status_code == 200
     assert res.json == test_url
+
+
+def test_log_multiple_errors(caplog):
+    """Check that the log_multiple_errors function doesn't throw an error itself."""
+    caplog.set_level(logging.DEBUG)
+
+    # Empty list
+    log_multiple_errors([])
+    assert caplog.text == ""
+    caplog.clear()
+
+    # Multiple data types
+    log_multiple_errors([0, {"some": "error"}, "uh oh"])
+    assert "0" in caplog.text
+    assert "{'some': 'error'}" in caplog.text
+    assert "uh oh" in caplog.text
+    caplog.clear()
+
+    # Non-list
+    log_multiple_errors("some error")
+    assert "some error" in caplog.text
+    caplog.clear()
