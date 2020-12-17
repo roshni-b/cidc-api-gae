@@ -14,7 +14,10 @@ from werkzeug.exceptions import BadRequest, NotFound, Unauthorized, Precondition
 from flask import current_app
 from cidc_schemas import prism, json_validation
 from cidc_schemas.template import Template
-from cidc_schemas.template_reader import XlTemplateReader
+from cidc_schemas.template_reader import (
+    XlTemplateReader,
+    ValidationError as SchemasValidationError,
+)
 
 from ..shared import gcloud_client
 from ..shared.auth import requires_auth, get_current_user, authenticate_and_get_user
@@ -289,7 +292,10 @@ def upload_handler(allowed_types: List[str]):
 
             errors_so_far = []
 
-            xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
+            try:
+                xlsx, errors = XlTemplateReader.from_excel(xlsx_file)
+            except SchemasValidationError as e:
+                raise BadRequest({"errors": [str(e)]})
             logger.info(f"xlsx parsed: {len(errors)} errors")
             log_multiple_errors(errors)
             errors_so_far.extend(errors)

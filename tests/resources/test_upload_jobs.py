@@ -7,21 +7,10 @@ from unittest.mock import MagicMock
 from typing import Tuple
 
 import pytest
-from werkzeug.exceptions import (
-    NotFound,
-    Unauthorized,
-    UnprocessableEntity,
-    HTTPException,
-    InternalServerError,
-    BadRequest,
-    NotImplemented,
-)
+from werkzeug.exceptions import NotFound, Unauthorized, UnprocessableEntity, BadRequest
 from cidc_schemas import prism
-from cidc_schemas.prism import (
-    merge_artifact_extra_metadata,
-    PROTOCOL_ID_FIELD_NAME,
-    LocalFileUploadEntry,
-)
+from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME, LocalFileUploadEntry
+from cidc_schemas.template_reader import ValidationError
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.resources.upload_jobs import (
@@ -468,19 +457,25 @@ def test_validate_valid_template(cidc_api, some_file, clean_db, monkeypatch):
     mocks.iter_errors.assert_called_once()
 
 
-def test_validate_invalid_template(cidc_api, some_file, clean_db, monkeypatch):
+def test_validate_invalid_template(cidc_api, clean_db, monkeypatch):
     """Ensure that the validation endpoint returns errors for a known-invalid .xlsx file"""
     user_id = setup_trial_and_user(cidc_api, monkeypatch)
     make_admin(user_id, cidc_api)
-
-    mocks = UploadMocks(monkeypatch)
-    mocks.iter_errors.return_value = ["test error"]
-
     grant_upload_permission(user_id, "pbmc", cidc_api)
+    mocks = UploadMocks(monkeypatch)
 
     client = cidc_api.test_client()
-    data = form_data("pbmc.xlsx", some_file, "pbmc")
-    res = client.post(VALIDATE, data=data)
+
+    # handles ValidationError thrown by `XlTemplateReader.from_xlsx`
+    mocks.open_xlsx.side_effect = ValidationError("uh oh")
+    res = client.post(VALIDATE, data=form_data("pbmc.xlsx", io.BytesIO(b"123"), "pbmc"))
+    assert res.status_code == 400
+    assert res.json["_error"]["message"]["errors"] == ["uh oh"]
+
+    # handles errors returned by `XlTemplateReader.iter_errors`
+    mocks.open_xlsx.side_effect = None
+    mocks.iter_errors.return_value = ["test error"]
+    res = client.post(VALIDATE, data=form_data("pbmc.xlsx", io.BytesIO(b"123"), "pbmc"))
     assert res.status_code == 400
     assert len(res.json["_error"]["message"]) > 0
 
