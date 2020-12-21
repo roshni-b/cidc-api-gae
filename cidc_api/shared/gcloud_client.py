@@ -124,6 +124,8 @@ def revoke_upload_access(user_email: str):
 def grant_download_access(user_email: str, trial_id: str, upload_type: str):
     """
     Give a user download access to all objects in a trial of a particular upload type.
+    If the user already has download access for this trial and upload type, regrant the
+    permission with a new, extended TTL.
     """
     url_prefix, prefix_expression = _build_prefix_clause(trial_id, upload_type)
 
@@ -135,11 +137,10 @@ def grant_download_access(user_email: str, trial_id: str, upload_type: str):
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.version = 3
 
-    # try to find the policy binding for this user if one exists
-    binding = _find_and_pop_download_binding(policy, user_email, prefix_expression)
-    # build a new binding if no existing binding was found
-    if binding is None:
-        binding = _build_download_binding(user_email, prefix_expression)
+    # remove the existing binding if one exists so that we can recreate it with
+    # an updated TTL.
+    _find_and_pop_download_binding(policy, user_email, prefix_expression)
+    binding = _build_download_binding(user_email, prefix_expression)
 
     # (re)insert the binding into the policy
     policy.bindings.append(binding)

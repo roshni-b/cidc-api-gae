@@ -493,6 +493,24 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
+    def grant_iam_permissions(user: Users, session: Session):
+        """
+        Grant each of the given `user`'s IAM permissions. If the permissions
+        have already been granted, calling this will extend their expiry date.
+        """
+        filter_for_user = lambda q: q.filter(Permissions.granted_to_user == user.id)
+        perms = Permissions.list(
+            page_size=Permissions.count(session=session, filter_=filter_for_user),
+            filter_=filter_for_user,
+            session=session,
+        )
+        for perm in perms:
+            # Regrant each permission to reset the TTL for this permission to
+            # `settings.INACTIVE_USER_DAYS` from today.
+            grant_download_access(user.email, perm.trial_id, perm.upload_type)
+
+    @staticmethod
+    @with_default_session
     def grant_all_iam_permissions(session: Session):
         Permissions._change_all_iam_permissions(grant=True, session=session)
 
@@ -507,7 +525,7 @@ class Permissions(CommonColumns):
         perms = Permissions.list(page_size=Permissions.count(), session=session)
         for perm in perms:
             user = Users.find_by_id(perm.granted_to_user)
-            if user.is_admin() or user.is_nci_user():
+            if user.is_admin() or user.is_nci_user() or user.disabled:
                 continue
             if grant:
                 grant_download_access(user.email, perm.trial_id, perm.upload_type)

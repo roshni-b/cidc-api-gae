@@ -888,9 +888,35 @@ def test_permissions_delete(clean_db, monkeypatch, caplog):
 
 
 @db_test
+def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
+    """
+    Smoke test that Permissions.grant_iam_permissions calls grant_download_access with the right arguments.
+    """
+    gcloud_client = mock_gcloud_client(monkeypatch)
+    user = Users(email="test@user.com")
+    user.insert()
+    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
+    trial.insert()
+
+    upload_types = ["wes", "cytof", "rna", "plasma"]
+    for upload_type in upload_types:
+        Permissions(
+            granted_to_user=user.id,
+            trial_id=trial.trial_id,
+            upload_type=upload_type,
+            granted_by_user=user.id,
+        ).insert()
+
+    Permissions.grant_iam_permissions(user=user)
+    gcloud_client.grant_download_access.assert_has_calls(
+        [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
+    )
+
+
+@db_test
 def test_permissions_grant_all_iam_permissions(clean_db, monkeypatch):
     """
-    Smoke test that Permissions.grant_all_iam_permissions calls grant_download_access the right arguments.
+    Smoke test that Permissions.grant_all_iam_permissions calls grant_download_access with the right arguments.
     """
     gcloud_client = mock_gcloud_client(monkeypatch)
     user = Users(email="test@user.com")

@@ -94,17 +94,20 @@ def test_grant_download_access(monkeypatch):
     _mock_gcloud_storage([], set_iam_policy, monkeypatch)
     grant_download_access(EMAIL, "10021", "wes_analysis")
 
-    matching_binding = _build_download_binding(
-        EMAIL,
-        'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/wes")',
-    )
+    matching_prefix = 'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/wes")'
+    matching_binding = _build_download_binding(EMAIL, matching_prefix)
 
     def set_iam_policy(policy):
         bindings = policy.bindings
         assert len(bindings) == 2
-        assert matching_binding in bindings
+        assert any(
+            matching_prefix
+            in binding.get("condition", {}).get("expression", {})  # prefixes match
+            and binding != matching_binding  # but TTL has changed
+            for binding in bindings
+        )
 
-    # Check idempotence
+    # Check permission regranting - TTL should be updated, but download prefix should be unchanged
     _mock_gcloud_storage([matching_binding] + bindings, set_iam_policy, monkeypatch)
     grant_download_access(EMAIL, "10021", "wes_analysis")
 
