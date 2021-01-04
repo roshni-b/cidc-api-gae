@@ -64,6 +64,7 @@ from ..shared import emails
 from ..shared.gcloud_client import (
     publish_artifact_upload,
     grant_download_access,
+    refresh_intake_access,
     revoke_download_access,
 )
 from ..config.logging import get_logger
@@ -508,6 +509,9 @@ class Permissions(CommonColumns):
             # Regrant each permission to reset the TTL for this permission to
             # `settings.INACTIVE_USER_DAYS` from today.
             grant_download_access(user.email, perm.trial_id, perm.upload_type)
+
+        # Regrant all of the user's intake bucket upload permissions, if they have any
+        refresh_intake_access(user.id, user.email)
 
     @staticmethod
     @with_default_session

@@ -892,6 +892,11 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
     """
     Smoke test that Permissions.grant_iam_permissions calls grant_download_access with the right arguments.
     """
+    refresh_intake_access = MagicMock()
+    monkeypatch.setattr(
+        "cidc_api.models.models.refresh_intake_access", refresh_intake_access
+    )
+
     gcloud_client = mock_gcloud_client(monkeypatch)
     user = Users(email="test@user.com")
     user.insert()
@@ -911,6 +916,8 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
     gcloud_client.grant_download_access.assert_has_calls(
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
     )
+
+    refresh_intake_access.assert_called_once_with(user.id, user.email)
 
 
 @db_test

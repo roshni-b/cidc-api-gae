@@ -1,3 +1,5 @@
+from cidc_api.models.models import ROLES
+from cidc_api.shared import gcloud_client
 import io
 import logging
 from datetime import datetime
@@ -14,6 +16,7 @@ from cidc_schemas.template_reader import ValidationError
 
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.resources.upload_jobs import (
+    INTAKE_ROLES,
     extract_schema_and_xlsx,
     requires_upload_token_auth,
 )
@@ -27,7 +30,7 @@ from cidc_api.models import (
     CIDCRole,
 )
 
-from ..utils import mock_current_user, make_admin, mock_gcloud_client
+from ..utils import make_role, mock_current_user, make_admin, mock_gcloud_client
 
 trial_id = "test_trial"
 user_email = "test@email.com"
@@ -1086,3 +1089,53 @@ def test_merge_extra_metadata(cidc_api, clean_db, monkeypatch):
         au = fetched_jobs[0]
         assert "extra_md" in au.metadata_patch["whatever"]["hierarchy"][0]
         assert "extra_md" in au.metadata_patch["whatever"]["hierarchy"][1]
+
+
+def test_create_intake_gcs_uri(cidc_api, clean_db, monkeypatch):
+    user_id = setup_trial_and_user(cidc_api, monkeypatch)
+
+    gcloud_client = MagicMock()
+    gcloud_client.grant_intake_access = MagicMock()
+    gcloud_client.grant_intake_access.return_value = "gs://some-uri"
+    monkeypatch.setattr("cidc_api.resources.upload_jobs.gcloud_client", gcloud_client)
+
+    client = cidc_api.test_client()
+
+    for role in ROLES:
+        make_role(user_id, role, cidc_api)
+        res = client.post(
+            "/ingestion/intake_gcs_uri",
+            json={"trial_id": "test-trial", "upload_type": "test-upload"},
+        )
+        if role in INTAKE_ROLES:
+            assert res.status_code == 200
+            gcloud_client.grant_intake_access.assert_called_with(
+                user_id, user_email, "test-trial", "test-upload"
+            )
+            assert res.json == "gs://some-uri"
+        else:
+            assert res.status_code == 401
+        gcloud_client.grant_intake_access.reset_mock()
+
+
+def test_list_intake_gcs_uris(cidc_api, clean_db, monkeypatch):
+    user_id = setup_trial_and_user(cidc_api, monkeypatch)
+
+    uris = ["gs://a", "gs://b", "gs://c"]
+    gcloud_client = MagicMock()
+    gcloud_client.list_intake_access = MagicMock()
+    gcloud_client.list_intake_access.return_value = uris
+    monkeypatch.setattr("cidc_api.resources.upload_jobs.gcloud_client", gcloud_client)
+
+    client = cidc_api.test_client()
+
+    for role in ROLES:
+        make_role(user_id, role, cidc_api)
+        res = client.get("/ingestion/intake_gcs_uri")
+        if role in INTAKE_ROLES:
+            assert res.status_code == 200
+            gcloud_client.list_intake_access.assert_called_with(user_email)
+            assert res.json == {"_items": uris, "_meta": {"total": len(uris)}}
+        else:
+            assert res.status_code == 401
+        gcloud_client.grant_intake_access.reset_mock()

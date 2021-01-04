@@ -22,6 +22,7 @@ env_variables:
   CLOUD_SQL_DB_NAME: "cidc-prod"
   GOOGLE_DATA_BUCKET: "cidc-data-prod"
   GOOGLE_SECRETS_BUCKET: "cidc-secrets-prod"
+  GOOGLE_INTAKE_BUCKET: "cidc-intake-prod"
   GOOGLE_UPLOAD_BUCKET: "cidc-uploads-prod"
   GOOGLE_UPLOAD_TOPIC: "uploads"
   GOOGLE_EMAILS_TOPIC: "emails"

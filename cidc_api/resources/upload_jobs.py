@@ -618,3 +618,43 @@ def extra_assay_metadata():
 
     # TODO: return something here?
     return jsonify({})
+
+
+INTAKE_ROLES = [
+    CIDCRole.ADMIN.value,
+    CIDCRole.CIDC_BIOFX_USER.value,
+    CIDCRole.CIMAC_BIOFX_USER.value,
+]
+
+
+@ingestion_bp.route("/intake_gcs_uri", methods=["POST"])
+@requires_auth("intake_gcs_uri", INTAKE_ROLES)
+@use_args(
+    {"trial_id": fields.Str(required=True), "upload_type": fields.Str(required=True)}
+)
+def create_intake_gcs_uri(args):
+    """
+    Grant upload access to the current user for the provided trial and upload types,
+    returning the GCS URI the user now has permission to upload to.
+    NOTE: we don't verify that the user has permission to upload data for this trial-upload 
+    type combo because they won't be able to overwrite any other user's uploaded data.
+    """
+    user = get_current_user()
+    gcs_uri = gcloud_client.grant_intake_access(
+        user.id, user.email, args["trial_id"], args["upload_type"]
+    )
+
+    return jsonify(gcs_uri)
+
+
+@ingestion_bp.route("/intake_gcs_uri", methods=["GET"])
+@requires_auth("intake_gcs_uri", INTAKE_ROLES)
+def list_intake_gcs_uris():
+    """
+    List the GCS URIs to subdirectories of the intake bucket to which this user already
+    has been granted access.
+    """
+    user = get_current_user()
+    gcs_uris = gcloud_client.list_intake_access(user.email)
+
+    return jsonify({"_items": gcs_uris, "_meta": {"total": len(gcs_uris)}})

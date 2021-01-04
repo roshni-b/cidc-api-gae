@@ -115,7 +115,7 @@ def update_user(user: Users, user_updates: Users):
 
     # If this user is being re-enabled after being disabled, update their last
     # access date to now so that they aren't disabled again tomorrow and
-    # refresh their IAM download permissions.
+    # refresh their IAM permissions.
     if user.disabled and user_updates.get("disabled") == False:
         user_updates["_accessed"] = datetime.now()
         Permissions.grant_iam_permissions(user)
