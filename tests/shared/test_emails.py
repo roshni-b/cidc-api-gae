@@ -1,10 +1,14 @@
+from io import BytesIO
 from unittest.mock import MagicMock
+
+from werkzeug.datastructures import FileStorage
 
 from cidc_api.models import Users, UploadJobs
 from cidc_api.shared.emails import (
     confirm_account_approval,
     new_user_registration,
     new_upload_alert,
+    intake_metadata,
     CIDC_MAILING_LIST,
 )
 
@@ -65,3 +69,24 @@ def test_new_upload_alert(monkeypatch):
         assert gen_confs.called_once()
 
         assert email.get("attachments") == expected_att
+
+
+def test_intake_metadata():
+    user = Users(
+        email="test@email.com",
+        contact_email="test@contactemail.com",
+        first_n="foo",
+        last_n="bar",
+    )
+    trial_id = "10021"
+    assay_type = "wes"
+    description = "a test description of this metadata"
+    xlsx_uri = "gs://fake/gcs/uri"
+
+    email = intake_metadata(user, trial_id, assay_type, description, xlsx_uri)
+    assert email["to_emails"] == [CIDC_MAILING_LIST]
+    assert f"{user.first_n} {user.last_n}" in email["html_content"]
+    assert f"{user.email}" in email["html_content"]
+    assert f"{user.contact_email}" in email["html_content"]
+    assert f"{description}" in email["html_content"]
+    assert f"{xlsx_uri}" in email["html_content"]

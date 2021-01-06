@@ -4,9 +4,11 @@ from unittest.mock import MagicMock, call
 from datetime import datetime
 
 import pytest
+from werkzeug.datastructures import FileStorage
 
 from cidc_api.shared import gcloud_client
 from cidc_api.config import settings
+from cidc_api.models.models import Users
 from cidc_api.shared.gcloud_client import (
     grant_intake_access,
     grant_upload_access,
@@ -21,6 +23,7 @@ from cidc_api.shared.gcloud_client import (
     upload_xlsx_to_gcs,
     _pseudo_blob,
     _build_binding_with_expiry,
+    upload_xlsx_to_intake_bucket,
 )
 from cidc_api.config.settings import (
     GOOGLE_INTAKE_BUCKET,
@@ -334,6 +337,25 @@ def test_upload_xlsx_to_gcs(monkeypatch):
     bucket.blob.assert_called_once_with(expected_name)
     blob.upload_from_file.assert_called_once_with(open_file)
     bucket.copy_blob.assert_called_once_with(blob, bucket)
+
+
+def test_upload_xlsx_to_intake_bucket(monkeypatch):
+    user = Users(id=123, email="test@email.com")
+    trial_id = "test-trial"
+    assay_type = "wes"
+    xlsx = FileStorage(filename="metadata.xlsx")
+
+    _get_bucket = MagicMock()
+    _get_bucket.return_value = bucket = MagicMock()
+    bucket.blob.return_value = blob = MagicMock()
+    monkeypatch.setattr("cidc_api.shared.gcloud_client._get_bucket", _get_bucket)
+
+    url = upload_xlsx_to_intake_bucket(user, trial_id, assay_type, xlsx)
+    blob.upload_from_file.assert_called_once()
+    assert url.startswith(
+        "https://console.cloud.google.com/storage/browser/_details/cidc-intake-staging/test-trial/wes/test-123/metadata"
+    )
+    assert url.endswith(".xlsx")
 
 
 def test_get_signed_url(monkeypatch):
