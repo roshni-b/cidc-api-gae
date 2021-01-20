@@ -2,6 +2,8 @@ from cidc_api.models.models import ROLES
 from cidc_api.shared import gcloud_client
 import io
 import logging
+from copy import deepcopy
+from deepdiff import DeepDiff
 from datetime import datetime
 from contextlib import contextmanager
 from collections import namedtuple
@@ -19,6 +21,8 @@ from cidc_api.resources.upload_jobs import (
     INTAKE_ROLES,
     extract_schema_and_xlsx,
     requires_upload_token_auth,
+    upload_data_files,
+    _remove_optional_uuid_recursive,
 )
 from cidc_api.models import (
     TrialMetadata,
@@ -78,18 +82,20 @@ def setup_upload_jobs(cidc_api) -> Tuple[int, int]:
             uploader_email=user_email,
             trial_id=trial_id,
             status=UploadJobStatus.STARTED.value,
-            metadata_patch={},
+            metadata_patch={"test": {"upload_placeholder": "baz"}, "test2": "foo"},
             upload_type="",
             gcs_xlsx_uri="",
+            gcs_file_map={"bip": "baz"},
             multifile=False,
         )
         job2 = UploadJobs(
             uploader_email=other_user.email,
             trial_id=trial_id,
             status=UploadJobStatus.STARTED.value,
-            metadata_patch={},
+            metadata_patch={"array": [{"upload_placeholder": "baz"}, {"test2": "foo"}]},
             upload_type="",
             gcs_xlsx_uri="",
+            gcs_file_map={"bip": "baz"},
             multifile=False,
         )
 
@@ -291,7 +297,7 @@ def test_update_upload_job(cidc_api, clean_db, monkeypatch):
     res = client.patch(
         f"/upload_jobs/{other_job}?token={other_job_record.token}",
         headers={"if-match": other_job_record._etag},
-        json=upload_failure,
+        json={"gcs_file_map": {"foo": "bar"}, **upload_failure},
     )
     assert res.status_code == 200
     publish_success.assert_not_called()
@@ -299,18 +305,26 @@ def test_update_upload_job(cidc_api, clean_db, monkeypatch):
     revoke_upload_access.reset_mock()
 
     with cidc_api.app_context():
+        modified_job = UploadJobs.find_by_id(other_job)
+        assert modified_job.metadata_patch == {"array": [{"test2": "foo"}]}
         user_job_record._set_status_no_validation(UploadJobStatus.STARTED.value)
         user_job_record.update()
 
     # A user can update a job to be a success
+    # Also allows for updating the gcs_file_map and thereby the metadata_patch
     res = client.patch(
         f"/upload_jobs/{user_job}?token={user_job_record.token}",
         headers={"if-match": user_job_record._etag},
-        json=upload_success,
+        json={"gcs_file_map": {"foo": "bar"}, **upload_success},
     )
     assert res.status_code == 200
     publish_success.assert_called_once_with(user_job)
     revoke_upload_access.assert_called_once()
+    with cidc_api.app_context():
+        modified_job = UploadJobs.find_by_id(user_job)
+        assert modified_job.gcs_file_map == {"foo": "bar"}
+        assert modified_job.metadata_patch == {"test2": "foo"}
+
     publish_success.reset_mock()
     revoke_upload_access.reset_mock()
 
@@ -1176,3 +1190,177 @@ def test_send_intake_metadata(cidc_api, clean_db, monkeypatch):
         else:
             assert res.status_code == 401
         intake_metadata_email.reset_mock()
+
+
+def test_upload_data_files(cidc_api, monkeypatch):
+    user = Users(email="other@email.com")
+    trial = TrialMetadata(
+        trial_id="test_trial",
+        metadata_json={
+            prism.PROTOCOL_ID_FIELD_NAME: trial_id,
+            "participants": [],
+            "allowed_cohort_names": ["Arm_Z"],
+            "allowed_collection_event_names": [],
+        },
+    )
+    template_type = "foo"
+    xlsx_file = MagicMock()
+    md_patch = {}
+    file_infos = [
+        finfo(
+            "localfile1.ext",
+            "test_trial/url/file1.ext",
+            "uuid-1",
+            metadata_availability=None,
+            allow_empty=None,
+        ),
+        finfo(
+            "localfile2.ext",
+            "test_trial/url/file2.ext",
+            "uuid-2",
+            metadata_availability=True,
+            allow_empty=None,
+        ),
+        finfo(
+            "localfile3.ext",
+            "test_trial/url/file3.ext",
+            "uuid-3",
+            metadata_availability=None,
+            allow_empty=True,
+        ),
+        finfo(
+            "localfile4.ext",
+            "test_trial/url/file4.ext",
+            "uuid-4",
+            metadata_availability=True,
+            allow_empty=True,
+        ),
+    ]
+
+    gcloud_client = MagicMock()
+    gcloud_client.grant_upload_access = MagicMock()
+    gcloud_client.upload_xlsx_to_gcs = MagicMock()
+    gcs_blob = MagicMock()
+    gcs_blob.name = "blob"
+    gcloud_client.upload_xlsx_to_gcs.return_value = gcs_blob
+    monkeypatch.setattr("cidc_api.resources.upload_jobs.gcloud_client", gcloud_client)
+
+    create = MagicMock()
+    job = MagicMock()
+    job.id = "id"
+    job._etag = "_etag"
+    job.token = "token"
+    create.return_value = job
+    monkeypatch.setattr("cidc_api.resources.upload_jobs.UploadJobs.create", create)
+
+    with cidc_api.app_context():
+        response = upload_data_files(
+            user, trial, template_type, xlsx_file, md_patch, file_infos
+        )
+    json = response.get_json()
+
+    assert "job_id" in json and json["job_id"] == "id"
+    assert "job_etag" in json and json["job_etag"] == "_etag"
+    assert "url_mapping" in json
+    url_mapping = {k: v.rsplit("/", 1)[0] for k, v in json["url_mapping"].items()}
+    assert url_mapping == {
+        "localfile1.ext": "test_trial/url/file1.ext",
+        "localfile2.ext": "test_trial/url/file2.ext",
+        "localfile3.ext": "test_trial/url/file3.ext",
+        "localfile4.ext": "test_trial/url/file4.ext",
+    }
+    assert "gcs_bucket" in json and json["gcs_bucket"] == "cidc-uploads-staging"
+    assert "extra_metadata" in json and json["extra_metadata"] == {
+        "localfile2.ext": "uuid-2",
+        "localfile4.ext": "uuid-4",
+    }
+    assert "gcs_file_map" in json
+    gcs_file_map = sorted(
+        [(k.rsplit("/", 1)[0], v) for k, v in json["gcs_file_map"].items()],
+        key=lambda i: i[0],
+    )
+    assert gcs_file_map == [
+        ("test_trial/url/file1.ext", "uuid-1"),
+        ("test_trial/url/file2.ext", "uuid-2"),
+        ("test_trial/url/file3.ext", "uuid-3"),
+        ("test_trial/url/file4.ext", "uuid-4"),
+    ]
+    assert "optional_files" in json and json["optional_files"] == [
+        "localfile3.ext",
+        "localfile4.ext",
+    ]
+    assert "token" in json and json["token"] == "token"
+
+
+def test_remove_optional_uuid_recursive():
+    test = {
+        "foo": {"upload_placeholder": "one-deep"},
+        "bar": {
+            "foo": {"upload_placeholder": "two-deep"},
+            "baz": [{"upload_placeholder": "two-deep array"}],
+        },
+        "baz": [
+            {"upload_placeholder": "one-deep array"},
+            {"upload_placeholder": "second item"},
+        ],
+    }
+
+    this_test = deepcopy(test)
+    del this_test["foo"]
+    assert not DeepDiff(
+        this_test, _remove_optional_uuid_recursive(deepcopy(test), "one-deep")
+    )
+
+    this_test = deepcopy(test)
+    del this_test["bar"]["foo"]
+    assert not DeepDiff(
+        this_test, _remove_optional_uuid_recursive(deepcopy(test), "two-deep")
+    )
+
+    this_test = deepcopy(test)
+    del this_test["bar"]["baz"]
+    assert not DeepDiff(
+        this_test, _remove_optional_uuid_recursive(deepcopy(test), "two-deep array")
+    )
+
+    this_test = deepcopy(test)
+    del this_test["baz"][0]
+    assert not DeepDiff(
+        this_test, _remove_optional_uuid_recursive(deepcopy(test), "one-deep array")
+    )
+
+    this_test = deepcopy(test)
+    del this_test["baz"][1]
+    assert not DeepDiff(
+        this_test, _remove_optional_uuid_recursive(deepcopy(test), "second item")
+    )
+
+    this_test = deepcopy(test)
+    del this_test["baz"]
+    temp = _remove_optional_uuid_recursive(deepcopy(test), "one-deep array")
+    assert not DeepDiff(
+        _remove_optional_uuid_recursive(deepcopy(temp), "second item"), this_test
+    )
+
+    this_test = deepcopy(test)
+    del this_test["bar"]
+    temp = _remove_optional_uuid_recursive(deepcopy(test), "two-deep array")
+    assert not DeepDiff(
+        _remove_optional_uuid_recursive(deepcopy(temp), "two-deep"), this_test
+    )
+
+    this_test = deepcopy(test)
+    del this_test["foo"]
+    temp = _remove_optional_uuid_recursive(deepcopy(test), "one-deep")
+    assert not DeepDiff(temp, this_test)
+    del this_test["bar"]["foo"]
+    temp = _remove_optional_uuid_recursive(temp, "two-deep")
+    assert not DeepDiff(temp, this_test)
+    del this_test["bar"]
+    temp = _remove_optional_uuid_recursive(temp, "two-deep array")
+    assert not DeepDiff(temp, this_test)
+    del this_test["baz"][0]
+    temp = _remove_optional_uuid_recursive(temp, "one-deep array")
+    assert not DeepDiff(temp, this_test)
+    temp = _remove_optional_uuid_recursive(temp, "second item")
+    assert not temp
