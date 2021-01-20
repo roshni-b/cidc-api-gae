@@ -442,7 +442,13 @@ def test_endpoint_urls(cidc_api):
     }
 
     # Check that every endpoint included in the API is expected.
-    endpoints = set([rule.rule for rule in cidc_api.url_map._rules])
+    endpoints = set(
+        [
+            rule.rule
+            for rule in cidc_api.url_map._rules
+            if not "/dashboards/" in rule.rule  # exclude plotly dash dashboards
+        ]
+    )
     assert endpoints == expected_endpoints
 
 

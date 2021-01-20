@@ -235,10 +235,16 @@ def test_authenticate(empty_app, monkeypatch):
 
 def test_extract_token(empty_app):
     """Test that _extract_token handles edge cases"""
+    token = "Case-Sensitive-Test-Token"
+
     # No auth header
     with empty_app.test_request_context("/"):
         with pytest.raises(Unauthorized):
             auth._extract_token()
+
+    # No auth header but id_token present in JSON request body
+    with empty_app.test_request_context("/", json={"id_token": token}):
+        assert auth._extract_token() == token
 
     # Non-bearer auth headers
     with empty_app.test_request_context("/", headers={"authorization": ""}):
@@ -254,7 +260,6 @@ def test_extract_token(empty_app):
             auth._extract_token()
 
     # Well-formed auth header
-    token = "Case-Sensitive-Test-Token"
     with empty_app.test_request_context(
         "/", headers={"authorization": f"Bearer {token}"}
     ):

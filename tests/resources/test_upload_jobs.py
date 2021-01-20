@@ -701,7 +701,7 @@ def test_upload_wes(cidc_api, clean_db, monkeypatch):
     mocks = UploadMocks(
         monkeypatch,
         prismify_file_entries=[
-            finfo("localfile.ext", "test_trial/url/file.ext", "uuid-1", None)
+            finfo("localfile.ext", "test_trial/url/file.ext", "uuid-1", None, False)
         ],
     )
 
@@ -805,7 +805,7 @@ def test_upload_olink(cidc_api, clean_db, monkeypatch):
     mocks = UploadMocks(
         monkeypatch,
         prismify_file_entries=[
-            finfo(lp, url, "uuid" + str(i), "npx" in url)
+            finfo(lp, url, "uuid" + str(i), "npx" in url, False)
             for i, (lp, url) in enumerate(OLINK_TESTDATA)
         ],
     )
