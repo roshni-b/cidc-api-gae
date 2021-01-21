@@ -195,7 +195,7 @@ def _remove_optional_uuid_recursive(target: dict, uuid: str):
             ):
                 target.pop(k)
                 return target
-            else:
+            elif isinstance(v, (dict, list)):
                 temp = _remove_optional_uuid_recursive(v, uuid)
                 if len(temp):
                     target[k] = temp
