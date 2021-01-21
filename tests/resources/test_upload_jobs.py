@@ -1303,6 +1303,7 @@ def test_remove_optional_uuid_recursive():
             {"upload_placeholder": "one-deep array"},
             {"upload_placeholder": "second item"},
         ],
+        "int": 4,
     }
 
     this_test = deepcopy(test)
@@ -1363,4 +1364,4 @@ def test_remove_optional_uuid_recursive():
     temp = _remove_optional_uuid_recursive(temp, "one-deep array")
     assert not DeepDiff(temp, this_test)
     temp = _remove_optional_uuid_recursive(temp, "second item")
-    assert not temp
+    assert not DeepDiff(temp, {"int": 4})
