@@ -26,6 +26,7 @@ from cidc_api.shared.gcloud_client import (
     upload_xlsx_to_intake_bucket,
 )
 from cidc_api.config.settings import (
+    GOOGLE_INTAKE_ROLE,
     GOOGLE_INTAKE_BUCKET,
     GOOGLE_UPLOAD_ROLE,
     GOOGLE_UPLOAD_BUCKET,
@@ -94,7 +95,7 @@ def test_grant_intake_access(monkeypatch):
     grant_gcs_access.assert_called_once_with(
         GOOGLE_INTAKE_BUCKET,
         "test-trial/upload-type/testuser-123",
-        GOOGLE_UPLOAD_ROLE,
+        GOOGLE_INTAKE_ROLE,
         "test.user@email.com",
     )
 
@@ -110,7 +111,7 @@ def test_revoke_intake_access(monkeypatch):
     revoke_gcs_access.assert_called_once_with(
         GOOGLE_INTAKE_BUCKET,
         "test-trial/upload-type/testuser-123",
-        GOOGLE_UPLOAD_ROLE,
+        GOOGLE_INTAKE_ROLE,
         "test.user@email.com",
     )
 
@@ -130,7 +131,7 @@ def intake_bindings(trial_ids_upload_types):
         _build_binding_with_expiry(
             GOOGLE_INTAKE_BUCKET,
             f"{trial_id}/{upload_type}/testuser-{ID}",
-            GOOGLE_UPLOAD_ROLE,
+            GOOGLE_INTAKE_ROLE,
             EMAIL,
         )
         for trial_id, upload_type in trial_ids_upload_types

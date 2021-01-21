@@ -13,6 +13,7 @@ from werkzeug.datastructures import FileStorage
 
 from ..config.settings import (
     GOOGLE_DOWNLOAD_ROLE,
+    GOOGLE_INTAKE_ROLE,
     GOOGLE_INTAKE_BUCKET,
     GOOGLE_UPLOAD_ROLE,
     GOOGLE_UPLOAD_BUCKET,
@@ -171,7 +172,7 @@ def grant_intake_access(
     logger.info(f"Granting intake access on {prefix} to {user_email}")
 
     return grant_conditional_gcs_access(
-        GOOGLE_INTAKE_BUCKET, prefix, GOOGLE_UPLOAD_ROLE, user_email
+        GOOGLE_INTAKE_BUCKET, prefix, GOOGLE_INTAKE_ROLE, user_email
     )
 
 
@@ -189,7 +190,7 @@ def revoke_intake_access(
     logger.info(f"Granting intake access on {prefix} to {user_email}")
 
     return revoke_conditional_gcs_access(
-        GOOGLE_INTAKE_BUCKET, prefix, GOOGLE_UPLOAD_ROLE, user_email
+        GOOGLE_INTAKE_BUCKET, prefix, GOOGLE_INTAKE_ROLE, user_email
     )
 
 
@@ -214,7 +215,7 @@ def list_intake_access(user_email: str) -> List[str]:
         subdir_match = intake_subdir_regex.match(expression)
         if (
             binding["members"] == {user_member(user_email)}
-            and binding["role"] == GOOGLE_UPLOAD_ROLE
+            and binding["role"] == GOOGLE_INTAKE_ROLE
             and subdir_match
         ):
             user_uris.append(f"gs://{GOOGLE_INTAKE_BUCKET}/{subdir_match.group(1)}")
