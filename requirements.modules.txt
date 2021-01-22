@@ -2,7 +2,7 @@ flask~=1.1.1
 flask-migrate==2.5.2
 flask-sqlalchemy~=2.4.0
 marshmallow-sqlalchemy==0.22.3
-google-cloud-storage~=1.31.0
+google-cloud-storage~=1.35.0
 google-cloud-pubsub==0.42.1
 cidc-schemas~=0.23.11
 python-dotenv==0.10.3
