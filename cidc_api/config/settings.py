@@ -30,7 +30,7 @@ IS_GUNICORN = "gunicorn" in environ.get("SERVER_SOFTWARE", "")
 
 ### Configure miscellaneous constants ###
 TEMPLATES_DIR = path.join("/tmp", "templates")
-MIN_CLI_VERSION = "0.9.8"
+MIN_CLI_VERSION = "0.9.9"
 PAGINATION_PAGE_SIZE = 25
 MAX_PAGINATION_PAGE_SIZE = 200
 INACTIVE_USER_DAYS = 60
@@ -55,15 +55,17 @@ AUTH0_CLIENT_ID = environ.get("AUTH0_CLIENT_ID")
 ALGORITHMS = ["RS256"]
 
 ### Configure GCP ###
-GOOGLE_CLOUD_PROJECT = environ.get("GOOGLE_CLOUD_PROJECT")
-GOOGLE_UPLOAD_BUCKET = environ.get("GOOGLE_UPLOAD_BUCKET")
-GOOGLE_UPLOAD_TOPIC = environ.get("GOOGLE_UPLOAD_TOPIC")
-GOOGLE_DATA_BUCKET = environ.get("GOOGLE_DATA_BUCKET")
-GOOGLE_UPLOAD_ROLE = environ.get("GOOGLE_UPLOAD_ROLE")
+GOOGLE_CLOUD_PROJECT = environ["GOOGLE_CLOUD_PROJECT"]
+GOOGLE_INTAKE_BUCKET = environ["GOOGLE_INTAKE_BUCKET"]
+GOOGLE_UPLOAD_BUCKET = environ["GOOGLE_UPLOAD_BUCKET"]
+GOOGLE_UPLOAD_TOPIC = environ["GOOGLE_UPLOAD_TOPIC"]
+GOOGLE_DATA_BUCKET = environ["GOOGLE_DATA_BUCKET"]
+GOOGLE_UPLOAD_ROLE = environ["GOOGLE_UPLOAD_ROLE"]
+GOOGLE_INTAKE_ROLE = "roles/storage.objectAdmin"  # same across environments
 GOOGLE_DOWNLOAD_ROLE = "roles/storage.objectViewer"  # same across environments
-GOOGLE_PATIENT_SAMPLE_TOPIC = environ.get("GOOGLE_PATIENT_SAMPLE_TOPIC")
-GOOGLE_EMAILS_TOPIC = environ.get("GOOGLE_EMAILS_TOPIC")
-GOOGLE_ARTIFACT_UPLOAD_TOPIC = environ.get("GOOGLE_ARTIFACT_UPLOAD_TOPIC")
+GOOGLE_PATIENT_SAMPLE_TOPIC = environ["GOOGLE_PATIENT_SAMPLE_TOPIC"]
+GOOGLE_EMAILS_TOPIC = environ["GOOGLE_EMAILS_TOPIC"]
+GOOGLE_ARTIFACT_UPLOAD_TOPIC = environ["GOOGLE_ARTIFACT_UPLOAD_TOPIC"]
 # This is a limit set by GCP - there will never be more than this many
 # conditional bindings for a single member-role combo.
 # See: https://cloud.google.com/iam/docs/conditions-overview

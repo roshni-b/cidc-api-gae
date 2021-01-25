@@ -13,7 +13,14 @@ from ..shared.rest_utils import (
     unmarshal_request,
     use_args_with_pagination,
 )
-from ..models import Users, UserSchema, UserListSchema, CIDCRole, IntegrityError
+from ..models import (
+    Users,
+    UserSchema,
+    UserListSchema,
+    CIDCRole,
+    IntegrityError,
+    Permissions,
+)
 
 users_bp = Blueprint("users", __name__)
 
@@ -106,10 +113,12 @@ def update_user(user: Users, user_updates: Users):
     if not user.role and "role" in user_updates:
         user_updates["approval_date"] = datetime.now()
 
-    # If a user is being reenabled after being disabled, update their last
-    # access date to now so that they aren't disabled again tomorrow.
+    # If this user is being re-enabled after being disabled, update their last
+    # access date to now so that they aren't disabled again tomorrow and
+    # refresh their IAM permissions.
     if user.disabled and user_updates.get("disabled") == False:
         user_updates["_accessed"] = datetime.now()
+        Permissions.grant_iam_permissions(user)
 
     user.update(changes=user_updates)
 

@@ -1,4 +1,3 @@
-import sys
 import datetime
 from typing import BinaryIO, Tuple, List
 from functools import wraps
@@ -19,7 +18,7 @@ from cidc_schemas.template_reader import (
     ValidationError as SchemasValidationError,
 )
 
-from ..shared import gcloud_client
+from ..shared import gcloud_client, emails
 from ..shared.auth import requires_auth, get_current_user, authenticate_and_get_user
 from ..shared.rest_utils import (
     with_lookup,
@@ -145,12 +144,24 @@ def requires_upload_token_auth(endpoint):
 @upload_jobs_bp.route("/<int:upload_job>", methods=["PATCH"])
 @requires_upload_token_auth
 @unmarshal_request(
-    UploadJobSchema(only=["status", "token"]), "upload_job_updates", load_sqla=False
+    UploadJobSchema(only=["status", "gcs_file_map", "token"]),
+    "upload_job_updates",
+    load_sqla=False,
 )
 @marshal_response(upload_job_schema, 200)
-def update_upload_job(upload_job: UploadJobs, upload_job_updates: UploadJobs):
+def update_upload_job(upload_job: UploadJobs, upload_job_updates: dict):
     """Update an upload_job."""
     try:
+        if "gcs_file_map" in upload_job_updates and upload_job.gcs_file_map is not None:
+            upload_job_updates["metadata_patch"] = upload_job.metadata_patch.copy()
+            for uri, uuid in upload_job.gcs_file_map.items():
+                if uri not in upload_job_updates["gcs_file_map"]:
+                    upload_job_updates[
+                        "metadata_patch"
+                    ] = _remove_optional_uuid_recursive(
+                        upload_job_updates["metadata_patch"], uuid
+                    )
+
         upload_job.update(changes=upload_job_updates)
     except ValueError as e:
         raise BadRequest(str(e))
@@ -164,6 +175,40 @@ def update_upload_job(upload_job: UploadJobs, upload_job_updates: UploadJobs):
     gcloud_client.revoke_upload_access(upload_job.uploader_email)
 
     return upload_job
+
+
+def _remove_optional_uuid_recursive(target: dict, uuid: str):
+    """
+    If target contains an item : dict with {"upload_placeholder":uuid}, removes that item and returns the modified target
+    If no such item is found, continues recursively as depth first search
+    If the uuid is never found, returns the target unchanged
+    """
+    if isinstance(target, dict):
+        if target.get("upload_placeholder") == uuid:
+            return {}
+
+        for k, v in target.items():
+            if (
+                isinstance(v, dict)
+                and "upload_placeholder" in v
+                and v["upload_placeholder"] == uuid
+            ):
+                target.pop(k)
+                return target
+            elif isinstance(v, (dict, list)):
+                temp = _remove_optional_uuid_recursive(v, uuid)
+                if len(temp):
+                    target[k] = temp
+                else:
+                    # drop completely if empty
+                    target.pop(k)
+                    return target
+
+    elif isinstance(target, list):
+        temp = [_remove_optional_uuid_recursive(i, uuid) for i in target]
+        target = [t for t in temp if t]  # remove None or empty
+
+    return target
 
 
 ### Ingestion endpoints ###
@@ -497,6 +542,7 @@ def upload_data_files(
     upload_moment = datetime.datetime.now().isoformat()
     uri2uuid = {}
     url_mapping = {}
+    optional_files = []
     files_with_extra_md = {}
     for file_info in file_infos:
         uuid = file_info.upload_placeholder
@@ -517,6 +563,9 @@ def upload_data_files(
         if file_info.metadata_availability:
             files_with_extra_md[file_info.local_path] = file_info.upload_placeholder
 
+        if file_info.allow_empty:
+            optional_files.append(file_info.local_path)
+
     gcs_blob = gcloud_client.upload_xlsx_to_gcs(
         trial.trial_id, "assays", template_type, xlsx_file, upload_moment
     )
@@ -535,6 +584,8 @@ def upload_data_files(
         "url_mapping": url_mapping,
         "gcs_bucket": GOOGLE_UPLOAD_BUCKET,
         "extra_metadata": None,
+        "gcs_file_map": uri2uuid,
+        "optional_files": optional_files,
         "token": job.token,
     }
     if bool(files_with_extra_md):
@@ -618,3 +669,79 @@ def extra_assay_metadata():
 
     # TODO: return something here?
     return jsonify({})
+
+
+INTAKE_ROLES = [
+    CIDCRole.ADMIN.value,
+    CIDCRole.CIDC_BIOFX_USER.value,
+    CIDCRole.CIMAC_BIOFX_USER.value,
+]
+
+
+@ingestion_bp.route("/intake_gcs_uri", methods=["POST"])
+@requires_auth("intake_gcs_uri", INTAKE_ROLES)
+@use_args(
+    {"trial_id": fields.Str(required=True), "upload_type": fields.Str(required=True)}
+)
+def create_intake_gcs_uri(args):
+    """
+    Grant upload access to the current user for the provided trial and upload types,
+    returning the GCS URI the user now has permission to upload to.
+    NOTE: we don't verify that the user has permission to upload data for this trial-upload 
+    type combo because they won't be able to overwrite any other user's uploaded data.
+    """
+    user = get_current_user()
+    gcs_uri = gcloud_client.grant_intake_access(
+        user.id, user.email, args["trial_id"], args["upload_type"]
+    )
+
+    return jsonify(gcs_uri)
+
+
+@ingestion_bp.route("/intake_gcs_uri", methods=["GET"])
+@requires_auth("intake_gcs_uri", INTAKE_ROLES)
+def list_intake_gcs_uris():
+    """
+    List the GCS URIs to subdirectories of the intake bucket to which this user already
+    has been granted access.
+    """
+    user = get_current_user()
+    gcs_uris = gcloud_client.list_intake_access(user.email)
+
+    return jsonify({"_items": gcs_uris, "_meta": {"total": len(gcs_uris)}})
+
+
+@ingestion_bp.route("/intake_metadata", methods=["POST"])
+@requires_auth("intake_metadata", INTAKE_ROLES)
+@use_args(
+    {
+        "trial_id": fields.Str(required=True),
+        "assay_type": fields.Str(required=True),
+        "description": fields.Str(required=True),
+    },
+    location="form",
+)
+@use_args(
+    {
+        "xlsx": fields.Field(
+            required=True,
+            # Check that this is an XLSX file
+            validate=lambda file: file.mimetype
+            == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            error_messages={"validator_failed": "must be a .xlsx file"},
+        )
+    },
+    location="files",
+)
+def send_intake_metadata(form_args, file_args):
+    """
+    Send an email to the CIDC Admin mailing list with the provided metadata attached.
+    """
+    user = get_current_user()
+    xlsx_gcp_url = gcloud_client.upload_xlsx_to_intake_bucket(
+        user, form_args["trial_id"], form_args["assay_type"], file_args["xlsx"]
+    )
+    emails.intake_metadata(
+        user, **form_args, xlsx_gcp_url=xlsx_gcp_url, send_email=True
+    )
+    return jsonify("ok")

@@ -13,6 +13,7 @@ from .config.settings import SETTINGS
 from .config.logging import get_logger
 from .shared.auth import validate_api_auth
 from .resources import register_resources
+from .dash_example import init_dash
 
 logger = get_logger(__name__)
 
@@ -63,6 +64,8 @@ def handle_errors(e: Exception):
 
     return response
 
+
+init_dash(app)
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000)

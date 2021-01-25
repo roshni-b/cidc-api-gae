@@ -3,10 +3,18 @@ from io import BytesIO
 from unittest.mock import MagicMock, call
 from datetime import datetime
 
+import pytest
+from werkzeug.datastructures import FileStorage
+
 from cidc_api.shared import gcloud_client
 from cidc_api.config import settings
+from cidc_api.models.models import Users
 from cidc_api.shared.gcloud_client import (
+    grant_intake_access,
     grant_upload_access,
+    list_intake_access,
+    refresh_intake_access,
+    revoke_intake_access,
     revoke_upload_access,
     grant_download_access,
     revoke_download_access,
@@ -14,16 +22,20 @@ from cidc_api.shared.gcloud_client import (
     _xlsx_gcs_uri_format,
     upload_xlsx_to_gcs,
     _pseudo_blob,
-    _build_download_binding,
+    _build_binding_with_expiry,
+    upload_xlsx_to_intake_bucket,
 )
 from cidc_api.config.settings import (
+    GOOGLE_INTAKE_ROLE,
+    GOOGLE_INTAKE_BUCKET,
     GOOGLE_UPLOAD_ROLE,
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_DATA_BUCKET,
     GOOGLE_DOWNLOAD_ROLE,
 )
 
-EMAIL = "test@email.com"
+ID = 123
+EMAIL = "test.user@email.com"
 
 
 def _mock_gcloud_storage(bindings, set_iam_policy_fn, monkeypatch):
@@ -72,6 +84,84 @@ def test_revoke_upload_access(monkeypatch):
     revoke_upload_access(EMAIL)
 
 
+def test_grant_intake_access(monkeypatch):
+    grant_gcs_access = MagicMock()
+    monkeypatch.setattr(
+        "cidc_api.shared.gcloud_client.grant_conditional_gcs_access", grant_gcs_access
+    )
+
+    grant_intake_access(123, "test.user@email.com", "test-trial", "upload-type")
+
+    grant_gcs_access.assert_called_once_with(
+        GOOGLE_INTAKE_BUCKET,
+        "test-trial/upload-type/testuser-123",
+        GOOGLE_INTAKE_ROLE,
+        "test.user@email.com",
+    )
+
+
+def test_revoke_intake_access(monkeypatch):
+    revoke_gcs_access = MagicMock()
+    monkeypatch.setattr(
+        "cidc_api.shared.gcloud_client.revoke_conditional_gcs_access", revoke_gcs_access
+    )
+
+    revoke_intake_access(123, "test.user@email.com", "test-trial", "upload-type")
+
+    revoke_gcs_access.assert_called_once_with(
+        GOOGLE_INTAKE_BUCKET,
+        "test-trial/upload-type/testuser-123",
+        GOOGLE_INTAKE_ROLE,
+        "test.user@email.com",
+    )
+
+
+@pytest.fixture
+def trial_ids_upload_types():
+    return [
+        ("test-trial-1", "upload-type-1"),
+        ("test-trial-2", "upload-type-2"),
+        ("test-trial-3", "upload-type-3"),
+    ]
+
+
+@pytest.fixture
+def intake_bindings(trial_ids_upload_types):
+    return [
+        _build_binding_with_expiry(
+            GOOGLE_INTAKE_BUCKET,
+            f"{trial_id}/{upload_type}/testuser-{ID}",
+            GOOGLE_INTAKE_ROLE,
+            EMAIL,
+        )
+        for trial_id, upload_type in trial_ids_upload_types
+    ]
+
+
+def test_list_intake_access(intake_bindings, trial_ids_upload_types, monkeypatch):
+    _mock_gcloud_storage(intake_bindings, lambda i: i, monkeypatch)
+
+    uris = list_intake_access(EMAIL)
+    assert uris == [
+        f"gs://{GOOGLE_INTAKE_BUCKET}/{t}/{u}/testuser-{ID}"
+        for t, u in trial_ids_upload_types
+    ]
+
+
+def test_refresh_intake_access(intake_bindings, trial_ids_upload_types, monkeypatch):
+    _mock_gcloud_storage(intake_bindings, lambda i: i, monkeypatch)
+
+    grant_intake_access_mock = MagicMock()
+    monkeypatch.setattr(
+        "cidc_api.shared.gcloud_client.grant_intake_access", grant_intake_access_mock
+    )
+
+    refresh_intake_access(ID, EMAIL)
+    assert grant_intake_access_mock.call_args_list == [
+        call(ID, EMAIL, t, u) for t, u in trial_ids_upload_types
+    ]
+
+
 def test_grant_download_access(monkeypatch):
     """Check that grant_download_access adds policy bindings as expected"""
     bindings = [
@@ -87,24 +177,29 @@ def test_grant_download_access(monkeypatch):
         assert binding["members"] == {f"user:{EMAIL}"}
         assert binding["role"] == GOOGLE_DOWNLOAD_ROLE
         condition = binding["condition"]
-        assert condition["title"] == f"Conditional download access for {EMAIL}"
+        assert f"{GOOGLE_DOWNLOAD_ROLE} access on 10021/wes until" in condition["title"]
         assert "updated by the CIDC API" in condition["description"]
         assert "10021/wes" in condition["expression"]
 
     _mock_gcloud_storage([], set_iam_policy, monkeypatch)
     grant_download_access(EMAIL, "10021", "wes_analysis")
 
-    matching_binding = _build_download_binding(
-        EMAIL,
-        'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/wes")',
+    matching_prefix = "10021/wes"
+    matching_binding = _build_binding_with_expiry(
+        GOOGLE_DATA_BUCKET, matching_prefix, GOOGLE_DOWNLOAD_ROLE, EMAIL
     )
 
     def set_iam_policy(policy):
         bindings = policy.bindings
         assert len(bindings) == 2
-        assert matching_binding in bindings
+        assert any(
+            matching_prefix
+            in binding.get("condition", {}).get("expression", {})  # prefixes match
+            and binding != matching_binding  # but TTL has changed
+            for binding in bindings
+        )
 
-    # Check idempotence
+    # Check permission regranting - TTL should be updated, but download prefix should be unchanged
     _mock_gcloud_storage([matching_binding] + bindings, set_iam_policy, monkeypatch)
     grant_download_access(EMAIL, "10021", "wes_analysis")
 
@@ -125,18 +220,17 @@ def test_grant_download_access(monkeypatch):
 
 def test_revoke_download_access(monkeypatch):
     bindings = [
-        _build_download_binding(
-            EMAIL,
-            'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/wes")',
+        _build_binding_with_expiry(
+            GOOGLE_DATA_BUCKET, "10021/wes", GOOGLE_DOWNLOAD_ROLE, EMAIL
         ),
-        _build_download_binding(
-            EMAIL,
-            'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/cytof")',
+        _build_binding_with_expiry(
+            GOOGLE_DATA_BUCKET, "10021/cytof", GOOGLE_DOWNLOAD_ROLE, EMAIL
         ),
         {"role": "some-other-role", "members": {f"user:JohnDoe"}},
     ]
 
     def set_iam_policy(policy):
+        print(policy.bindings)
         assert len(policy.bindings) == 2
         assert not any(
             "10021/wes" in binding["condition"]["expression"]
@@ -154,17 +248,14 @@ def test_revoke_download_access(monkeypatch):
 
     # revocation when target binding is duplicated
     bindings = [
-        _build_download_binding(
-            EMAIL,
-            'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/wes")',
+        _build_binding_with_expiry(
+            GOOGLE_DATA_BUCKET, "10021/wes", GOOGLE_DOWNLOAD_ROLE, EMAIL
         ),
-        _build_download_binding(
-            EMAIL,
-            'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/wes")',
+        _build_binding_with_expiry(
+            GOOGLE_DATA_BUCKET, "10021/wes", GOOGLE_DOWNLOAD_ROLE, EMAIL
         ),
-        _build_download_binding(
-            EMAIL,
-            'resource.name.startsWith("projects/_/buckets/cidc-data-staging/objects/10021/cytof")',
+        _build_binding_with_expiry(
+            GOOGLE_DATA_BUCKET, "10021/cytof", GOOGLE_DOWNLOAD_ROLE, EMAIL
         ),
         {"role": "some-other-role", "members": {f"user:JohnDoe"}},
     ]
@@ -247,6 +338,25 @@ def test_upload_xlsx_to_gcs(monkeypatch):
     bucket.blob.assert_called_once_with(expected_name)
     blob.upload_from_file.assert_called_once_with(open_file)
     bucket.copy_blob.assert_called_once_with(blob, bucket)
+
+
+def test_upload_xlsx_to_intake_bucket(monkeypatch):
+    user = Users(id=123, email="test@email.com")
+    trial_id = "test-trial"
+    assay_type = "wes"
+    xlsx = FileStorage(filename="metadata.xlsx")
+
+    _get_bucket = MagicMock()
+    _get_bucket.return_value = bucket = MagicMock()
+    bucket.blob.return_value = blob = MagicMock()
+    monkeypatch.setattr("cidc_api.shared.gcloud_client._get_bucket", _get_bucket)
+
+    url = upload_xlsx_to_intake_bucket(user, trial_id, assay_type, xlsx)
+    blob.upload_from_file.assert_called_once()
+    assert url.startswith(
+        "https://console.cloud.google.com/storage/browser/_details/cidc-intake-staging/test-trial/wes/test-123/metadata"
+    )
+    assert url.endswith(".xlsx")
 
 
 def test_get_signed_url(monkeypatch):

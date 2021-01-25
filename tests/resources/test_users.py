@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Tuple
+from unittest.mock import MagicMock
 
 from cidc_api.models import Users, UserSchema, CIDCRole
 
@@ -184,6 +185,9 @@ def test_update_user(cidc_api, clean_db, monkeypatch):
     _accessed = res.json["_accessed"]
 
     # Reenabling a disabled user updates that user's last access date.
+    mock_permissions = MagicMock()
+    mock_permissions.grant_iam_permissions = MagicMock()
+    monkeypatch.setattr("cidc_api.resources.users.Permissions", mock_permissions)
     res = client.patch(
         f"/users/{other_user.id}",
         headers={"If-Match": res.json["_etag"]},
@@ -197,6 +201,7 @@ def test_update_user(cidc_api, clean_db, monkeypatch):
     )
     assert res.status_code == 200
     assert res.json["_accessed"] > _accessed
+    mock_permissions.grant_iam_permissions.assert_called()
 
     # Trying to update a non-existing user yields 404
     res = client.patch(
