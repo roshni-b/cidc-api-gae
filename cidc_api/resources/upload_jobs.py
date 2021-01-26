@@ -10,7 +10,6 @@ from jsonschema.exceptions import ValidationError
 from sqlalchemy.orm.session import Session
 from werkzeug.exceptions import BadRequest, NotFound, Unauthorized, PreconditionRequired
 
-from flask import current_app
 from cidc_schemas import prism, json_validation
 from cidc_schemas.template import Template
 from cidc_schemas.template_reader import (
@@ -678,37 +677,24 @@ INTAKE_ROLES = [
 ]
 
 
-@ingestion_bp.route("/intake_gcs_uri", methods=["POST"])
-@requires_auth("intake_gcs_uri", INTAKE_ROLES)
+@ingestion_bp.route("/intake_bucket", methods=["POST"])
+@requires_auth("intake_bucket", INTAKE_ROLES)
 @use_args(
     {"trial_id": fields.Str(required=True), "upload_type": fields.Str(required=True)}
 )
-def create_intake_gcs_uri(args):
+def create_intake_bucket(args):
     """
-    Grant upload access to the current user for the provided trial and upload types,
-    returning the GCS URI the user now has permission to upload to.
-    NOTE: we don't verify that the user has permission to upload data for this trial-upload 
-    type combo because they won't be able to overwrite any other user's uploaded data.
-    """
-    user = get_current_user()
-    gcs_uri = gcloud_client.grant_intake_access(
-        user.id, user.email, args["trial_id"], args["upload_type"]
-    )
-
-    return jsonify(gcs_uri)
-
-
-@ingestion_bp.route("/intake_gcs_uri", methods=["GET"])
-@requires_auth("intake_gcs_uri", INTAKE_ROLES)
-def list_intake_gcs_uris():
-    """
-    List the GCS URIs to subdirectories of the intake bucket to which this user already
-    has been granted access.
+    Create an intake bucket for the current user if one doesn't exist yet, and return
+    both the `gs://...` and web console URLs to the subdirectory in this bucket that we
+    want the user to upload to (for the given trial / upload type combination).
     """
     user = get_current_user()
-    gcs_uris = gcloud_client.list_intake_access(user.email)
+    intake_bucket = gcloud_client.create_intake_bucket(user.email)
+    bucket_subdir = f'{intake_bucket.name}/{args["trial_id"]}/{args["upload_type"]}'
+    gs_url = f"gs://{bucket_subdir}"
+    console_url = f"https://console.cloud.google.com/storage/browser/{bucket_subdir}"
 
-    return jsonify({"_items": gcs_uris, "_meta": {"total": len(gcs_uris)}})
+    return jsonify({"gs_url": gs_url, "console_url": console_url})
 
 
 @ingestion_bp.route("/intake_metadata", methods=["POST"])
@@ -739,7 +725,7 @@ def send_intake_metadata(form_args, file_args):
     """
     user = get_current_user()
     xlsx_gcp_url = gcloud_client.upload_xlsx_to_intake_bucket(
-        user, form_args["trial_id"], form_args["assay_type"], file_args["xlsx"]
+        user.email, form_args["trial_id"], form_args["assay_type"], file_args["xlsx"]
     )
     emails.intake_metadata(
         user, **form_args, xlsx_gcp_url=xlsx_gcp_url, send_email=True

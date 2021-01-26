@@ -1,4 +1,5 @@
 """Template functions for CIDC email bodies."""
+import html
 import base64
 from functools import wraps
 
@@ -128,10 +129,10 @@ def intake_metadata(
     html_content = f"""
     <p><strong>user:</strong> {user.first_n} {user.last_n} ({user.email})</p>
     <p><strong>contact email:</strong> {user.contact_email}</p>
-    <p><strong>protocol identifier:</strong> {trial_id}</p>
-    <p><strong>assay type:</strong> {assay_type}</p>
+    <p><strong>protocol identifier:</strong> {html.escape(trial_id)}</p>
+    <p><strong>assay type:</strong> {html.escape(assay_type)}</p>
     <p><strong>metadata file:</strong> <a href={xlsx_gcp_url}>{xlsx_gcp_url}</a></p>
-    <p><strong>description:</strong> {description}</p>
+    <p><strong>description:</strong> {html.escape(description)}</p>
     """
 
     email = {

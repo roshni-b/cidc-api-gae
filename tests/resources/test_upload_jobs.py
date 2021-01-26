@@ -1105,12 +1105,15 @@ def test_merge_extra_metadata(cidc_api, clean_db, monkeypatch):
         assert "extra_md" in au.metadata_patch["whatever"]["hierarchy"][1]
 
 
-def test_create_intake_gcs_uri(cidc_api, clean_db, monkeypatch):
+def test_create_intake_bucket(cidc_api, clean_db, monkeypatch):
     user_id = setup_trial_and_user(cidc_api, monkeypatch)
+    bucket_name = "test-intake-bucket"
 
     gcloud_client = MagicMock()
-    gcloud_client.grant_intake_access = MagicMock()
-    gcloud_client.grant_intake_access.return_value = "gs://some-uri"
+    gcloud_client.create_intake_bucket = MagicMock()
+    bucket = MagicMock()
+    bucket.name = bucket_name
+    gcloud_client.create_intake_bucket.return_value = bucket
     monkeypatch.setattr("cidc_api.resources.upload_jobs.gcloud_client", gcloud_client)
 
     client = cidc_api.test_client()
@@ -1118,41 +1121,19 @@ def test_create_intake_gcs_uri(cidc_api, clean_db, monkeypatch):
     for role in ROLES:
         make_role(user_id, role, cidc_api)
         res = client.post(
-            "/ingestion/intake_gcs_uri",
+            "/ingestion/intake_bucket",
             json={"trial_id": "test-trial", "upload_type": "test-upload"},
         )
         if role in INTAKE_ROLES:
             assert res.status_code == 200
-            gcloud_client.grant_intake_access.assert_called_with(
-                user_id, user_email, "test-trial", "test-upload"
-            )
-            assert res.json == "gs://some-uri"
+            gcloud_client.create_intake_bucket.assert_called_with(user_email)
+            assert res.json == {
+                "gs_url": f"gs://{bucket_name}/test-trial/test-upload",
+                "console_url": f"https://console.cloud.google.com/storage/browser/{bucket_name}/test-trial/test-upload",
+            }
         else:
             assert res.status_code == 401
-        gcloud_client.grant_intake_access.reset_mock()
-
-
-def test_list_intake_gcs_uris(cidc_api, clean_db, monkeypatch):
-    user_id = setup_trial_and_user(cidc_api, monkeypatch)
-
-    uris = ["gs://a", "gs://b", "gs://c"]
-    gcloud_client = MagicMock()
-    gcloud_client.list_intake_access = MagicMock()
-    gcloud_client.list_intake_access.return_value = uris
-    monkeypatch.setattr("cidc_api.resources.upload_jobs.gcloud_client", gcloud_client)
-
-    client = cidc_api.test_client()
-
-    for role in ROLES:
-        make_role(user_id, role, cidc_api)
-        res = client.get("/ingestion/intake_gcs_uri")
-        if role in INTAKE_ROLES:
-            assert res.status_code == 200
-            gcloud_client.list_intake_access.assert_called_with(user_email)
-            assert res.json == {"_items": uris, "_meta": {"total": len(uris)}}
-        else:
-            assert res.status_code == 401
-        gcloud_client.grant_intake_access.reset_mock()
+        gcloud_client.create_intake_bucket.reset_mock()
 
 
 def test_send_intake_metadata(cidc_api, clean_db, monkeypatch):

@@ -3,6 +3,7 @@ import json
 import datetime
 import re
 import warnings
+import hashlib
 from collections import namedtuple
 from concurrent.futures import Future
 from typing import List, Tuple, Optional, BinaryIO
@@ -33,14 +34,19 @@ from ..config.logging import get_logger
 
 logger = get_logger(__name__)
 
-storage_client = None
+_storage_client = None
+
+
+def _get_storage_client() -> storage.Client:
+    global _storage_client
+    if _storage_client is None:
+        _storage_client = storage.Client()
+    return _storage_client
 
 
 def _get_bucket(bucket_name: str) -> storage.Bucket:
     """Get the bucket with name `bucket_name` from GCS."""
-    global storage_client
-    if storage_client is None:
-        storage_client = storage.Client()
+    storage_client = _get_storage_client()
     bucket = storage_client.get_bucket(bucket_name)
     return bucket
 
@@ -98,27 +104,6 @@ def upload_xlsx_to_gcs(
     return final_object
 
 
-def upload_xlsx_to_intake_bucket(
-    user, trial_id: str, assay_type: str, xlsx: FileStorage
-) -> str:
-    """
-    Upload a metadata spreadsheet file to the GCS intake bucket, 
-    returning the URL to the bucket in the GCP console.
-    """
-    # get the intake bucket subdirectory for this upload
-    blob_prefix = _build_intake_prefix(user.id, user.email, trial_id, assay_type)
-    # add a timestamp to the metadata file name to avoid overwriting previous versions
-    filename_with_timestamp = f'{xlsx.filename.rsplit(".xlsx", 1)[0]}_{datetime.datetime.now().isoformat()}.xlsx'
-    blob_name = f"{blob_prefix}/{filename_with_timestamp}"
-
-    # upload the metadata spreadsheet to the intake bucket
-    bucket = _get_bucket(GOOGLE_INTAKE_BUCKET)
-    blob = bucket.blob(blob_name)
-    blob.upload_from_file(xlsx)
-
-    return f"https://console.cloud.google.com/storage/browser/_details/{GOOGLE_INTAKE_BUCKET}/{blob_name}"
-
-
 def grant_upload_access(user_email: str):
     """
     Grant a user upload access to the GOOGLE_UPLOAD_BUCKET. Upload access
@@ -149,92 +134,73 @@ def revoke_upload_access(user_email: str):
     bucket.set_iam_policy(policy)
 
 
-def _build_intake_prefix(
-    user_id: int, user_email: str, trial_id: str, upload_type: str
+def get_intake_bucket_name(user_email: str) -> str:
+    """
+    Get the name for an intake bucket associated with the given user.
+    Bucket names will have a structure like <intake
+    """
+    # 10 characters should be plenty, given that we only expect
+    # a handful of unique data uploaders - we get 16^10 possible hashes.
+    email_hash = hashlib.sha1(bytes(user_email, "utf-8")).hexdigest()[:10]
+    bucket_name = f"{GOOGLE_INTAKE_BUCKET}-{email_hash}"
+    return bucket_name
+
+
+def create_intake_bucket(user_email: str) -> storage.Bucket:
+    """
+    Create a new data intake bucket for this user, or get the existing one.
+    Grant the user GCS object admin permissions on the bucket, or refresh those
+    permissions if they've already been granted.
+    """
+    print("HELLO!", storage)
+
+    storage_client = _get_storage_client()
+    bucket_name = get_intake_bucket_name(user_email)
+    bucket = storage_client.bucket(bucket_name)
+
+    if not bucket.exists():
+        # Create a new bucket with bucket-level permissions enabled.
+        bucket.iam_configuration.uniform_bucket_level_access_enabled = True
+        bucket = storage_client.create_bucket(bucket)
+
+    # Grant the user appropriate permissions
+    grant_expiring_gcs_access(bucket, GOOGLE_INTAKE_ROLE, user_email)
+
+    return bucket
+
+
+def refresh_intake_access(user_email: str):
+    """
+    Re-grant a user's access to their intake bucket if it exists.
+    """
+    bucket_name = get_intake_bucket_name(user_email)
+    bucket = _get_bucket(bucket_name)
+
+    if bucket.exists():
+        grant_expiring_gcs_access(bucket, GOOGLE_INTAKE_ROLE, user_email)
+
+
+def upload_xlsx_to_intake_bucket(
+    user_email: str, trial_id: str, upload_type: str, xlsx: FileStorage
 ) -> str:
-    usernameish = user_email.split("@")[0].replace(".", "")
-    return (
-        f"{_build_trial_upload_prefix(trial_id, upload_type)}/{usernameish}-{user_id}"
-    )
-
-
-def grant_intake_access(
-    user_id: int, user_email: str, trial_id: str, upload_type: str
-) -> str:
     """
-    Give a user upload access to a subdirectory of the intake bucket with prefix like
-    <trial id>/<upload type>/<user email prefix>-<user id>
-
-    Return the GCS URI to which access has been granted.
+    Upload a metadata spreadsheet file to the GCS intake bucket, 
+    returning the URL to the bucket in the GCP console.
     """
-    prefix = _build_intake_prefix(user_id, user_email, trial_id, upload_type)
+    # add a timestamp to the metadata file name to avoid overwriting previous versions
+    filename_with_ts = f'{xlsx.filename.rsplit(".xlsx", 1)[0]}_{datetime.datetime.now().isoformat()}.xlsx'
+    blob_name = f"{trial_id}/{upload_type}/metadata/{filename_with_ts}"
 
-    logger.info(f"Granting intake access on {prefix} to {user_email}")
+    # upload the metadata spreadsheet to the intake bucket
+    bucket_name = get_intake_bucket_name(user_email)
+    bucket = _get_bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    blob.upload_from_file(xlsx)
 
-    return grant_conditional_gcs_access(
-        GOOGLE_INTAKE_BUCKET, prefix, GOOGLE_INTAKE_ROLE, user_email
-    )
-
-
-def revoke_intake_access(
-    user_id: int, user_email: str, trial_id: str, upload_type: str
-) -> str:
-    """
-    Revoke a user's upload access to a subdirectory of the intake bucket with prefix like
-    <trial id>/<upload type>/<user email prefix>-<user id>
-
-    Return the GCS URI from which access has been revoked.
-    """
-    prefix = _build_intake_prefix(user_id, user_email, trial_id, upload_type)
-
-    logger.info(f"Granting intake access on {prefix} to {user_email}")
-
-    return revoke_conditional_gcs_access(
-        GOOGLE_INTAKE_BUCKET, prefix, GOOGLE_INTAKE_ROLE, user_email
-    )
+    return f"https://console.cloud.google.com/storage/browser/_details/{bucket_name}/{blob_name}"
 
 
-user_member = lambda email: f"user:{email}"
-
-intake_subdir_regex = re.compile(
-    f'resource.name.startsWith\("projects/_/buckets/{GOOGLE_INTAKE_BUCKET}/objects/(.*?)"\)'
-)
-
-
-def list_intake_access(user_email: str) -> List[str]:
-    """
-    List the GCS URIs in the intake bucket to which this user has access.
-    """
-    bucket = _get_bucket(GOOGLE_INTAKE_BUCKET)
-    policy = bucket.get_iam_policy(requested_policy_version=3)
-    policy.version = 3
-
-    user_uris = []
-    for binding in policy.bindings:
-        expression = binding.get("condition", {}).get("expression", "")
-        subdir_match = intake_subdir_regex.match(expression)
-        if (
-            binding["members"] == {user_member(user_email)}
-            and binding["role"] == GOOGLE_INTAKE_ROLE
-            and subdir_match
-        ):
-            user_uris.append(f"gs://{GOOGLE_INTAKE_BUCKET}/{subdir_match.group(1)}")
-
-    return user_uris
-
-
-def refresh_intake_access(user_id: int, user_email: str):
-    """
-    Re-grant access to all GCS URIs in the intake bucket to which this user has access.
-    """
-    gcs_uris = list_intake_access(user_email)
-    for uri in gcs_uris:
-        # Renew the user's upload permission for the relevant trial_id and upload_type
-        trial_id, upload_type = uri.split("/")[-3:-1]
-        grant_intake_access(user_id, user_email, trial_id, upload_type)
-
-
-def grant_download_access(user_email: str, trial_id: str, upload_type: str) -> str:
+def grant_download_access(user_email: str, trial_id: str, upload_type: str):
     """
     Give a user download access to all objects in a trial of a particular upload type.
     If the user already has download access for this trial and upload type, regrant the
@@ -246,9 +212,8 @@ def grant_download_access(user_email: str, trial_id: str, upload_type: str) -> s
 
     logger.info(f"Granting download access on {prefix}* to {user_email}")
 
-    return grant_conditional_gcs_access(
-        GOOGLE_DATA_BUCKET, prefix, GOOGLE_DOWNLOAD_ROLE, user_email
-    )
+    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+    grant_expiring_gcs_access(bucket, GOOGLE_DOWNLOAD_ROLE, user_email, prefix)
 
 
 def revoke_download_access(user_email: str, trial_id: str, upload_type: str):
@@ -261,9 +226,8 @@ def revoke_download_access(user_email: str, trial_id: str, upload_type: str):
 
     logger.info(f"Revoking download access on {prefix}* to {user_email}")
 
-    return revoke_conditional_gcs_access(
-        GOOGLE_DATA_BUCKET, prefix, GOOGLE_DOWNLOAD_ROLE, user_email
-    )
+    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+    return revoke_expiring_gcs_access(bucket, GOOGLE_DOWNLOAD_ROLE, user_email, prefix)
 
 
 def _build_trial_upload_prefix(trial_id: str, upload_type: str) -> str:
@@ -271,11 +235,15 @@ def _build_trial_upload_prefix(trial_id: str, upload_type: str) -> str:
     return f"{trial_id}/{broad_upload_type}"
 
 
-def grant_conditional_gcs_access(
-    bucket_name: str, prefix: str, role: str, user_email: str
-) -> str:
-    # get the current IAM policy for the provided bucket
-    bucket = _get_bucket(bucket_name)
+def grant_expiring_gcs_access(
+    bucket: storage.Bucket, role: str, user_email: str, prefix: Optional[str] = None
+):
+    """
+    Grant `user_email` the provided `role` on a `bucket`, expiring after `INACTIVE_USER_DAYS` 
+    days have elapsed. By default, permissions apply to the whole bucket. Optionally, provide 
+    an object URL `prefix` to restrict this permission grant to only a portion of the objects 
+    in the given bucket.
+    """
     # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.version = 3
@@ -283,22 +251,17 @@ def grant_conditional_gcs_access(
     # remove the existing binding if one exists so that we can recreate it with
     # an updated TTL.
     _find_and_pop_binding(policy, prefix, role, user_email)
-    binding = _build_binding_with_expiry(bucket_name, prefix, role, user_email)
+    binding = _build_binding_with_expiry(bucket.name, prefix, role, user_email)
 
     # (re)insert the binding into the policy
     policy.bindings.append(binding)
     bucket.set_iam_policy(policy)
 
-    return f"gs://{bucket_name}/{prefix}"
 
-
-def revoke_conditional_gcs_access(
-    bucket_name: str, prefix: str, role: str, user_email: str
+def revoke_expiring_gcs_access(
+    bucket: storage.Bucket, role: str, user_email: str, prefix: Optional[str] = None
 ):
-    logger.info(f"Revoking download access on {prefix}* from {user_email}")
-
-    # get the current IAM policy for the data bucket
-    bucket = _get_bucket(bucket_name)
+    """Revoke a bucket IAM policy change made by calling `grant_expiring_gcs_access`."""
     # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.version = 3
@@ -314,8 +277,6 @@ def revoke_conditional_gcs_access(
             break
 
     bucket.set_iam_policy(policy)
-
-    return f"gs://{bucket_name}/{prefix}"
 
 
 # Arbitrary upper bound on the number of GCS bindings we expect a user to have
@@ -341,9 +302,12 @@ def revoke_all_download_access(user_email: str):
     bucket.set_iam_policy(policy)
 
 
+user_member = lambda email: f"user:{email}"
+
+
 def _build_binding_with_expiry(
     bucket: str,
-    prefix: str,
+    prefix: Optional[str],
     role: str,
     user_email: str,
     ttl_days: int = INACTIVE_USER_DAYS,
@@ -357,24 +321,25 @@ def _build_binding_with_expiry(
     """
     timestamp = datetime.datetime.now()
     expiry_date = (timestamp + datetime.timedelta(ttl_days)).date()
-    ttl_clause = f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")'
-    prefix_clause = (
-        f'resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefix}")'
-    )
+    # All conditions should have a TTL clause
+    condition = f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")'
+    # Add an object URL prefix to the condition if a prefix was specified
+    if prefix:
+        condition += f'&& resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefix}")&&'
 
     return {
         "role": role,
         "members": {user_member(user_email)},
         "condition": {
-            "title": f"{role} access on {prefix} until {expiry_date}",
+            "title": f"{role} access on {prefix or 'bucket'} until {expiry_date}",
             "description": f"Auto-updated by the CIDC API on {timestamp}",
-            "expression": f"{prefix_clause} && {ttl_clause}",
+            "expression": condition,
         },
     }
 
 
 def _find_and_pop_binding(
-    policy: storage.bucket.Policy, prefix: str, role: str, user_email: str
+    policy: storage.bucket.Policy, prefix: Optional[str], role: str, user_email: str
 ) -> Optional[dict]:
     """
     Find an IAM policy binding for the given `user_email`, `policy`, and `role`, and pop
@@ -383,11 +348,12 @@ def _find_and_pop_binding(
     # try to find the policy binding on the `policy`
     user_binding_index = None
     for i, binding in enumerate(policy.bindings):
-        if (
-            binding.get("role") == role
-            and binding.get("members") == {user_member(user_email)}
-            and prefix in binding.get("condition", {}).get("expression", "")
-        ):
+        role_matches = binding.get("role") == role
+        member_matches = binding.get("members") == {user_member(user_email)}
+        prefix_matches = prefix is None or prefix in binding.get("condition", {}).get(
+            "expression", ""
+        )
+        if role_matches and member_matches and prefix_matches:
             # a user should be a member of no more than one conditional download binding
             if user_binding_index is not None:
                 warnings.warn(
@@ -418,7 +384,7 @@ def get_signed_url(
     Using v2 signed urls because v4 is in Beta and response_disposition doesn't work.
     https://cloud.google.com/storage/docs/access-control/signing-urls-with-helpers
     """
-    storage_client = storage.Client()
+    storage_client = _get_storage_client()
     bucket = storage_client.get_bucket(bucket_name)
     blob = bucket.blob(object_name)
 
