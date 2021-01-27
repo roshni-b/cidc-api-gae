@@ -159,6 +159,8 @@ def test_grant_download_access(monkeypatch):
         assert f"{GOOGLE_DOWNLOAD_ROLE} access on 10021/wes until" in condition["title"]
         assert "updated by the CIDC API" in condition["description"]
         assert "10021/wes" in condition["expression"]
+        # should have structure "<expiry time> && <prefix condition>""
+        assert len(condition["expression"].split(" && ")) == 2
 
     _mock_gcloud_storage([], set_iam_policy, monkeypatch)
     grant_download_access(EMAIL, "10021", "wes_analysis")

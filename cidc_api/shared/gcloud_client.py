@@ -152,8 +152,6 @@ def create_intake_bucket(user_email: str) -> storage.Bucket:
     Grant the user GCS object admin permissions on the bucket, or refresh those
     permissions if they've already been granted.
     """
-    print("HELLO!", storage)
-
     storage_client = _get_storage_client()
     bucket_name = get_intake_bucket_name(user_email)
     bucket = storage_client.bucket(bucket_name)
@@ -325,7 +323,7 @@ def _build_binding_with_expiry(
     condition = f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")'
     # Add an object URL prefix to the condition if a prefix was specified
     if prefix:
-        condition += f'&& resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefix}")&&'
+        condition += f' && resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefix}")'
 
     return {
         "role": role,
