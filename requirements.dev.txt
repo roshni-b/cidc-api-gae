@@ -1,4 +1,11 @@
-pytest==4.6.3
+pytest~=6.0.1
 black==19.3b0
 pre-commit==1.17.0
+ipython
+## plotly dash testing dependencies ##
+webdriver_manager
+percy
+selenium
+bs4
+## end plotly dash testing dependencies ##
 -r requirements.txt

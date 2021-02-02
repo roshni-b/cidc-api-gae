@@ -511,7 +511,7 @@ class Permissions(CommonColumns):
             grant_download_access(user.email, perm.trial_id, perm.upload_type)
 
         # Regrant all of the user's intake bucket upload permissions, if they have any
-        refresh_intake_access(user.id, user.email)
+        refresh_intake_access(user.email)
 
     @staticmethod
     @with_default_session

@@ -917,7 +917,7 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
     )
 
-    refresh_intake_access.assert_called_once_with(user.id, user.email)
+    refresh_intake_access.assert_called_once_with(user.email)
 
 
 @db_test

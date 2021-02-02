@@ -1,8 +1,6 @@
 from io import BytesIO
 from unittest.mock import MagicMock
 
-from werkzeug.datastructures import FileStorage
-
 from cidc_api.models import Users, UploadJobs
 from cidc_api.shared.emails import (
     confirm_account_approval,
@@ -80,7 +78,7 @@ def test_intake_metadata():
     )
     trial_id = "10021"
     assay_type = "wes"
-    description = "a test description of this metadata"
+    description = "a test description of this <a>metadata</a>"
     xlsx_uri = "gs://fake/gcs/uri"
 
     email = intake_metadata(user, trial_id, assay_type, description, xlsx_uri)
@@ -88,5 +86,9 @@ def test_intake_metadata():
     assert f"{user.first_n} {user.last_n}" in email["html_content"]
     assert f"{user.email}" in email["html_content"]
     assert f"{user.contact_email}" in email["html_content"]
-    assert f"{description}" in email["html_content"]
+    # sketchy html in the provided description should be escaped
+    assert (
+        f"a test description of this &lt;a&gt;metadata&lt;/a&gt;"
+        in email["html_content"]
+    )
     assert f"{xlsx_uri}" in email["html_content"]

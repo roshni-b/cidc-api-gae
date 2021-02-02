@@ -165,10 +165,6 @@ def test_enforce_cli_version(empty_app):
 
     match = "upgrade to the most recent version"
 
-    # Reject python-requests requests
-    with pytest.raises(Unauthorized, match=match):
-        test_with_user_agent("python-requests", "")
-
     # Reject too-low cidc-cli clients
     too_low = ["0.1.2", "0.1.0"]
     for v in too_low:
