@@ -1,3 +1,8 @@
 [tool.black]
 exclude = "migrations"
 target-version = ["py36"]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+# configure a webdriver for testing Dash dashboards
+addopts = "--webdriver Chrome --headless"

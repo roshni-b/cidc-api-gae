@@ -322,27 +322,17 @@ def _enforce_cli_version():
         logger.error(f"Unrecognized user-agent string format: {user_agent}")
         raise BadRequest("could not parse User-Agent string")
 
-    # Old CLI versions don't update the User-Agent header, so we (perhaps dangerously)
-    # assume any request coming from the python requests library is from a "very" old
-    # version of the CLI.
-    is_very_old_cli = client == "python-requests"
-
-    # Newer version of the CLI update the User-Agent header to `cidc-cli/{version}`,
+    # The CLI sets the User-Agent header to `cidc-cli/{version}`,
     # so we can assess whether the requester needs to update their CLI.
     is_old_cli = client == "cidc-cli" and version.parse(client_version) < version.parse(
         app.config["MIN_CLI_VERSION"]
     )
 
-    if is_very_old_cli or is_old_cli:
+    if is_old_cli:
         logger.info("cancelling request: detected outdated CLI")
         message = (
             "You appear to be using an out-of-date version of the CIDC CLI. "
             "Please upgrade to the most recent version:\n"
             "    pip3 install --upgrade cidc-cli"
         )
-        if is_very_old_cli:
-            # This is semantically incorrect, but there is no other way
-            # to get the error message to show up for the oldest versions of the CLI
-            raise Unauthorized(message)
-        else:
-            raise PreconditionFailed(message)
+        raise PreconditionFailed(message)
