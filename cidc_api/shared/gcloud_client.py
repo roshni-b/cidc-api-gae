@@ -47,7 +47,7 @@ def _get_storage_client() -> storage.Client:
 def _get_bucket(bucket_name: str) -> storage.Bucket:
     """Get the bucket with name `bucket_name` from GCS."""
     storage_client = _get_storage_client()
-    bucket = storage_client.get_bucket(bucket_name)
+    bucket = storage_client.bucket(bucket_name)
     return bucket
 
 
