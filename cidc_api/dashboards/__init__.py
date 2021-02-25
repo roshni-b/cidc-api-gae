@@ -1,8 +1,8 @@
 from flask import Flask
 
-from .upload_jobs_table import upload_jobs_table
+from .shipments import shipments_dashboard
 
 
 def register_dashboards(app: Flask):
     """Add dashboard endpoints to the provided Flask app instance."""
-    upload_jobs_table.init_app(app)
+    shipments_dashboard.init_app(app)
