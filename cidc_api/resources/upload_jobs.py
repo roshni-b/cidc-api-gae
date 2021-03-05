@@ -37,6 +37,7 @@ from ..models import (
     Permissions,
     CIDCRole,
     Users,
+    ValidationMultiError,
 )
 from ..config.logging import get_logger
 
@@ -468,7 +469,7 @@ def upload_manifest(
         trial = TrialMetadata.patch_manifest(trial.trial_id, md_patch, commit=False)
     except ValidationError as e:
         raise BadRequest(json_validation.format_validation_error(e))
-    except prism.ValidationMultiError as e:
+    except ValidationMultiError as e:
         raise BadRequest({"errors": e.args[0]})
 
     # TODO maybe rely on default session

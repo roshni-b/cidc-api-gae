@@ -572,6 +572,7 @@ def test_upload_manifest_on_validation_multierror(
 
     res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
     assert res.status_code == 400
+    assert res.json["_error"]["message"] == {"errors": ["one error", "another error"]}
 
 
 def test_upload_invalid_manifest(cidc_api, some_file, clean_db, monkeypatch):
