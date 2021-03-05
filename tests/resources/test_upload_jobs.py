@@ -1,5 +1,3 @@
-from cidc_api.models.models import ROLES
-from cidc_api.shared import gcloud_client
 import io
 import logging
 from copy import deepcopy
@@ -16,6 +14,7 @@ from cidc_schemas import prism
 from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME, LocalFileUploadEntry
 from cidc_schemas.template_reader import ValidationError
 
+from cidc_api.shared import gcloud_client
 from cidc_api.config.settings import GOOGLE_UPLOAD_BUCKET
 from cidc_api.resources.upload_jobs import (
     INTAKE_ROLES,
@@ -32,6 +31,8 @@ from cidc_api.models import (
     Permissions,
     DownloadableFiles,
     CIDCRole,
+    ROLES,
+    ValidationMultiError,
 )
 
 from ..utils import make_role, mock_current_user, make_admin, mock_gcloud_client
@@ -549,6 +550,28 @@ def test_upload_manifest_non_existing_trial_id(
     mocks.upload_xlsx.assert_not_called()
     mocks.iter_errors.assert_called_once()
     mocks.prismify.assert_called_once()
+
+
+def test_upload_manifest_on_validation_multierror(
+    cidc_api, some_file, clean_db, monkeypatch
+):
+    """Ensure that manifest uploads catch ValidationMultiErrors"""
+    user_id = setup_trial_and_user(cidc_api, monkeypatch)
+    make_admin(user_id, cidc_api)
+
+    UploadMocks(monkeypatch)
+
+    client = cidc_api.test_client()
+
+    patch_manifest = MagicMock()
+    patch_manifest.side_effect = ValidationMultiError(["one error", "another error"])
+    monkeypatch.setattr(
+        "cidc_api.resources.upload_jobs.TrialMetadata.patch_manifest",
+        staticmethod(patch_manifest),
+    )
+
+    res = client.post(MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", some_file, "pbmc"))
+    assert res.status_code == 400
 
 
 def test_upload_invalid_manifest(cidc_api, some_file, clean_db, monkeypatch):
