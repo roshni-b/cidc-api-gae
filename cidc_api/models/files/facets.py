@@ -198,8 +198,9 @@ assay_facets: Facets = {
             [
                 "Assay Type|Olink|All Olink Files|/olink",
                 "/olink/study_npx.xlsx",
-                "/olink/chip_/assay_npx.xlsx",
-                "/olink/chip_/assay_raw_ct.csv",
+                "/olink/batch_/combined_npx.xlsx",
+                "/olink/batch_/chip_/assay_npx.xlsx",
+                "/olink/batch_/chip_/assay_raw_ct.csv",
             ],
             "Analysis files from the Olink platform.",
         )
