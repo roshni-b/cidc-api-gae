@@ -397,12 +397,17 @@ details_dict = {
         "excel file that has the Normalized Protein eXpression results for the full study",
         "An XML-based Excel file that contains the combined results across the full study in Log2-scaled NPX, or Normalized Protein eXpression (Olink’s arbitrary unit). NPX is calculated from Ct values and data pre-processing (normalization) is performed to minimize both intra- and inter-assay variation.\nNPX data allows users to identify changes for individual protein levels across their sample set, and then use this data to establish protein signatures.",
     ),
-    "/olink/chip_/assay_npx.xlsx": FileDetails(
+    "/olink/batch_/combined_npx.xlsx": FileDetails(
+        "analysis",
+        "excel file that has the Normalized Protein eXpression results for a batch of samples",
+        "An XML-based Excel file that contains the combined results across a batch of samples in Log2-scaled NPX, or Normalized Protein eXpression (Olink’s arbitrary unit). NPX is calculated from Ct values and data pre-processing (normalization) is performed to minimize both intra- and inter-assay variation.\nNPX data allows users to identify changes for individual protein levels across their sample set, and then use this data to establish protein signatures.",
+    ),
+    "/olink/batch_/chip_/assay_npx.xlsx": FileDetails(
         "analysis",
         "excel file that has the Normalized Protein eXpression results for a single chip",
         "An XML-based Excel file that contains the results from a single chip in Log2-scaled NPX, or Normalized Protein eXpression (Olink’s arbitrary unit). Combined with other chips in study_npx.xlsx.\nNPX is calculated from Ct values and data pre-processing (normalization) is performed to minimize both intra- and inter-assay variation.\nNPX data allows users to identify changes for individual protein levels across their sample set, and then use this data to establish protein signatures.",
     ),
-    "/olink/chip_/assay_raw_ct.csv": FileDetails(
+    "/olink/batch_/chip_/assay_raw_ct.csv": FileDetails(
         "source",
         "comma-separated table of Ct values results for a single chip",
         "The comma-separated, plain-text table that contains the raw Ct value results from a single chip. These values are not normalized for intra- or inter-assay variablity, and a high Ct value is related to a low protein concentration.",
