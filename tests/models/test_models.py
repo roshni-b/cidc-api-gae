@@ -31,7 +31,7 @@ from cidc_api.config.settings import (
 from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 from cidc_schemas import prism
 
-from ..utils import make_admin, mock_gcloud_client
+from ..utils import make_admin, make_role, mock_gcloud_client
 
 
 def db_test(test):
@@ -838,6 +838,22 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
         == f"admin-action: {user.email} gave {user.email} the permission wes on {trial.trial_id}"
         for log_record in caplog.records
     )
+    gcloud_client.grant_download_access.assert_called_once()
+
+    # If granting a permission to a "network-viewer", no GCS IAM actions are taken
+    _insert.reset_mock()
+    gcloud_client.grant_download_access.reset_mock()
+    user.role = CIDCRole.NETWORK_VIEWER.value
+    user.update()
+    perm = Permissions(
+        granted_to_user=user.id,
+        trial_id=trial.trial_id,
+        upload_type="cytof",
+        granted_by_user=user.id,
+    )
+    perm.insert()
+    _insert.assert_called_once()
+    gcloud_client.grant_download_access.assert_not_called()
 
 
 @db_test
@@ -886,6 +902,20 @@ def test_permissions_delete(clean_db, monkeypatch, caplog):
     gcloud_client.revoke_download_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
 
+    # If revoking a permission from a "network-viewer", no GCS IAM actions are taken
+    gcloud_client.revoke_download_access.reset_mock()
+    user.role = CIDCRole.NETWORK_VIEWER.value
+    user.update()
+    perm = Permissions(
+        granted_to_user=user.id,
+        trial_id=trial.trial_id,
+        upload_type="cytof",
+        granted_by_user=user.id,
+    )
+    perm.insert()
+    perm.delete(deleted_by=user)
+    gcloud_client.revoke_download_access.assert_not_called()
+
 
 @db_test
 def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
@@ -898,7 +928,7 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
     )
 
     gcloud_client = mock_gcloud_client(monkeypatch)
-    user = Users(email="test@user.com")
+    user = Users(email="test@user.com", role=CIDCRole.NETWORK_VIEWER.value)
     user.insert()
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
@@ -912,10 +942,18 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
             granted_by_user=user.id,
         ).insert()
 
+    # IAM permissions not granted to network viewers
     Permissions.grant_iam_permissions(user=user)
-    gcloud_client.grant_download_access.assert_has_calls(
-        [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
-    )
+    gcloud_client.grant_download_access.assert_not_called()
+
+    # IAM permissions should be granted for any other role
+    user.role = CIDCRole.CIMAC_USER.value
+    Permissions.grant_iam_permissions(user=user)
+    for upload_type in upload_types:
+        assert (
+            call(user.email, trial.trial_id, upload_type)
+            in gcloud_client.grant_download_access.call_args_list
+        )
 
     refresh_intake_access.assert_called_once_with(user.email)
 

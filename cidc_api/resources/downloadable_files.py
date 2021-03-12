@@ -1,3 +1,4 @@
+from cidc_api.models.models import CIDCRole
 from io import BytesIO
 from typing import List
 
@@ -12,6 +13,7 @@ from ..models import (
     DownloadableFileSchema,
     DownloadableFileListSchema,
     Permissions,
+    ROLES,
 )
 from ..shared import gcloud_client
 from ..shared.auth import get_current_user, requires_auth
@@ -125,7 +127,10 @@ def generate_filelist(args):
 
 
 @downloadable_files_bp.route("/download_url", methods=["GET"])
-@requires_auth("download_url")
+@requires_auth(
+    "download_url",
+    allowed_roles=[role for role in ROLES if role != CIDCRole.NETWORK_VIEWER.value],
+)
 @use_args({"id": fields.Str(required=True)}, location="query")
 def get_download_url(args):
     """

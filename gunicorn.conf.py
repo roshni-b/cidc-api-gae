@@ -1,5 +1,6 @@
 """Configuration for the gunicorn WSGI server."""
 import os
+from gunicorn.arbiter import Arbiter
 
 is_dev = os.environ.get("ENV") == "dev"
 
