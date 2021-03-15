@@ -387,6 +387,11 @@ def test_get_download_url(cidc_api, clean_db, monkeypatch):
     assert res.status_code == 200
     assert res.json == test_url
 
+    # network viewers aren't allowed to get download urls
+    make_role(user_id, CIDCRole.NETWORK_VIEWER.value, cidc_api)
+    res = client.get(f"/downloadable_files/download_url?id={file_id}")
+    assert res.status_code == 401
+
 
 def test_log_multiple_errors(caplog):
     """Check that the log_multiple_errors function doesn't throw an error itself."""

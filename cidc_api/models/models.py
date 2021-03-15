@@ -252,6 +252,7 @@ class CIDCRole(EnumBaseClass):
     DEVELOPER = "developer"
     DEVOPS = "devops"
     NCI_BIOBANK_USER = "nci-biobank-user"
+    NETWORK_VIEWER = "network-viewer"
 
 
 ROLES = [role.value for role in CIDCRole]
@@ -414,8 +415,12 @@ class Permissions(CommonColumns):
                 orig=f"`granted_by_user` user must exist, but no user found with id {self.granted_by_user}",
             )
 
+        is_network_viewer = grantee.role == CIDCRole.NETWORK_VIEWER.value
+
         # A user can only have 20 granular permissions at a time, due to GCS constraints
-        if (
+        # (with the exception of Network Viewers, who can't download data from GCS and aren't
+        # subject to this constraint.)
+        if not is_network_viewer and (
             len(Permissions.find_for_user(self.granted_to_user))
             >= GOOGLE_MAX_DOWNLOAD_PERMISSIONS
         ):
@@ -431,6 +436,10 @@ class Permissions(CommonColumns):
 
         # Always commit, because we don't want to grant IAM download unless this insert succeeds.
         super().insert(session=session, commit=True, compute_etag=compute_etag)
+
+        # Don't make any GCS changes if this user doesn't have download access
+        if is_network_viewer:
+            return
 
         try:
             # Grant IAM permission in GCS only if db insert worked
@@ -461,13 +470,15 @@ class Permissions(CommonColumns):
         if deleted_by_user is None:
             raise NoResultFound(f"no user with id {deleted_by}")
 
-        try:
-            # Revoke IAM permission in GCS
-            revoke_download_access(grantee.email, self.trial_id, self.upload_type)
-        except Exception as e:
-            raise IAMException(
-                "IAM revoke failed, and permission db record not removed."
-            ) from e
+        # Only make GCS IAM changes if this user has download access
+        if grantee.role != CIDCRole.NETWORK_VIEWER.value:
+            try:
+                # Revoke IAM permission in GCS
+                revoke_download_access(grantee.email, self.trial_id, self.upload_type)
+            except Exception as e:
+                raise IAMException(
+                    "IAM revoke failed, and permission db record not removed."
+                ) from e
 
         logger.info(
             f"admin-action: {deleted_by_user.email} removed from {grantee.email} the permission {self.upload_type} on {self.trial_id}"
@@ -499,6 +510,10 @@ class Permissions(CommonColumns):
         Grant each of the given `user`'s IAM permissions. If the permissions
         have already been granted, calling this will extend their expiry date.
         """
+        # Don't make any GCS changes if this user doesn't have download access
+        if user.role == CIDCRole.NETWORK_VIEWER.value:
+            return
+
         filter_for_user = lambda q: q.filter(Permissions.granted_to_user == user.id)
         perms = Permissions.list(
             page_size=Permissions.count(session=session, filter_=filter_for_user),
