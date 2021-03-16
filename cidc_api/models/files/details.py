@@ -435,4 +435,10 @@ details_dict = {
     "/tcr/summary_info.csv": FileDetails("miscellaneous", "", ""),
     "/tcr/tra_clone.csv": FileDetails("analysis", "", ""),
     "/tcr/trb_clone.csv": FileDetails("analysis", "", ""),
+    # H&E
+    "/hande/image_file.svs": FileDetails(
+        "source",
+        "stained image file that is the result of an H&E experiment",
+        "An SVS image file stained with hematoxylin and eosin, generated from an H&E experiment.",
+    ),
 }

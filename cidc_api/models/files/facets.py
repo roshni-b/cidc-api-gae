@@ -209,6 +209,7 @@ assay_facets: Facets = {
         "Images": FacetConfig(["/ihc/ihc_image."]),
         "Combined Markers": FacetConfig(["csv|ihc marker combined"]),
     },
+    "H&E": {"Images": FacetConfig(["hande/image_file.svs"], "Stained image files.")},
     "TCR": {
         "Source": FacetConfig(
             [
