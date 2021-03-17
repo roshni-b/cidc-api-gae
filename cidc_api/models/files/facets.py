@@ -21,9 +21,13 @@ Facets = Dict[str, Union[FacetConfig, Dict[str, FacetConfig]]]
 # for looking up files associated with the given subfacet.
 assay_facets: Facets = {
     "Nanostring": {
-        "Source": FacetConfig(["/nanostring/.rcc", "/nanostring/control.rcc"]),
+        "Source": FacetConfig(
+            ["/nanostring/.rcc", "/nanostring/control.rcc"],
+            "direct output from a single NanoString run",
+        ),
         "Data": FacetConfig(
-            ["/nanostring/raw_data.csv", "/nanostring/normalized_data.csv"]
+            ["/nanostring/raw_data.csv", "/nanostring/normalized_data.csv"],
+            "tabulated data across all samples in a batch",
         ),
     },
     "CyTOF": {
