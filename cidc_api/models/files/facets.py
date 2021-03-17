@@ -20,6 +20,12 @@ Facets = Dict[str, Union[FacetConfig, Dict[str, FacetConfig]]]
 # dictionary maps subfacet names to a list of SQLAlchemy filter clause elements
 # for looking up files associated with the given subfacet.
 assay_facets: Facets = {
+    "Nanostring": {
+        "Source": FacetConfig(["/nanostring/.rcc", "/nanostring/control.rcc"]),
+        "Data": FacetConfig(
+            ["/nanostring/raw_data.csv", "/nanostring/normalized_data.csv"]
+        ),
+    },
     "CyTOF": {
         "Source": FacetConfig(
             [
