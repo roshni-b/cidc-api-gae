@@ -345,6 +345,27 @@ details_dict = {
         "the log file produced by the Salmon analysis",
         "A plain-text file containing the time and output of all logging by Salmon during sample analysis.",
     ),
+    # Nanostring
+    "/nanostring/.rcc": FileDetails(
+        "source",
+        "xml-encoded comma-separated direct outputs from a NanoString sample",
+        "A plain-text XML file with comma-separated table elements for the raw NanoString output from a sample.",
+    ),
+    "/nanostring/control.rcc": FileDetails(
+        "source",
+        "xml-encoded csv direct outputs from a NanoString control",
+        "A plain-text XML file with comma-separated table elements for the raw NanoString output from a control.",
+    ),
+    "/nanostring/raw_data.csv": FileDetails(
+        "analysis",
+        "comma-separated values aggregated from the raw RCC files for all samples/controls",
+        "A comma-separated file where each column represents the values pulled from a sample/control's RCC file.",
+    ),
+    "/nanostring/normalized_data.csv": FileDetails(
+        "analysis",
+        "comma-separated values aggregated for all samples/controls and normalized",
+        "A comma-separated file where each column is the normalized values for a sample/control.",
+    ),
     # mIF
     "/mif/roi_/composite_image.tif": FileDetails(
         "source",
