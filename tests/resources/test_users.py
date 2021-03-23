@@ -208,3 +208,34 @@ def test_update_user(cidc_api, clean_db, monkeypatch):
         f"/users/123212321", headers={"If-Match": other_user._etag}, json=patch
     )
     assert res.status_code == 404
+
+
+def test_get_data_access_report(cidc_api, clean_db, monkeypatch):
+    """Check that the data access report endpoint returns data in the expected format"""
+    test_bytes = b"foobar"
+    mock_users = MagicMock()
+    mock_users.get_data_access_report = lambda bio: bio.write(test_bytes)
+    monkeypatch.setattr("cidc_api.resources.users.Users", mock_users)
+
+    user_id, _ = setup_users(cidc_api, monkeypatch, registered=True)
+
+    client = cidc_api.test_client()
+
+    # Non-admins aren't allowed
+    res = client.get("/users/data_access_report")
+    assert res.status_code == 401
+
+    make_admin(user_id, cidc_api)
+
+    # For admins, request returns expected bytes with XLSX content-type
+    res = client.get("/users/data_access_report")
+    assert res.status_code == 200
+    assert res.data == test_bytes
+    assert (
+        "attachment; filename=cidc_dev_data_access_"
+        in res.headers["Content-Disposition"]
+    )
+    assert (
+        res.headers["Content-Type"]
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )

@@ -1,12 +1,11 @@
-import json
+import io
 from datetime import datetime
 
-from flask import Blueprint, jsonify, abort, Request, current_app as app
-from werkzeug.exceptions import Unauthorized, BadRequest
+from flask import Blueprint, send_file
+from werkzeug.exceptions import BadRequest
 
-from ..shared import gcloud_client
 from ..shared.auth import get_current_user, requires_auth
-from ..shared.emails import new_user_registration, confirm_account_approval
+from ..shared.emails import new_user_registration
 from ..shared.rest_utils import (
     with_lookup,
     marshal_response,
@@ -21,6 +20,7 @@ from ..models import (
     IntegrityError,
     Permissions,
 )
+from ..config.settings import ENV
 
 users_bp = Blueprint("users", __name__)
 
@@ -123,3 +123,16 @@ def update_user(user: Users, user_updates: Users):
     user.update(changes=user_updates)
 
     return user
+
+
+@users_bp.route("/data_access_report", methods=["GET"])
+@requires_auth("users_data_access_report", [CIDCRole.ADMIN.value])
+def get_data_access_report():
+    """Generate the user data access report."""
+    buffer = io.BytesIO()
+    Users.get_data_access_report(buffer)
+    buffer.seek(0)
+
+    filename = f"cidc_{ENV}_data_access_{datetime.now().date()}.xlsx"
+
+    return send_file(buffer, as_attachment=True, attachment_filename=filename)
