@@ -439,6 +439,7 @@ def test_endpoint_urls(cidc_api):
         "/users/",
         "/users/self",
         "/users/<int:user>",
+        "/users/data_access_report",
     }
 
     # Check that every endpoint included in the API is expected.

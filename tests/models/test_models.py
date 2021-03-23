@@ -1044,3 +1044,61 @@ def test_user_confirm_approval(clean_db, monkeypatch):
     # The confirmation email should be sent for updates related to account approval
     user.update(changes={"approval_date": datetime.now()})
     confirm_account_approval.assert_called_once_with(user, send_email=True)
+
+
+@db_test
+def test_user_get_data_access_report(clean_db, monkeypatch):
+    """Test that user data access info is collected as expected"""
+    mock_gcloud_client(monkeypatch)
+
+    admin_user = Users(
+        email="admin@email.com",
+        organization="CIDC",
+        approval_date=datetime.now(),
+        role=CIDCRole.ADMIN.value,
+    )
+    admin_user.insert()
+
+    cimac_user = Users(
+        email="cimac@email.com",
+        organization="DFCI",
+        approval_date=datetime.now(),
+        role=CIDCRole.CIMAC_USER.value,
+    )
+    cimac_user.insert()
+
+    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
+    trial.insert()
+
+    upload_types = ["wes", "cytof"]
+
+    # Note that admins don't need permissions to view data,
+    # so we're deliberately issuing unnecessary permissions here.
+    for user in [admin_user, cimac_user]:
+        for t in upload_types:
+            Permissions(
+                granted_to_user=user.id,
+                granted_by_user=admin_user.id,
+                trial_id=trial.trial_id,
+                upload_type=t,
+            ).insert()
+
+    bio = io.BytesIO()
+    result_df = Users.get_data_access_report(bio)
+    bio.seek(0)
+
+    # Make sure bytes were written to the BytesIO instance
+    assert bio.getbuffer().nbytes > 0
+
+    # Make sure report data has expected info
+    assert set(result_df.columns) == set(
+        ["email", "role", "organization", "trial_id", "permissions"]
+    )
+    for user in [admin_user, cimac_user]:
+        user_df = result_df[result_df.email == user.email]
+        assert set([user.role]) == set(user_df.role)
+        assert set([user.organization]) == set(user_df.organization)
+        if user == admin_user:
+            assert set(["*"]) == set(user_df.permissions)
+        else:
+            assert set(["wes,cytof"]) == set(user_df.permissions)

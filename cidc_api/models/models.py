@@ -1,10 +1,13 @@
 import re
+import csv
 import hashlib
 from datetime import datetime, timedelta
 from enum import Enum as EnumBaseClass
 from functools import wraps
-from typing import Dict, Optional, List, Union, Callable, Tuple
+from io import BytesIO
+from typing import BinaryIO, Dict, Optional, List, Union, Callable, Tuple
 
+import pandas as pd
 from flask import current_app as app
 from google.cloud.storage import Blob
 from sqlalchemy import (
@@ -28,6 +31,7 @@ from sqlalchemy import (
     select,
     literal_column,
     not_,
+    literal,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -344,6 +348,54 @@ class Users(CommonColumns):
         if commit:
             session.commit()
         return res
+
+    @staticmethod
+    @with_default_session
+    def get_data_access_report(io: BinaryIO, session: Session) -> pd.DataFrame:
+        """
+        Generate an XLSX containing an overview of trial/assay data access permissions
+        for every active user in the database. The report will have a sheet per protocol
+        identifier, with each sheet containing columns corresponding to a user's email,
+        organization, role, and upload type access permissions.
+
+        Save an excel file to the given file handler, and return the pandas dataframe
+        used to generate that excel file.
+        """
+        user_columns = (Users.email, Users.organization, Users.role)
+
+        query = (
+            session.query(
+                *user_columns,
+                Permissions.trial_id,
+                func.string_agg(Permissions.upload_type, ","),
+            )
+            .filter(
+                Users.id == Permissions.granted_to_user,
+                Users.disabled == False,
+                Users.role != None,
+                # Exclude admins, since perms in the Permissions table don't impact them.
+                # Admin users are handled below.
+                Users.role != CIDCRole.ADMIN.value,
+            )
+            .group_by(Users.id, Permissions.trial_id)
+            .union_all(
+                # Handle admins separately, since they can view all data for all
+                # trials even if they have no permissions assigned to them.
+                session.query(
+                    *user_columns, TrialMetadata.trial_id, literal("*")
+                ).filter(Users.role == CIDCRole.ADMIN.value)
+            )
+        )
+
+        df = pd.DataFrame(
+            query, columns=["email", "organization", "role", "trial_id", "permissions"]
+        )
+
+        with pd.ExcelWriter(io) as writer:
+            for trial_id, trial_group in df.groupby("trial_id"):
+                trial_group.to_excel(writer, sheet_name=trial_id, index=False)
+
+        return df
 
 
 class IAMException(Exception):
