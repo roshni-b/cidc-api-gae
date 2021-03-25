@@ -414,17 +414,17 @@ details_dict = {
         "A file generated in relation to an Olink study.",
     ),
     "/olink/study_npx.xlsx": FileDetails(
-        "analysis",
+        "source",
         "excel file that has the Normalized Protein eXpression results for the full study",
         "An XML-based Excel file that contains the combined results across the full study in Log2-scaled NPX, or Normalized Protein eXpression (Olink’s arbitrary unit). NPX is calculated from Ct values and data pre-processing (normalization) is performed to minimize both intra- and inter-assay variation.\nNPX data allows users to identify changes for individual protein levels across their sample set, and then use this data to establish protein signatures.",
     ),
     "/olink/batch_/combined_npx.xlsx": FileDetails(
-        "analysis",
+        "source",
         "excel file that has the Normalized Protein eXpression results for a batch of samples",
         "An XML-based Excel file that contains the combined results across a batch of samples in Log2-scaled NPX, or Normalized Protein eXpression (Olink’s arbitrary unit). NPX is calculated from Ct values and data pre-processing (normalization) is performed to minimize both intra- and inter-assay variation.\nNPX data allows users to identify changes for individual protein levels across their sample set, and then use this data to establish protein signatures.",
     ),
     "/olink/batch_/chip_/assay_npx.xlsx": FileDetails(
-        "analysis",
+        "source",
         "excel file that has the Normalized Protein eXpression results for a single chip",
         "An XML-based Excel file that contains the results from a single chip in Log2-scaled NPX, or Normalized Protein eXpression (Olink’s arbitrary unit). Combined with other chips in study_npx.xlsx.\nNPX is calculated from Ct values and data pre-processing (normalization) is performed to minimize both intra- and inter-assay variation.\nNPX data allows users to identify changes for individual protein levels across their sample set, and then use this data to establish protein signatures.",
     ),
@@ -432,6 +432,11 @@ details_dict = {
         "source",
         "comma-separated table of Ct values results for a single chip",
         "The comma-separated, plain-text table that contains the raw Ct value results from a single chip. These values are not normalized for intra- or inter-assay variablity, and a high Ct value is related to a low protein concentration.",
+    ),
+    "npx|analysis_ready|csv": FileDetails(
+        "analysis",
+        "comma-separated table of Normalized Protein eXpressions for the entire study",
+        "The comma-separated, plain-text table of Normalized Protein eXpressions for all samples and analytes across the entire study.\nEach row is a sample by CIMAC ID and each column is a sample by (Name, Uniprot ID, *Olink ID*).",
     ),
     # IHC
     "/ihc/ihc_image.": FileDetails(
