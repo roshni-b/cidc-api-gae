@@ -214,7 +214,7 @@ assay_facets: Facets = {
                 "npx|analysis_ready|csv",
             ],
             "Analysis files from the Olink platform.",
-        ),
+        )
     },
     "IHC": {
         "Images": FacetConfig(["/ihc/ihc_image."]),
