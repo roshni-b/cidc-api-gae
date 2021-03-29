@@ -435,8 +435,8 @@ details_dict = {
     ),
     "npx|analysis_ready|csv": FileDetails(
         "analysis",
-        "comma-separated table of Normalized Protein eXpressions for the entire study",
-        "The comma-separated, plain-text table of Normalized Protein eXpressions for all samples and analytes across the entire study.\nEach row is a sample by CIMAC ID and each column is a sample by (Name, Uniprot ID, *Olink ID*).",
+        "comma-separated table of Normalized Protein eXpressions for for all analytes/samples across the entire study",
+        "The comma-separated, plain-text table of Normalized Protein eXpressions for all samples (valid CIMAC ID) and analytes (have Olink ID) across the entire study.\nEach row is a sample by CIMAC ID and each column is a sample by (Name, Uniprot ID, *Olink ID*).\nNote that quality control columns and non-sample rows have been removed.",
     ),
     # IHC
     "/ihc/ihc_image.": FileDetails(
