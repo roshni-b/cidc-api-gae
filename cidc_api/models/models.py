@@ -630,6 +630,10 @@ class TrialMetadata(CommonColumns):
 
     @validates("metadata_json")
     def validate_metadata_json(self, key, metadata_json):
+        return self._validate_metadata_json(metadata_json)
+
+    @staticmethod
+    def _validate_metadata_json(metadata_json):
         errs = trial_metadata_validator.iter_error_messages(metadata_json)
         messages = list(f"'metadata_json': {err}" for err in errs)
         if messages:
@@ -858,6 +862,114 @@ class TrialMetadata(CommonColumns):
             "num_participants": num_participants,
             "num_samples": num_samples,
         }
+
+    @staticmethod
+    @with_default_session
+    def get_summaries(session: Session) -> List[dict]:
+        """
+        Return a list of trial summaries, where each summary has structure like:
+        ```python
+            {
+                "trial_id": ...,
+                "file_size_bytes": ..., # total file size for the trial
+                "wes": ..., # wes sample count
+                "cytof": ..., # cytof sample count
+                ... # other assays
+            }
+        ```
+        NOTE: if the metadata model for any existing assays substantially changes,
+        or if new assays are introduced that don't follow the typical structure 
+        (batches containing sample-level records), then this method will need to
+        be updated to accommodate those changes.
+        """
+        # Compute the total amount of data in bytes stored for each trial
+        files_subquery = """
+            select
+                trial_id,
+                'file_size_bytes' as key,
+                sum(file_size_bytes) as value
+            from
+                downloadable_files
+            group by trial_id
+        """
+
+        # Compute the number of samples associated with each assay type for
+        # assays whose metadata follows the typical structure: an array of batches,
+        # with each batch containing an array of records, where each record
+        # corresponds to a unique sample.
+        generic_assay_subquery = """
+            select
+                trial_id,
+                key as key,
+                sum(jsonb_array_length(batches->'records')) as value
+            from
+                trial_metadata,
+                jsonb_each(metadata_json->'assays') assays,
+                jsonb_array_elements(value) batches
+            where key not in ('olink', 'nanostring')
+            group by trial_id, key
+        """
+
+        # Compute the number of samples associated with nanostring uploads.
+        # Nanostring metadata has a slightly different structure than typical
+        # assays, where each batch has an array of runs, and each run has
+        # an array of sample-level entries.
+        nanostring_subquery = """
+            select
+                trial_id,
+                'nanostring' as key,
+                sum(jsonb_array_length(runs->'samples')) as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{assays,nanostring}') batches,
+                jsonb_array_elements(batches->'runs') runs
+            group by trial_id
+        """
+
+        # Compute the number of samples associated with olink uploads.
+        # Unlike other assays, olink metadata is an object at the top level
+        # rather than an array of batches. This object has a "batches"
+        # property that points to an array of batches, and each batch contains
+        # an array of records. These records are *not* sample-level; rather,
+        # the number of samples corresponding to a given record is stored
+        # like: record["files"]["assay_npx"]["number_of_samples"].
+        olink_subquery = """
+            select
+                trial_id,
+                'olink' as key,
+                sum((records#>'{files,assay_npx,number_of_samples}')::text::integer) as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{assays,olink,batches}') batches,
+                jsonb_array_elements(batches->'records') records
+            group by trial_id
+        """
+
+        # All the subqueries produce the same set of columns, so `UNION`
+        # them together into a single query, aggregating results into
+        # trial-level JSON dictionaries with the shape described in the docstring.
+        combined_query = f"""
+            select
+                jsonb_object_agg(key, value) || jsonb_object_agg('trial_id', trial_id)
+            from (
+                {files_subquery}
+                union
+                {generic_assay_subquery}
+                union
+                {nanostring_subquery}
+                union
+                {olink_subquery}
+            ) q
+            group by trial_id;
+        """
+
+        # Run the query and extract the trial-level summary dictionaries
+        summaries = [summary for (summary,) in session.execute(combined_query)]
+
+        # Shortcut to impute 0 values for assays where trials don't yet have data
+        summaries = pd.DataFrame(summaries).fillna(0).to_dict("records")
+
+        return summaries
 
 
 class UploadJobStatus(EnumBaseClass):
