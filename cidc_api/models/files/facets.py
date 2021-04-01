@@ -236,6 +236,7 @@ assay_facets: Facets = {
             "Data files from TCRseq analysis indicating TRA & TRB clones UMI counts",
         ),
     },
+    "ELISA": {"All Files": FacetConfig(["/elisa/assay.xlsx"])},
 }
 
 clinical_facets: Facets = {

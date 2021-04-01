@@ -945,6 +945,21 @@ class TrialMetadata(CommonColumns):
             group by trial_id
         """
 
+        # Compute the number of samples associated with elisa uploads.
+        # Unlike other assays, elisa metadata is an array of entries, each containing a single data file.
+        # The number of samples corresponding to a given entry is stored like:
+        # entry["assay_xlsx"]["number_of_samples"].
+        elisa_subquery = """
+            select
+                trial_id,
+                'elisa' as key,
+                sum((entry#>'{assay_xlsx,number_of_samples}')::text::integer) as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{assays,elisa}') entry
+            group by trial_id
+        """
+
         # All the subqueries produce the same set of columns, so `UNION`
         # them together into a single query, aggregating results into
         # trial-level JSON dictionaries with the shape described in the docstring.
@@ -959,6 +974,8 @@ class TrialMetadata(CommonColumns):
                 {nanostring_subquery}
                 union
                 {olink_subquery}
+                union
+                {elisa_subquery}
             ) q
             group by trial_id;
         """

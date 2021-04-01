@@ -467,4 +467,10 @@ details_dict = {
         "stained image file that is the result of an H&E experiment",
         "An SVS image file stained with hematoxylin and eosin, generated from an H&E experiment.",
     ),
+    # ELISA
+    "/elisa/assay.xlsx": FileDetails(
+        "source",
+        "xlsx file of measured values where rows are samples and columns are antigens",
+        "An XML-based Excel file that contains the results of a single run in arbitrary units. Each row is a sample, though not all have CIMAC IDs, and each column is an antigen.",
+    ),
 }
