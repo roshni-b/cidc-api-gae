@@ -1,3 +1,4 @@
+from unittest.mock import MagicMock
 from datetime import datetime
 from typing import Tuple
 
@@ -9,6 +10,7 @@ from cidc_api.models import (
     Permissions,
     CIDCRole,
     DownloadableFiles,
+    ROLES,
 )
 
 from ..utils import mock_current_user, make_role, mock_gcloud_client
@@ -316,3 +318,30 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
 
         with cidc_api.app_context():
             trial = TrialMetadata.find_by_id(trial.id)
+
+
+def test_get_trial_metadata_summaries(cidc_api, clean_db, monkeypatch):
+    """Check that the /trial_metadata/summaries endpoint behaves as expected"""
+    user_id = setup_user(cidc_api, monkeypatch)
+
+    monkeypatch.setattr(
+        TrialMetadata, "_validate_metadata_json", staticmethod(lambda m: m)
+    )
+
+    result = {"some": "json"}
+    TrialMetadataMock = MagicMock()
+    TrialMetadataMock.get_summaries.return_value = result
+    monkeypatch.setattr(
+        "cidc_api.resources.trial_metadata.TrialMetadata", TrialMetadataMock
+    )
+
+    client = cidc_api.test_client()
+
+    for role in ROLES:
+        make_role(user_id, role, cidc_api)
+        res = client.get("/trial_metadata/summaries")
+        if role in trial_modifier_roles:
+            assert res.status_code == 200
+            assert res.json == result
+        else:
+            assert res.status_code == 401
