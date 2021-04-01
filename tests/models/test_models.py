@@ -1,3 +1,4 @@
+from cidc_api.models.schemas import TrialMetadataListSchema
 import io
 import logging
 from copy import deepcopy
@@ -364,6 +365,86 @@ def test_partial_patch_trial_metadata(clean_db):
 
     # patch it - should be no error/exception
     TrialMetadata._patch_trial_metadata(TRIAL_ID, metadata_patch)
+
+
+@db_test
+def test_trial_metadata_get_summaries(clean_db, monkeypatch):
+    """Check that trial data summaries are computed as expected"""
+    monkeypatch.setattr(
+        TrialMetadata, "_validate_metadata_json", staticmethod(lambda m: m)
+    )
+
+    # Add some trials
+    records = [{"fake": "record"}]
+    tm1 = {
+        **METADATA,
+        # deliberately override METADATA['protocol_identifier']
+        "protocol_identifier": "tm1",
+        "assays": {
+            "wes": [{"records": records * 3}],
+            "rna": [{"records": records * 2}],
+            "nanostring": [
+                {"runs": [{"samples": records * 2}]},
+                {"runs": [{"samples": records * 1}]},
+            ],
+        },
+    }
+    tm2 = {
+        **METADATA,
+        # deliberately override METADATA['protocol_identifier']
+        "protocol_identifier": "tm1",
+        "assays": {
+            "cytof": [{"records": records * 4}],
+            "olink": {
+                "batches": [
+                    {"records": [{"number_of_samples": 2}, {"number_of_samples": 3}]},
+                    {"records": [{"number_of_samples": 5}]},
+                ]
+            },
+        },
+    }
+    TrialMetadata(trial_id="tm1", metadata_json=tm1).insert()
+    TrialMetadata(trial_id="tm2", metadata_json=tm2).insert()
+
+    # Add some files
+    for i, (tid, fs) in enumerate([("tm1", 3), ("tm1", 2), ("tm2", 4), ("tm2", 6)]):
+        DownloadableFiles(
+            trial_id=tid,
+            file_size_bytes=fs,
+            object_url=str(i),
+            facet_group="",
+            uploaded_timestamp=datetime.now(),
+            file_name="",
+            data_format="",
+            upload_type="",
+        ).insert()
+
+    sorter = lambda s: s["trial_id"]
+    received = sorted(TrialMetadata.get_summaries(), key=sorter)
+    expected = sorted(
+        [
+            {
+                "cytof": 4.0,
+                "olink": 0.0,
+                "trial_id": "tm2",
+                "file_size_bytes": 10,
+                "rna": 0.0,
+                "wes": 0.0,
+                "nanostring": 0.0,
+            },
+            {
+                "cytof": 0.0,
+                "olink": 0.0,
+                "trial_id": "tm1",
+                "file_size_bytes": 5,
+                "rna": 2.0,
+                "wes": 3.0,
+                "nanostring": 3.0,
+            },
+        ],
+        key=sorter,
+    )
+    assert received == expected
 
 
 @db_test
@@ -1101,4 +1182,4 @@ def test_user_get_data_access_report(clean_db, monkeypatch):
         if user == admin_user:
             assert set(["*"]) == set(user_df.permissions)
         else:
-            assert set(["wes,cytof"]) == set(user_df.permissions)
+            assert set(user_df.permissions).issubset(["wes,cytof", "cytof,wes"])
