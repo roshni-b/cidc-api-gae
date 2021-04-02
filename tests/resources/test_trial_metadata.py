@@ -97,9 +97,9 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
         # for trial 1
         for id, (type, facet_group) in enumerate(
             [
-                ("cytof", "/cytof/spike_in.fcs"),
-                ("cytof", "/cytof/source_.fcs"),
-                ("cytof", "/cytof_analysis/profiling.csv"),
+                ("cytof_10021", "/cytof_10021/spike_in.fcs"),
+                ("cytof_10021", "/cytof_10021/source_.fcs"),
+                ("cytof_10021", "/cytof_10021_analysis/profiling.csv"),
                 ("wes", "/wes/r1_.fastq.gz"),
             ]
         ):

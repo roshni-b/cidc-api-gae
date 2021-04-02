@@ -6,6 +6,7 @@ from cidc_api.models.files.facets import (
     build_trial_facets,
     build_data_category_facets,
     get_facet_groups_for_paths,
+    FacetConfig,
 )
 
 
@@ -22,15 +23,20 @@ def test_build_data_category_facets():
         assert config["count"] == count
 
     facet_specs = build_data_category_facets(data_category_file_counts)
+    print(facet_specs)
     for value in facet_specs.values():
         if isinstance(value, dict):
             for value_key, subvalue in value.items():
-                assert isinstance(subvalue, list)
-                for config in subvalue:
-                    if value_key == "WES" and config["label"] == "Source":
-                        assert_expected_facet_structure(config, wes_count)
-                    else:
-                        assert_expected_facet_structure(config)
+                assert isinstance(subvalue, (list, dict))
+                if isinstance(subvalue, list):
+                    for config in subvalue:
+                        if value_key == "WES" and config["label"] == "Source":
+                            assert_expected_facet_structure(config, wes_count)
+                        else:
+                            assert_expected_facet_structure(config)
+                elif isinstance(subvalue, dict):
+                    assert_expected_facet_structure(subvalue)
+
         else:
             assert isinstance(value, list)
             for config in value:

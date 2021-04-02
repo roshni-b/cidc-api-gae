@@ -20,7 +20,7 @@ def test_info_analyses(cidc_api):
     client = cidc_api.test_client()
     res = client.get(f"{INFO_ENDPOINT}/analyses")
     assert type(res.json) == list
-    assert "cytof_analysis" in res.json
+    assert "cytof_10021_analysis" in res.json
 
 
 def test_info_manifests(cidc_api):

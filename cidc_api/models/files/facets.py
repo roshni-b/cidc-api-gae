@@ -33,18 +33,25 @@ assay_facets: Facets = {
     "CyTOF": {
         "Source": FacetConfig(
             [
-                "/cytof/spike_in.fcs",
-                "/cytof/source_.fcs",
-                "/cytof/normalized_and_debarcoded.fcs",
-                "/cytof/processed.fcs",
+                "/cytof_10021/spike_in.fcs",
+                "/cytof_10021/source_.fcs",
+                "/cytof_10021/normalized_and_debarcoded.fcs",
+                "/cytof_10021/processed.fcs",
+                "/cytof_e4412/spike_in.fcs",
+                "/cytof_e4412/source_.fcs",
+                "/cytof_e4412/normalized_and_debarcoded.fcs",
+                "/cytof_e4412/processed.fcs",
             ],
             "De-barcoded, concatenated and de-multipled fcs files",
         ),
         "Cell Counts": FacetConfig(
             [
-                "/cytof_analysis/cell_counts_assignment.csv",
-                "/cytof_analysis/cell_counts_compartment.csv",
-                "/cytof_analysis/cell_counts_profiling.csv",
+                "/cytof_10021_analysis/cell_counts_assignment.csv",
+                "/cytof_10021_analysis/cell_counts_compartment.csv",
+                "/cytof_10021_analysis/cell_counts_profiling.csv",
+                "/cytof_e4412_analysis/cell_counts_assignment.csv",
+                "/cytof_e4412_analysis/cell_counts_compartment.csv",
+                "/cytof_e4412_analysis/cell_counts_profiling.csv",
             ],
             "Summary cell count expression of individual cell types in each sample",
         ),
@@ -57,18 +64,26 @@ assay_facets: Facets = {
             "Summary cell counts, combined across all samples in the trial",
         ),
         "Labeled Source": FacetConfig(
-            ["/cytof_analysis/source.fcs"],
+            ["/cytof_10021_analysis/source.fcs", "/cytof_e4412_analysis/source.fcs"],
             "FCS file with enumerations for compartment, assignment and profiling cell labels",
         ),
         "Analysis Results": FacetConfig(
-            ["/cytof_analysis/reports.zip", "/cytof_analysis/analysis.zip"],
+            [
+                "/cytof_10021_analysis/reports.zip",
+                "/cytof_10021_analysis/analysis.zip",
+                "/cytof_e4412_analysis/reports.zip",
+                "/cytof_e4412_analysis/analysis.zip",
+            ],
             "Results package from Astrolabe analysis",
         ),
         "Key": FacetConfig(
             [
-                "/cytof_analysis/assignment.csv",
-                "/cytof_analysis/compartment.csv",
-                "/cytof_analysis/profiling.csv",
+                "/cytof_10021_analysis/assignment.csv",
+                "/cytof_10021_analysis/compartment.csv",
+                "/cytof_10021_analysis/profiling.csv",
+                "/cytof_e4412_analysis/assignment.csv",
+                "/cytof_e4412_analysis/compartment.csv",
+                "/cytof_e4412_analysis/profiling.csv",
             ],
             "Keys for mapping from respective enumeration indices to the cell labels",
         ),
@@ -204,17 +219,18 @@ assay_facets: Facets = {
         ),
     },
     "Olink": {
-        "All Olink Files": FacetConfig(
+        "Run-Level": FacetConfig(
             [
-                "Assay Type|Olink|All Olink Files|/olink",
-                "/olink/study_npx.xlsx",
-                "/olink/batch_/combined_npx.xlsx",
                 "/olink/batch_/chip_/assay_npx.xlsx",
                 "/olink/batch_/chip_/assay_raw_ct.csv",
-                "npx|analysis_ready|csv",
+                "/olink/batch_/combined_npx.xlsx",
             ],
-            "Analysis files from the Olink platform.",
-        )
+            "Analysis files for a single run on the Olink platform.",
+        ),
+        "Study-Level": FacetConfig(
+            ["/olink/study_npx.xlsx", "npx|analysis_ready|csv"],
+            "Analysis files for all samples run on the Olink platform in the trial.",
+        ),
     },
     "IHC": {
         "Images": FacetConfig(["/ihc/ihc_image."]),
@@ -236,6 +252,7 @@ assay_facets: Facets = {
             "Data files from TCRseq analysis indicating TRA & TRB clones UMI counts",
         ),
     },
+    "ELISA": {"Data": FacetConfig(["/elisa/assay.xlsx"])},
 }
 
 clinical_facets: Facets = {
@@ -247,9 +264,12 @@ clinical_facets: Facets = {
     ),
 }
 
+analysis_ready_facets = {"Olink": FacetConfig(["npx|analysis_ready|csv"])}
+
 facets_dict: Dict[str, Facets] = {
     "Assay Type": assay_facets,
     "Clinical Type": clinical_facets,
+    "Analysis Ready": analysis_ready_facets,
 }
 
 
@@ -261,14 +281,18 @@ def _build_facet_groups_to_names():
 
     facet_names = {}
 
-    for facet_name, subfacet in assay_facets.items():
-        for subfacet_name, subsubfacet in subfacet.items():
-            for facet_group in subsubfacet.match_clauses:
-                facet_names[facet_group] = path_to_name([facet_name, subfacet_name])
+    for facet_type, facet_dict in facets_dict.items():
+        for facet_name, subfacet in facet_dict.items():
+            if isinstance(subfacet, dict):
+                for subfacet_name, subsubfacet in subfacet.items():
+                    for facet_group in subsubfacet.match_clauses:
+                        facet_names[facet_group] = path_to_name(
+                            [facet_name, subfacet_name]
+                        )
 
-    for facet_name, subfacet in clinical_facets.items():
-        for facet_group in subfacet.match_clauses:
-            facet_names[facet_group] = path_to_name([facet_name])
+            elif isinstance(subfacet, FacetConfig):
+                for facet_group in subfacet.match_clauses:
+                    facet_names[facet_group] = path_to_name([facet_name])
 
     return facet_names
 
@@ -288,7 +312,7 @@ def build_data_category_facets(data_category_file_counts: Dict[str, int]):
     }
     ```
     """
-    extract_facet_info = lambda facet_config_list, prefix: [
+    extract_facet_info = lambda facet_config_entries, prefix: [
         {
             "label": label,
             "description": config.description,
@@ -296,7 +320,7 @@ def build_data_category_facets(data_category_file_counts: Dict[str, int]):
                 FACET_NAME_DELIM.join([prefix, label]) if prefix else label, 0
             ),
         }
-        for label, config in facet_config_list.items()
+        for label, config in facet_config_entries.items()
     ]
 
     return {
@@ -305,6 +329,7 @@ def build_data_category_facets(data_category_file_counts: Dict[str, int]):
             for assay_name, subfacets in assay_facets.items()
         },
         "Clinical Type": extract_facet_info(clinical_facets, None),
+        "Analysis Ready": extract_facet_info(analysis_ready_facets, None),
     }
 
 
