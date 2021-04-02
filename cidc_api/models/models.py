@@ -890,7 +890,6 @@ class TrialMetadata(CommonColumns):
                 sum(file_size_bytes) as value
             from
                 downloadable_files
-            group by trial_id
         """
 
         # Compute the number of samples associated with each assay type for
@@ -900,14 +899,17 @@ class TrialMetadata(CommonColumns):
         generic_assay_subquery = """
             select
                 trial_id,
-                key as key,
+                case
+                    when key = 'cytof_10021' then 'cytof'
+                    when key = 'hande' then 'h&e'
+                    else key
+                end as key,
                 sum(jsonb_array_length(batches->'records')) as value
             from
                 trial_metadata,
                 jsonb_each(metadata_json->'assays') assays,
                 jsonb_array_elements(value) batches
-            where key not in ('olink', 'nanostring', 'elisa', 'cytof_10021', 'cytof_e4412')
-            group by trial_id, key
+            where key not in ('olink', 'nanostring', 'elisa', 'cytof_e4412')
         """
 
         # Compute the number of samples associated with nanostring uploads.
@@ -923,7 +925,6 @@ class TrialMetadata(CommonColumns):
                 trial_metadata,
                 jsonb_array_elements(metadata_json#>'{assays,nanostring}') batches,
                 jsonb_array_elements(batches->'runs') runs
-            group by trial_id
         """
 
         # Compute the number of samples associated with olink uploads.
@@ -960,20 +961,19 @@ class TrialMetadata(CommonColumns):
             group by trial_id
         """
 
-        # Compute the number of samples associated with nanostring uploads.
-        # Nanostring metadata has a slightly different structure than typical
-        # assays, where each batch has an array of runs, and each run has
+        # Compute the number of samples associated with cytof_4412 uploads.
+        # cytof_e4412 metadata has a slightly different structure than typical
+        # assays, where each batch has an array of participants, and each participant has
         # an array of sample-level entries.
-        cytof_subquery = """
+        cytof_e4412_subquery = """
             select
                 trial_id,
                 'cytof' as key,
-                sum(jsonb_array_length(batches->'records')) as value
+                sum(jsonb_array_length(participant->'samples')) as value
             from
                 trial_metadata,
-                jsonb_each(metadata_json->'assays') assays,
-                jsonb_array_elements(value) batches
-            where key in ('cytof_10021', 'cytof_e4412')
+                jsonb_array_elements(metadata_json#>'{assays,cytof_e4412}') batch,
+                jsonb_array_elements(batches#>'participants') participant
             group by trial_id
         """
 
@@ -984,18 +984,25 @@ class TrialMetadata(CommonColumns):
             select
                 jsonb_object_agg(key, value) || jsonb_object_agg('trial_id', trial_id)
             from (
-                {files_subquery}
-                union
-                {generic_assay_subquery}
-                union
-                {nanostring_subquery}
-                union
-                {olink_subquery}
-                union
-                {elisa_subquery}
-                union
-                {cytof_subquery}
-            ) q
+                select
+                    trial_id,
+                    key,
+                    sum(value) as value
+                from (
+                    {files_subquery}
+                    union
+                    {generic_assay_subquery}
+                    union
+                    {nanostring_subquery}
+                    union
+                    {olink_subquery}
+                    union
+                    {elisa_subquery}
+                    union
+                    {cytof_e4412_subquery}
+                ) q1
+                group by trial_id, key
+            ) q2
             group by trial_id;
         """
 

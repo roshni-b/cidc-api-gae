@@ -219,7 +219,7 @@ assay_facets: Facets = {
         ),
     },
     "Olink": {
-        "Run Level": FacetConfig(
+        "Run-Level": FacetConfig(
             [
                 "/olink/batch_/chip_/assay_npx.xlsx",
                 "/olink/batch_/chip_/assay_raw_ct.csv",
@@ -227,7 +227,7 @@ assay_facets: Facets = {
             ],
             "Analysis files for a single run on the Olink platform.",
         ),
-        "Study Level": FacetConfig(
+        "Study-Level": FacetConfig(
             ["/olink/study_npx.xlsx", "npx|analysis_ready|csv"],
             "Analysis files for all samples run on the Olink platform in the trial.",
         ),
@@ -312,7 +312,7 @@ def build_data_category_facets(data_category_file_counts: Dict[str, int]):
     }
     ```
     """
-    extract_facet_info = lambda facet_config_list, prefix: [
+    extract_facet_info = lambda facet_config_entries, prefix: [
         {
             "label": label,
             "description": config.description,
@@ -320,14 +320,12 @@ def build_data_category_facets(data_category_file_counts: Dict[str, int]):
                 FACET_NAME_DELIM.join([prefix, label]) if prefix else label, 0
             ),
         }
-        for label, config in facet_config_list.items()
+        for label, config in facet_config_entries.items()
     ]
 
     return {
         "Assay Type": {
             assay_name: extract_facet_info(subfacets, assay_name)
-            if isinstance(subfacets, dict)
-            else extract_facet_info({assay_name: subfacets}, None)[0]
             for assay_name, subfacets in assay_facets.items()
         },
         "Clinical Type": extract_facet_info(clinical_facets, None),
