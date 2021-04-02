@@ -383,6 +383,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "assays": {
             "wes": [{"records": records * 3}],
             "rna": [{"records": records * 2}],
+            "elisa": [{"assay_xlsx": {"number_of_samples": 7}}],
             "nanostring": [
                 {"runs": [{"samples": records * 2}]},
                 {"runs": [{"samples": records * 1}]},
@@ -394,7 +395,8 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         # deliberately override METADATA['protocol_identifier']
         "protocol_identifier": "tm1",
         "assays": {
-            "cytof": [{"records": records * 4}],
+            "cytof_10021": [{"records": records * 2}],
+            "cytof_e4412": [{"records": records * 2}],
             "olink": {
                 "batches": [
                     {"records": [{"number_of_samples": 2}, {"number_of_samples": 3}]},
@@ -431,8 +433,10 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "rna": 0.0,
                 "wes": 0.0,
                 "nanostring": 0.0,
+                "elisa": 0.0,
             },
             {
+                "elisa": 7.0,
                 "cytof": 0.0,
                 "olink": 0.0,
                 "trial_id": "tm1",

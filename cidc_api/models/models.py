@@ -906,7 +906,7 @@ class TrialMetadata(CommonColumns):
                 trial_metadata,
                 jsonb_each(metadata_json->'assays') assays,
                 jsonb_array_elements(value) batches
-            where key not in ('olink', 'nanostring')
+            where key not in ('olink', 'nanostring', 'elisa', 'cytof_10021', 'cytof_e4412')
             group by trial_id, key
         """
 
@@ -960,6 +960,23 @@ class TrialMetadata(CommonColumns):
             group by trial_id
         """
 
+        # Compute the number of samples associated with nanostring uploads.
+        # Nanostring metadata has a slightly different structure than typical
+        # assays, where each batch has an array of runs, and each run has
+        # an array of sample-level entries.
+        cytof_subquery = """
+            select
+                trial_id,
+                'cytof' as key,
+                sum(jsonb_array_length(batches->'records')) as value
+            from
+                trial_metadata,
+                jsonb_each(metadata_json->'assays') assays,
+                jsonb_array_elements(value) batches
+            where key in ('cytof_10021', 'cytof_e4412')
+            group by trial_id
+        """
+
         # All the subqueries produce the same set of columns, so `UNION`
         # them together into a single query, aggregating results into
         # trial-level JSON dictionaries with the shape described in the docstring.
@@ -976,6 +993,8 @@ class TrialMetadata(CommonColumns):
                 {olink_subquery}
                 union
                 {elisa_subquery}
+                union
+                {cytof_subquery}
             ) q
             group by trial_id;
         """
