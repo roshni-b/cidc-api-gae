@@ -887,7 +887,7 @@ class TrialMetadata(CommonColumns):
             select
                 trial_id,
                 'file_size_bytes' as key,
-                sum(file_size_bytes) as value
+                file_size_bytes as value
             from
                 downloadable_files
         """
@@ -904,7 +904,7 @@ class TrialMetadata(CommonColumns):
                     when key = 'hande' then 'h&e'
                     else key
                 end as key,
-                sum(jsonb_array_length(batches->'records')) as value
+                jsonb_array_length(batches->'records') as value
             from
                 trial_metadata,
                 jsonb_each(metadata_json->'assays') assays,
@@ -920,7 +920,7 @@ class TrialMetadata(CommonColumns):
             select
                 trial_id,
                 'nanostring' as key,
-                sum(jsonb_array_length(runs->'samples')) as value
+                jsonb_array_length(runs->'samples') as value
             from
                 trial_metadata,
                 jsonb_array_elements(metadata_json#>'{assays,nanostring}') batches,
@@ -938,12 +938,11 @@ class TrialMetadata(CommonColumns):
             select
                 trial_id,
                 'olink' as key,
-                sum((records#>'{files,assay_npx,number_of_samples}')::text::integer) as value
+                (records#>'{files,assay_npx,number_of_samples}')::text::integer as value
             from
                 trial_metadata,
                 jsonb_array_elements(metadata_json#>'{assays,olink,batches}') batches,
                 jsonb_array_elements(batches->'records') records
-            group by trial_id
         """
 
         # Compute the number of samples associated with elisa uploads.
@@ -954,11 +953,10 @@ class TrialMetadata(CommonColumns):
             select
                 trial_id,
                 'elisa' as key,
-                sum((entry#>'{assay_xlsx,number_of_samples}')::text::integer) as value
+                (entry#>'{assay_xlsx,number_of_samples}')::text::integer as value
             from
                 trial_metadata,
                 jsonb_array_elements(metadata_json#>'{assays,elisa}') entry
-            group by trial_id
         """
 
         # Compute the number of samples associated with cytof_4412 uploads.
@@ -969,12 +967,11 @@ class TrialMetadata(CommonColumns):
             select
                 trial_id,
                 'cytof' as key,
-                sum(jsonb_array_length(participant->'samples')) as value
+                jsonb_array_length(participant->'samples') as value
             from
                 trial_metadata,
-                jsonb_array_elements(metadata_json#>'{assays,cytof_e4412}') batch,
-                jsonb_array_elements(batches#>'participants') participant
-            group by trial_id
+                jsonb_array_elements(metadata_json#>'{assays,cytof_e4412}') batches,
+                jsonb_array_elements(batches->'participants') participant
         """
 
         # All the subqueries produce the same set of columns, so `UNION`

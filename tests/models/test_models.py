@@ -388,6 +388,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 {"runs": [{"samples": records * 2}]},
                 {"runs": [{"samples": records * 1}]},
             ],
+            "hande": [{"records": records * 5}],
         },
     }
     tm2 = {
@@ -396,7 +397,9 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "protocol_identifier": "tm1",
         "assays": {
             "cytof_10021": [{"records": records * 2}],
-            "cytof_e4412": [{"records": records * 2}],
+            "cytof_e4412": [
+                {"participants": [{"samples": records * 2}, {"samples": records}]}
+            ],
             "olink": {
                 "batches": [
                     {"records": [{"number_of_samples": 2}, {"number_of_samples": 3}]},
@@ -426,7 +429,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
     expected = sorted(
         [
             {
-                "cytof": 4.0,
+                "cytof": 5.0,
                 "olink": 0.0,
                 "trial_id": "tm2",
                 "file_size_bytes": 10,
@@ -434,6 +437,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "wes": 0.0,
                 "nanostring": 0.0,
                 "elisa": 0.0,
+                "h&e": 0.0,
             },
             {
                 "elisa": 7.0,
@@ -444,6 +448,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "rna": 2.0,
                 "wes": 3.0,
                 "nanostring": 3.0,
+                "h&e": 5.0,
             },
         ],
         key=sorter,
