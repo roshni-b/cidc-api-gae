@@ -23,17 +23,18 @@ def test_build_data_category_facets():
         assert config["count"] == count
 
     facet_specs = build_data_category_facets(data_category_file_counts)
+    print(facet_specs)
     for value in facet_specs.values():
         if isinstance(value, dict):
             for value_key, subvalue in value.items():
-                assert isinstance(subvalue, (list, FacetConfig))
-                if isinstance(subvalue, dict):
+                assert isinstance(subvalue, (list, dict))
+                if isinstance(subvalue, list):
                     for config in subvalue:
                         if value_key == "WES" and config["label"] == "Source":
                             assert_expected_facet_structure(config, wes_count)
                         else:
                             assert_expected_facet_structure(config)
-                elif isinstance(subvalue, FacetConfig):
+                elif isinstance(subvalue, dict):
                     assert_expected_facet_structure(subvalue)
 
         else:
