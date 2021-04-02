@@ -995,7 +995,7 @@ class TrialMetadata(CommonColumns):
                     {olink_subquery}
                     union
                     {elisa_subquery}
-                    union
+                    union all
                     {cytof_e4412_subquery}
                 ) q1
                 group by trial_id, key
