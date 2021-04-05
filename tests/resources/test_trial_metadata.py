@@ -97,9 +97,9 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
         # for trial 1
         for id, (type, facet_group) in enumerate(
             [
-                ("cytof", "/cytof/spike_in.fcs"),
-                ("cytof", "/cytof/source_.fcs"),
-                ("cytof", "/cytof_analysis/profiling.csv"),
+                ("cytof_10021", "/cytof_10021/spike_in.fcs"),
+                ("cytof_10021", "/cytof_10021/source_.fcs"),
+                ("cytof_10021", "/cytof_10021_analysis/profiling.csv"),
                 ("wes", "/wes/r1_.fastq.gz"),
             ]
         ):
@@ -337,11 +337,9 @@ def test_get_trial_metadata_summaries(cidc_api, clean_db, monkeypatch):
 
     client = cidc_api.test_client()
 
+    # Available to users of all roles
     for role in ROLES:
         make_role(user_id, role, cidc_api)
         res = client.get("/trial_metadata/summaries")
-        if role in trial_modifier_roles:
-            assert res.status_code == 200
-            assert res.json == result
-        else:
-            assert res.status_code == 401
+        assert res.status_code == 200
+        assert res.json == result

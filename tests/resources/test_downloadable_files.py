@@ -62,7 +62,9 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
         f"{trial_id}/wes/.../reads_123.bam", "wes", "/wes/r1_.fastq.gz"
     )
     cytof_file = make_file(
-        f"{trial_id}/cytof/.../analysis.zip", "cytof", "/cytof_analysis/analysis.zip"
+        f"{trial_id}/cytof/.../analysis.zip",
+        "cytof",
+        "/cytof_10021_analysis/analysis.zip",
     )
 
     with cidc_api.app_context():
@@ -306,6 +308,8 @@ def test_get_filter_facets(cidc_api, clean_db, monkeypatch):
 
     def check_facet_counts(facets, wes_count=0, cytof_count=0):
         for facet, subfacets in facets["Assay Type"].items():
+            if not isinstance(subfacets, list):
+                subfacets = [subfacets]
             for subfacet in subfacets:
                 if facet == "WES" and subfacet["label"] == "Source":
                     assert subfacet["count"] == wes_count

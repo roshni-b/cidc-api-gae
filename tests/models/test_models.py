@@ -383,10 +383,12 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "assays": {
             "wes": [{"records": records * 3}],
             "rna": [{"records": records * 2}],
+            "elisa": [{"assay_xlsx": {"number_of_samples": 7}}],
             "nanostring": [
                 {"runs": [{"samples": records * 2}]},
                 {"runs": [{"samples": records * 1}]},
             ],
+            "hande": [{"records": records * 5}],
         },
     }
     tm2 = {
@@ -394,7 +396,10 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         # deliberately override METADATA['protocol_identifier']
         "protocol_identifier": "tm1",
         "assays": {
-            "cytof": [{"records": records * 4}],
+            "cytof_10021": [{"records": records * 2}],
+            "cytof_e4412": [
+                {"participants": [{"samples": records * 2}, {"samples": records}]}
+            ],
             "olink": {
                 "batches": [
                     {"records": [{"number_of_samples": 2}, {"number_of_samples": 3}]},
@@ -424,15 +429,18 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
     expected = sorted(
         [
             {
-                "cytof": 4.0,
+                "cytof": 5.0,
                 "olink": 0.0,
                 "trial_id": "tm2",
                 "file_size_bytes": 10,
                 "rna": 0.0,
                 "wes": 0.0,
                 "nanostring": 0.0,
+                "elisa": 0.0,
+                "h&e": 0.0,
             },
             {
+                "elisa": 7.0,
                 "cytof": 0.0,
                 "olink": 0.0,
                 "trial_id": "tm1",
@@ -440,6 +448,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "rna": 2.0,
                 "wes": 3.0,
                 "nanostring": 3.0,
+                "h&e": 5.0,
             },
         ],
         key=sorter,
