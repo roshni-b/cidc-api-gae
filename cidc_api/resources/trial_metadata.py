@@ -68,7 +68,7 @@ def create_trial_metadata(trial):
 
 
 @trial_metadata_bp.route("/summaries", methods=["GET"])
-@requires_auth("trial_metadata_summaries", trial_modifier_roles)
+@requires_auth("trial_metadata_summaries")
 def get_trial_metadata_summaries():
     """Get summaries of all trial metadata in the database"""
     return jsonify(TrialMetadata.get_summaries())
