@@ -19,6 +19,7 @@ Facets = Dict[str, Union[FacetConfig, Dict[str, FacetConfig]]]
 # mapping an assay names to assay subfacet dictionaries. An assay subfacet
 # dictionary maps subfacet names to a list of SQLAlchemy filter clause elements
 # for looking up files associated with the given subfacet.
+# "{protocol identifier}/clinical/{file name}.xlsx"
 assay_facets: Facets = {
     "Nanostring": {
         "Source": FacetConfig(
@@ -261,6 +262,10 @@ clinical_facets: Facets = {
     ),
     "Samples Info": FacetConfig(
         ["Clinical Type|Samples Info|samples.csv", "csv|samples info"]
+    ),
+    "Clinical data": FacetConfig(
+        ["/clinical/.xlsx"],
+        "XLSX files containing clinical data supplied by the trial team. ",
     ),
 }
 
