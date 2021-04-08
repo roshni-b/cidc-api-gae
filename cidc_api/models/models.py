@@ -793,27 +793,124 @@ class TrialMetadata(CommonColumns):
         return unprism.unprism_samples(trial.metadata_json)
 
     file_bundle: Optional[FileBundle]
+    num_participants: Optional[int]
+    num_samples: Optional[int]
+
+    @classmethod
+    def _pruned_metadata_json(cls):
+        """
+        Builds a modified metadata_json column selector with the "assays", "analysis",
+        "shipments", and "participants" properties removed.
+        """
+        return (
+            func.jsonb_set(
+                cls.metadata_json, "{participants}", literal_column("'[]'::jsonb")
+            )
+            .op("-")("assays")
+            .op("-")("analysis")
+            .op("-")("shipments")
+            .label("metadata_json")
+        )
 
     @classmethod
     @with_default_session
-    def list_with_file_bundles(cls, session: Session, **pagination_args):
-        """List `TrialMetadata` records from the database along with their `file_bundle`s."""
-        # Build a query that collects trials along with all files for that trial
-        file_bundle_query = DownloadableFiles.build_file_bundle_query()
-        query = session.query(cls, file_bundle_query.c.file_bundle).join(
-            file_bundle_query, TrialMetadata.trial_id == file_bundle_query.c.trial_id
+    def _num_participants_query(cls, session: Session):
+        """
+        Build a query that counts the number of participants in each trial
+        """
+        participant_counts = func.jsonb_array_length(
+            cls.metadata_json.op("->")("participants")
+        ).alias("np")
+        return (
+            session.query(
+                cls.trial_id, func.sum(literal_column("np")).label("num_participants")
+            )
+            .select_from(cls, participant_counts)
+            .group_by(cls.trial_id)
         )
 
-        # Apply pagination options to the query
+    @classmethod
+    @with_default_session
+    def _num_samples_query(cls, session: Session):
+        """
+        Build a query that counts the number of samples in each trial
+        """
+        participants_array = func.jsonb_array_elements(
+            cls.metadata_json.op("->")("participants")
+        ).alias("ps")
+        sample_counts = func.jsonb_array_length(
+            literal_column("ps").op("->")("samples")
+        ).alias("ns")
+        return (
+            session.query(
+                cls.trial_id, func.sum(literal_column("ns")).label("num_samples")
+            )
+            .select_from(cls, participants_array, sample_counts)
+            .group_by(cls.trial_id)
+        )
+
+    @classmethod
+    @with_default_session
+    def list(
+        cls,
+        session: Session,
+        include_file_bundles: bool = False,
+        include_counts: bool = False,
+        **pagination_args,
+    ):
+        """
+        List `TrialMetadata` records from the database with pruned metadata JSON blobs.
+        If `file_bundle=True`, include the file bundle associated with each trial.
+        If `include_counts=True`, include participant and sample counts for this trial.
+
+        NOTE: use find_by_id or find_by_trial_id to get the full metadata JSON blob
+        for a particular trial. We don't want lists of trials to include full metadata,
+        because doing so can require loading lots of data at once.
+        """
+        # Instead of selecting the raw "metadata_json" for each trial,
+        # select a pruned version with data-heavy attributes removed.]
+        columns = [c for c in cls.__table__.c if c.name != "metadata_json"]
+        columns.append(cls._pruned_metadata_json())
+
+        # Add other subqueries/columns to include in the query
+        subqueries = []
+        if include_file_bundles:
+            file_bundle_query = DownloadableFiles.build_file_bundle_query()
+            columns.append(file_bundle_query.c.file_bundle)
+            subqueries.append(file_bundle_query)
+        if include_counts:
+            participant_counts = cls._num_participants_query().subquery()
+            sample_counts = cls._num_samples_query().subquery()
+            columns.extend(
+                [
+                    participant_counts.c.num_participants,
+                    case(
+                        [(participant_counts.c.num_participants == 0, 0)],
+                        else_=sample_counts.c.num_samples,
+                    ).label("num_samples"),
+                ]
+            )
+            subqueries.extend([participant_counts, sample_counts])
+
+        # Combine all query components
+        query = session.query(*columns)
+        for subquery in subqueries:
+            # Each subquery will have a trial_id column and one record per trial id
+            query = query.outerjoin(subquery, cls.trial_id == subquery.c.trial_id)
         query = cls._add_pagination_filters(query, **pagination_args)
 
-        # Run the query
-        query_results = query.all()
+        trials = []
+        for result in query:
+            # result._asdict gives us a dictionary mapping column names
+            # to values for this result
+            result_dict = result._asdict()
 
-        # Add file bundles to the `file_bundle` attribute on each trial record
-        trials: List[TrialMetadata] = []
-        for trial, file_bundle in query_results:
-            trial.file_bundle = file_bundle
+            # Create a TrialMetadata model instance from the result
+            trial = cls()
+            for column, value in result_dict.items():
+                if value is not None:
+                    setattr(trial, column, value)
+
             trials.append(trial)
 
         return trials
