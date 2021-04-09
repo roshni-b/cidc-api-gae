@@ -93,6 +93,8 @@ class TrialMetadataSchema(BaseSchema):
         model = TrialMetadata
 
     file_bundle = fields.Dict(dump_only=True)
+    num_participants = fields.Int(dump_only=True)
+    num_samples = fields.Int(dump_only=True)
 
 
 TrialMetadataListSchema = _make_list_schema(TrialMetadataSchema())

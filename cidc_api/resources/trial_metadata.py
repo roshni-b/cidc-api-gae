@@ -27,8 +27,10 @@ trial_modifier_roles = [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]
 
 
 bundle_argname = "include_file_bundles"
+counts_argname = "include_counts"
 trial_filter_schema = {
     bundle_argname: fields.Bool(),
+    counts_argname: fields.Bool(),
     "trial_ids": fields.DelimitedList(fields.Str),
 }
 
@@ -40,14 +42,12 @@ trial_filter_schema = {
 def list_trial_metadata(args, pagination_args):
     """List all trial metadata records."""
     user = get_current_user()
-    include_file_bundles = args.pop(bundle_argname, False)
-    filter_ = TrialMetadata.build_trial_filter(user=user, **args)
-    if include_file_bundles:
-        trials = TrialMetadata.list_with_file_bundles(
-            filter_=filter_, **pagination_args
-        )
-    else:
-        trials = TrialMetadata.list(filter_=filter_, **pagination_args)
+    trials = TrialMetadata.list(
+        include_file_bundles=args.pop(bundle_argname, False),
+        include_counts=args.pop(counts_argname, False),
+        filter_=TrialMetadata.build_trial_filter(user=user, **args),
+        **pagination_args,
+    )
     count = TrialMetadata.count()
 
     return {"_items": trials, "_meta": {"total": count}}
