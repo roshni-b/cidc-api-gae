@@ -39,7 +39,7 @@ def get_manifest_samples(trial_id: str, manifest_id: str) -> Optional[pd.DataFra
 
     # Normalize the participant-sample metadata to get a dataframe of samples
     metadata_patch = upload_record.metadata_patch
-    samples_df = pd.json_normalize(
+    samples_df = pd.io.json.json_normalize(
         metadata_patch["participants"], "samples", meta=["cohort_name"]
     )
     samples_df["assay_type"] = metadata_patch["shipments"][0]["assay_type"]
