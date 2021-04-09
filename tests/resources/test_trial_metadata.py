@@ -36,9 +36,29 @@ def setup_trial_metadata(cidc_api, user_id=None) -> Tuple[int, int]:
         trial_id = f"test-trial-{n}"
         metadata_json = {
             "protocol_identifier": trial_id,
-            "participants": [],
-            "allowed_collection_event_names": [],
+            "participants": []
+            if n == 2
+            else [
+                {
+                    "cimac_participant_id": "CTTTPP1",
+                    "participant_id": "x",
+                    "samples": [
+                        {
+                            "cimac_id": f"CTTTPP1SS.01",
+                            "sample_location": "",
+                            "type_of_primary_container": "Other",
+                            "type_of_sample": "Other",
+                            "collection_event_name": "",
+                            "parent_sample_id": "",
+                        }
+                    ],
+                }
+            ],
+            "allowed_collection_event_names": [""],
             "allowed_cohort_names": [],
+            "assays": {},
+            "analysis": {},
+            "shipments": [],
         }
         trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
         trial.insert()
@@ -75,6 +95,8 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
     assert len(res.json["_items"]) == 1
     assert res.json["_items"][0]["id"] == trial_1
     assert "file_bundle" not in res.json["_items"][0]
+    assert "num_participants" not in res.json["_items"][0]
+    assert "num_samples" not in res.json["_items"][0]
 
     # Allowed users can get all trials
     for role in trial_modifier_roles:
@@ -87,10 +109,13 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
         assert set([t["id"] for t in res.json["_items"]]) == set([trial_1, trial_2])
         assert not any("file_bundle" in t for t in res.json["_items"])
 
-    # Listing trials with file bundles excludes trials with no files
+    # Passing the URL param include_file_bundles=true works on an
+    # as-available basis - if trials have no files associated with them,
+    # they won't have a file bundle in the response
     res = client.get("/trial_metadata?include_file_bundles=true")
     assert res.status_code == 200
-    assert len(res.json["_items"]) == 0
+    assert len(res.json["_items"]) == 2
+    assert "file_bundle" not in res.json["_items"][0]
 
     # Add some files...
     with cidc_api.app_context():
@@ -133,9 +158,9 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
                 uploaded_timestamp=datetime.now(),
             ).insert()
 
-    # Listing trials with populated file bundles (also, check that sorting works)
+    # Listing trials with populated file bundles (also, check that sorting and counting participants/samples works)
     res = client.get(
-        "/trial_metadata?include_file_bundles=true&sort_field=trial_id&sort_direction=asc"
+        "/trial_metadata?include_file_bundles=true&include_counts=true&sort_field=trial_id&sort_direction=asc"
     )
     assert res.status_code == 200
     assert len(res.json["_items"]) == 2
@@ -144,8 +169,12 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
     assert set(trial_json_1["file_bundle"]["CyTOF"]["source"]) == set([0, 1])
     assert trial_json_1["file_bundle"]["CyTOF"]["analysis"] == [2]
     assert trial_json_1["file_bundle"]["WES"]["source"] == [3]
+    assert trial_json_1["num_samples"] == 1
+    assert trial_json_1["num_participants"] == 1
     assert trial_json_2["file_bundle"]["Participants Info"]["clinical"] == [4]
     assert trial_json_2["file_bundle"]["mIF"]["analysis"] == [5]
+    assert trial_json_2["num_samples"] == 0
+    assert trial_json_2["num_participants"] == 0
 
     # Filtering by trial id seems to work when file bundles are included
     res = client.get("/trial_metadata?include_file_bundles=true&trial_ids=test-trial-1")
@@ -157,6 +186,15 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
     res = client.get("/trial_metadata?include_file_bundles=true&page_size=1")
     assert res.status_code == 200
     assert len(res.json["_items"]) == 1
+
+    # Metadata blobs are pruned as expected
+    res = client.get("/trial_metadata")
+    assert res.status_code == 200
+    metadata_json = res.json["_items"][0]["metadata_json"]
+    assert metadata_json["participants"] == []
+    assert metadata_json.get("assays") is None
+    assert metadata_json.get("analysis") is None
+    assert metadata_json.get("shipments") is None
 
 
 def test_get_trial(cidc_api, clean_db, monkeypatch):
@@ -297,13 +335,15 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
             json={"metadata_json": bad_trial_json["metadata_json"]},
         )
         assert res.status_code == 422
-        print(res.json["_error"]["message"])
         assert res.json["_error"]["message"] == bad_trial_error_message
 
         # An admin can successfully update a trial
         new_metadata_json = {
             **trial.metadata_json,
-            "allowed_collection_event_names": ["bazz"],
+            "allowed_collection_event_names": [
+                *trial.metadata_json["allowed_collection_event_names"],
+                "bazz",
+            ],
             "allowed_cohort_names": ["buzz"],
         }
         res = client.patch(
