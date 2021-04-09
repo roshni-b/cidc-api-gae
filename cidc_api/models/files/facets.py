@@ -264,7 +264,7 @@ clinical_facets: Facets = {
     ),
     "Clinical data": FacetConfig(
         ["/clinical/.xlsx"],
-        "XLSX files containing clinical data supplied by the trial team. ",
+        "XLSX files containing clinical data supplied by the trial team.",
     ),
 }
 
