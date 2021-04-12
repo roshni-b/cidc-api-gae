@@ -142,7 +142,7 @@ def test_migrations_failures(use_upload_jobs_table, monkeypatch):
     select_assay_uploads.side_effect = None
     run_metadata_migration(mock_migration, use_upload_jobs_table)
     # Ensure we updated trials as expected
-    assert trial_record.metadata_json == new_metadata
+    trial_record.safely_set_metadata_json.assert_called_with(new_metadata)
     # Ensure we updated files as expected
     assert df_record.object_url == "b_new_url"
     assert df_record.additional_metadata == {"some_assay.extra": "metadata"}

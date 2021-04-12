@@ -3,6 +3,7 @@
 This file doesn't contain tests for methods that don't directly correspond
 to data resources, like endpoints that handle upload-related functionality.
 """
+from copy import deepcopy
 from unittest.mock import MagicMock
 from datetime import datetime
 from dateutil.parser import parse as parse_date
@@ -262,7 +263,14 @@ def test_resource_and_item_get(resource, config, cidc_api, clean_db, monkeypatch
     if "GET" in config["allowed_methods"]:
         assert response.status_code == 200
         item = response.json["_items"][0]
-        assert_dict_contains(item, config["json"])
+        # trial_metadata is an exception - it prunes metadata_json
+        # on resource-level GET queries
+        if resource == "trial_metadata":
+            json = deepcopy(config["json"])
+            json["metadata_json"].pop("participants")
+            assert_dict_contains(item, json)
+        else:
+            assert_dict_contains(item, config["json"])
         if config.get("pagination"):
             assert response.json["_meta"]["total"] == 3
         elif resource == "users":
