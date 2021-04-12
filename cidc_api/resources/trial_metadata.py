@@ -60,7 +60,8 @@ def list_trial_metadata(args, pagination_args):
 def create_trial_metadata(trial):
     """Create a new trial metadata record."""
     try:
-        trial.insert()
+        # metadata was already validated by unmarshal_request
+        trial.insert(validate_metadata=False)
     except IntegrityError as e:
         raise BadRequest(str(e.orig))
 
@@ -92,6 +93,15 @@ def get_trial_metadata_by_trial_id(trial):
 @marshal_response(trial_metadata_schema, 200)
 def update_trial_metadata_by_trial_id(trial, trial_updates):
     """Update an existing trial metadata record by trial_id."""
+    # Block updates to protected metadata JSON fields
+    metadata_updates = trial_updates.get("metadata_json")
+    if trial.metadata_json or metadata_updates:
+        for field in TrialMetadata.PROTECTED_FIELDS:
+            if trial.metadata_json.get(field) != metadata_updates.get(field):
+                raise BadRequest(
+                    f"updating metadata_json['{field}'] via the API is prohibited"
+                )
+
     trial.update(changes=trial_updates)
 
     return trial

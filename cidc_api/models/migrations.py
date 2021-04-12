@@ -165,7 +165,7 @@ def _run_metadata_migration(
         migration = metadata_migration(trial.metadata_json)
 
         # Update the trial metadata object
-        trial.metadata_json = migration.result
+        trial.safely_set_metadata_json(migration.result)
 
         # A workaround fix for JSON field modifications not being tracked
         # by SQLalchemy for some reason. Using MutableDict.as_mutable(JSON)

@@ -6,6 +6,7 @@ from enum import Enum as EnumBaseClass
 from functools import wraps
 from io import BytesIO
 from typing import BinaryIO, Dict, Optional, List, Union, Callable, Tuple
+from jsonschema.validators import validate
 
 import pandas as pd
 from flask import current_app as app
@@ -246,6 +247,10 @@ class CommonColumns(BaseModel):  # type: ignore
         distinct_query = filtered_query.distinct()
 
         return list(v[0] for v in distinct_query)
+
+    def validate(self):
+        """Run custom validations on attributes set on this instance."""
+        pass
 
 
 class CIDCRole(EnumBaseClass):
@@ -628,17 +633,26 @@ class TrialMetadata(CommonColumns):
     # Create a GIN index on the metadata JSON blobs
     _metadata_idx = Index("metadata_idx", metadata_json, postgresql_using="gin")
 
-    @validates("metadata_json")
-    def validate_metadata_json(self, key, metadata_json):
-        return self._validate_metadata_json(metadata_json)
-
     @staticmethod
-    def _validate_metadata_json(metadata_json):
+    def validate_metadata_json(metadata_json: dict) -> dict:
         errs = trial_metadata_validator.iter_error_messages(metadata_json)
         messages = list(f"'metadata_json': {err}" for err in errs)
         if messages:
             raise ValidationMultiError(messages)
         return metadata_json
+
+    def validate(self):
+        """Run custom validations on attributes set on this instance."""
+        if self.metadata_json is not None:
+            self.validate_metadata_json(self.metadata_json)
+
+    def safely_set_metadata_json(self, metadata_json: dict):
+        """
+        Validate `metadata_json` according to the trial metadata schema before setting
+        the `TrialMetadata.metadata_json` attribute.
+        """
+        self.validate_metadata_json(metadata_json)
+        self.metadata_json = metadata_json
 
     @staticmethod
     @with_default_session
@@ -715,7 +729,7 @@ class TrialMetadata(CommonColumns):
         if errs:
             raise ValidationMultiError(errs)
         # Save updates to trial record
-        trial.metadata_json = updated_metadata
+        trial.safely_set_metadata_json(updated_metadata)
         trial._etag = make_etag([trial.trial_id, updated_metadata])
 
         session.add(trial)
@@ -796,21 +810,26 @@ class TrialMetadata(CommonColumns):
     num_participants: Optional[int]
     num_samples: Optional[int]
 
+    # List of metadata JSON fields that should not be sent to clients
+    # in queries that list trial metadata, because they may contain a lot
+    # of data.
+    PRUNED_FIELDS = ["participants", "assays", "analysis", "shipments"]
+
+    # List of metadata JSON fields that should only be settable via
+    # manifest and metadata templates.
+    PROTECTED_FIELDS = [*PRUNED_FIELDS, "protocol_identifier"]
+
     @classmethod
     def _pruned_metadata_json(cls):
         """
         Builds a modified metadata_json column selector with the "assays", "analysis",
         "shipments", and "participants" properties removed.
         """
-        return (
-            func.jsonb_set(
-                cls.metadata_json, "{participants}", literal_column("'[]'::jsonb")
-            )
-            .op("-")("assays")
-            .op("-")("analysis")
-            .op("-")("shipments")
-            .label("metadata_json")
-        )
+        query = cls.metadata_json
+        for field in cls.PRUNED_FIELDS:
+            query = query.op("-")(field)
+
+        return query.label("metadata_json")
 
     @classmethod
     @with_default_session
@@ -914,6 +933,45 @@ class TrialMetadata(CommonColumns):
             trials.append(trial)
 
         return trials
+
+    @with_default_session
+    def insert(
+        self,
+        session: Session,
+        commit: bool = True,
+        compute_etag: bool = True,
+        validate_metadata: bool = True,
+    ):
+        """Add the current instance to the session. Skip JSON metadata validation validate_metadata=False."""
+        if self.metadata_json is not None and validate_metadata:
+            self.validate_metadata_json(self.metadata_json)
+
+        return super().insert(session=session, commit=commit, compute_etag=compute_etag)
+
+    @with_default_session
+    def update(
+        self,
+        session: Session,
+        changes: dict = None,
+        commit: bool = True,
+        validate_metadata: bool = True,
+    ):
+        """
+        Update the current TrialMetadata instance if it exists. `changes` should be
+        a dictionary mapping column names to updated values. Skip JSON metadata validation 
+        if validate_metadata=False.
+        """
+        # Since commit=False, this will only apply changes to the in-memory
+        # TrialMetadata instance, not the corresponding db record
+        super().update(session=session, changes=changes, commit=False)
+
+        # metadata_json was possibly updated in above method call,
+        # so check that it's still valid if validate_metadata=True
+        if validate_metadata:
+            self.validate_metadata_json(self.metadata_json)
+
+        if commit:
+            session.commit()
 
     @classmethod
     def build_trial_filter(cls, user: Users, trial_ids: List[str] = []):

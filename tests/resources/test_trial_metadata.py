@@ -191,7 +191,7 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
     res = client.get("/trial_metadata")
     assert res.status_code == 200
     metadata_json = res.json["_items"][0]["metadata_json"]
-    assert metadata_json["participants"] == []
+    assert metadata_json.get("participants") is None
     assert metadata_json.get("assays") is None
     assert metadata_json.get("analysis") is None
     assert metadata_json.get("shipments") is None
@@ -337,6 +337,26 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
         assert res.status_code == 422
         assert res.json["_error"]["message"] == bad_trial_error_message
 
+        # No protected fields on a trial's metadata can be updated
+        for field in TrialMetadata.PROTECTED_FIELDS:
+            metadata = trial.metadata_json.copy()
+            if field == "participants":
+                metadata["participants"] = []
+            elif field == "protocol_identifier":
+                metadata["protocol_identifier"] = "uh oh!"
+            else:
+                metadata.pop(field)
+            res = client.patch(
+                f"/trial_metadata/{trial.trial_id}",
+                headers={"If-Match": trial._etag},
+                json={"metadata_json": metadata},
+            )
+            assert res.status_code == 400
+            assert (
+                res.json["_error"]["message"]
+                == f"updating metadata_json['{field}'] via the API is prohibited"
+            )
+
         # An admin can successfully update a trial
         new_metadata_json = {
             **trial.metadata_json,
@@ -363,10 +383,6 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
 def test_get_trial_metadata_summaries(cidc_api, clean_db, monkeypatch):
     """Check that the /trial_metadata/summaries endpoint behaves as expected"""
     user_id = setup_user(cidc_api, monkeypatch)
-
-    monkeypatch.setattr(
-        TrialMetadata, "_validate_metadata_json", staticmethod(lambda m: m)
-    )
 
     result = {"some": "json"}
     TrialMetadataMock = MagicMock()
