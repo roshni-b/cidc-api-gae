@@ -51,11 +51,9 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
             trial_id=trial_id,
             upload_type=upload_type,
             object_url=object_url,
-            data_format="",
             facet_group=facet_group,
             uploaded_timestamp=datetime.now(),
             file_size_bytes=0,
-            file_name="",
         )
 
     wes_file = make_file(
@@ -194,11 +192,9 @@ def test_get_related_files(cidc_api, clean_db, monkeypatch):
             trial_id=trial_id,
             upload_type="wes",
             object_url=object_url,
-            data_format="",
             facet_group="/wes/r2_.fastq.gz",  # this is what makes this file "related"
             uploaded_timestamp=datetime.now(),
             file_size_bytes=0,
-            file_name="",
         ).insert()
 
     # Non-admins get 401s when requesting related files they don't have permission to view
@@ -287,8 +283,6 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
                 trial_id=trial_id,
                 object_url=str(id),
                 upload_type="",
-                file_name="",
-                data_format="",
                 file_size_bytes=0,
                 uploaded_timestamp=datetime.now(),
             ).insert()
