@@ -262,6 +262,10 @@ clinical_facets: Facets = {
     "Samples Info": FacetConfig(
         ["Clinical Type|Samples Info|samples.csv", "csv|samples info"]
     ),
+    "Clinical data": FacetConfig(
+        ["/clinical/.xlsx"],
+        "XLSX files containing clinical data supplied by the trial team.",
+    ),
 }
 
 analysis_ready_facets = {"Olink": FacetConfig(["npx|analysis_ready|csv"])}
