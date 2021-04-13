@@ -83,9 +83,7 @@ downloadable_files = {
     "json": {
         "id": TEST_RECORD_ID,
         "trial_id": trial_metadata["json"]["trial_id"],
-        "file_name": "",
         "upload_type": "rna",
-        "data_format": "",
         "object_url": f'{trial_metadata["json"]["trial_id"]}/rna/.../r1_123.fastq.gz',
         "facet_group": "/rna/reads_.bam",
         "uploaded_timestamp": datetime.now(),
