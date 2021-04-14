@@ -1027,6 +1027,7 @@ class TrialMetadata(CommonColumns):
             {
                 "trial_id": ...,
                 "file_size_bytes": ..., # total file size for the trial
+                "clinical_participants": ..., # number of participants with clinical data
                 "wes": ..., # wes sample count
                 "cytof": ..., # cytof sample count
                 ... # other assays
@@ -1045,6 +1046,22 @@ class TrialMetadata(CommonColumns):
                 file_size_bytes as value
             from
                 downloadable_files
+        """
+
+        # Count how many participants have associated clinical data. The same
+        # participant may appear in multiple clinical data files, so deduplicate
+        # participants before counting them.
+        clinical_subquery = """
+            select
+                trial_id,
+                'clinical_participants' as key,
+                count(distinct participants) as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{clinical_data,records}') as records,
+                jsonb_array_elements(records#>'{clinical_file,participants}') as participants
+            group by
+                trial_id
         """
 
         # Compute the number of samples associated with each assay type for
@@ -1142,6 +1159,8 @@ class TrialMetadata(CommonColumns):
                     sum(value) as value
                 from (
                     {files_subquery}
+                    union
+                    {clinical_subquery}
                     union
                     {generic_assay_subquery}
                     union
