@@ -463,8 +463,6 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
             object_url=str(i),
             facet_group="",
             uploaded_timestamp=datetime.now(),
-            file_name="",
-            data_format="",
             upload_type="",
         ).insert()
 
@@ -650,12 +648,10 @@ def test_create_downloadable_file_from_metadata(clean_db, monkeypatch):
     # fake file metadata
     file_metadata = {
         "object_url": "10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
-        "file_name": "wes_forward.fastq",
         "file_size_bytes": 1,
         "md5_hash": "hash1234",
         "uploaded_timestamp": datetime.now(),
         "foo": "bar",  # unsupported column - should be filtered
-        "data_format": "FASTQ",
     }
     additional_metadata = {"more": "info"}
 
@@ -682,7 +678,7 @@ def test_create_downloadable_file_from_metadata(clean_db, monkeypatch):
     # Check that we created the file
     new_file = (
         clean_db.query(DownloadableFiles)
-        .filter_by(file_name=file_metadata["file_name"])
+        .filter_by(object_url=file_metadata["object_url"])
         .first()
     )
     assert new_file
@@ -690,14 +686,6 @@ def test_create_downloadable_file_from_metadata(clean_db, monkeypatch):
     for k in file_metadata.keys():
         assert getattr(new_file, k) == file_metadata[k]
     assert new_file.additional_metadata == additional_metadata
-
-    # Throw in an additional capitalization test
-    assert (
-        new_file
-        == clean_db.query(DownloadableFiles)
-        .filter_by(data_format="fAsTq", upload_type="WeS")
-        .one()
-    )
 
     # Check that no artifact upload event was published
     publisher.assert_not_called()
@@ -720,11 +708,9 @@ def test_downloadable_files_additional_metadata_default(clean_db):
         trial_id=TRIAL_ID,
         upload_type="wes",
         object_url="10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
-        file_name="wes_forward.fastq",
         file_size_bytes=1,
         md5_hash="hash1234",
         uploaded_timestamp=datetime.now(),
-        data_format="FASTQ",
     )
 
     # Check no value passed
@@ -831,8 +817,6 @@ def test_downloadable_files_get_related_files(clean_db):
             trial_id=TRIAL_ID,
             uploaded_timestamp=datetime.now(),
             file_size_bytes=0,
-            file_name="",
-            data_format="",
             object_url=facet_group,  # just filler, not relevant to the test
             upload_type="",
         )

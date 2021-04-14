@@ -1416,12 +1416,10 @@ class DownloadableFiles(CommonColumns):
         ),
     )
 
-    file_name = Column(String, nullable=False)
     file_size_bytes = Column(BigInteger, nullable=False)
     uploaded_timestamp = Column(DateTime, nullable=False)
     facet_group = Column(String, nullable=False)
     # NOTE: this column actually has type CITEXT.
-    data_format = Column(String, nullable=False)
     additional_metadata = Column(JSONB, nullable=False)
     # TODO rename upload_type, because we store manifests in there too.
     # NOTE: this column actually has type CITEXT.
@@ -1438,6 +1436,14 @@ class DownloadableFiles(CommonColumns):
     # Visualization data columns (should always be nullable)
     clustergrammer = Column(JSONB, nullable=True)
     ihc_combined_plot = Column(JSONB, nullable=True)
+
+    # This fields are optional and should eventually be removed:
+    # - object_url should be used instead of file_name
+    # - some combo of object_url/data_category/upload_type should be
+    #   used instead of data_format.
+    # The columns are left as optional for short term backwards compatibility.
+    file_name = Column(String, nullable=True)
+    data_format = Column(String, nullable=True)
 
     FILE_EXT_REGEX = r"\.([^./]*(\.gz)?)$"
 
