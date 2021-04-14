@@ -262,7 +262,7 @@ clinical_facets: Facets = {
     "Samples Info": FacetConfig(
         ["Clinical Type|Samples Info|samples.csv", "csv|samples info"]
     ),
-    "Clinical data": FacetConfig(
+    "Clinical Data": FacetConfig(
         ["/clinical/.xlsx"],
         "XLSX files containing clinical data supplied by the trial team.",
     ),
