@@ -424,6 +424,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         **METADATA,
         # deliberately override METADATA['protocol_identifier']
         "protocol_identifier": "tm1",
+        "participants": [{"samples": [1, 2]}, {"samples": [3]}],
         "assays": {
             "wes": [{"records": records * 3}],
             "rna": [{"records": records * 2}],
@@ -446,6 +447,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         **METADATA,
         # deliberately override METADATA['protocol_identifier']
         "protocol_identifier": "tm1",
+        "participants": [{"samples": []}],
         "assays": {
             "cytof_10021": [{"records": records * 2}],
             "cytof_e4412": [
@@ -482,6 +484,8 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "olink": 0.0,
                 "trial_id": "tm2",
                 "file_size_bytes": 10,
+                "total_participants": 1,
+                "total_samples": 0,
                 "clinical_participants": 0,
                 "rna": 0.0,
                 "wes": 0.0,
@@ -495,6 +499,8 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "olink": 0.0,
                 "trial_id": "tm1",
                 "file_size_bytes": 5,
+                "total_participants": 2.0,
+                "total_samples": 3.0,
                 "clinical_participants": 7.0,
                 "rna": 2.0,
                 "wes": 3.0,
