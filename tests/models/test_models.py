@@ -434,6 +434,13 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
             ],
             "hande": [{"records": records * 5}],
         },
+        "clinical_data": {
+            "records": [
+                {"clinical_file": {"participants": ["a", "b", "c"]}},
+                {"clinical_file": {"participants": ["a", "b", "d"]}},
+                {"clinical_file": {"participants": ["e", "f", "g"]}},
+            ]
+        },
     }
     tm2 = {
         **METADATA,
@@ -475,6 +482,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "olink": 0.0,
                 "trial_id": "tm2",
                 "file_size_bytes": 10,
+                "clinical_participants": 0,
                 "rna": 0.0,
                 "wes": 0.0,
                 "nanostring": 0.0,
@@ -487,6 +495,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "olink": 0.0,
                 "trial_id": "tm1",
                 "file_size_bytes": 5,
+                "clinical_participants": 7.0,
                 "rna": 2.0,
                 "wes": 3.0,
                 "nanostring": 3.0,
