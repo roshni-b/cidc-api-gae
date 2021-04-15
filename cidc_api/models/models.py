@@ -1038,6 +1038,29 @@ class TrialMetadata(CommonColumns):
         (batches containing sample-level records), then this method will need to
         be updated to accommodate those changes.
         """
+        # Compute the total count of participants for each trial
+        participants_subquery = """
+            select
+                trial_id,
+                'total_participants' as key,
+                jsonb_array_length(metadata_json->'participants') as value
+            from
+                trial_metadata
+        """
+
+        # Compute the total  count of samples for each trial
+        samples_subquery = """
+            select
+                trial_id,
+                'total_samples' as key,
+                sum(num_samples) as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json->'participants') participants,
+                jsonb_array_length(participants->'samples') num_samples
+            group by trial_id
+        """
+
         # Compute the total amount of data in bytes stored for each trial
         files_subquery = """
             select
@@ -1158,6 +1181,10 @@ class TrialMetadata(CommonColumns):
                     key,
                     sum(value) as value
                 from (
+                    {participants_subquery}
+                    union
+                    {samples_subquery}
+                    union
                     {files_subquery}
                     union
                     {clinical_subquery}
