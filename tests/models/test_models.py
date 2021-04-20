@@ -428,6 +428,11 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "assays": {
             "wes": [{"records": records * 3}],
             "rna": [{"records": records * 2}],
+            "mif": [
+                {"records": records * 3},
+                {"records": records},
+                {"records": records},
+            ],
             "elisa": [{"assay_xlsx": {"number_of_samples": 7}}],
             "nanostring": [
                 {"runs": [{"samples": records * 2}]},
@@ -449,14 +454,29 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "protocol_identifier": "tm1",
         "participants": [{"samples": []}],
         "assays": {
-            "cytof_10021": [{"records": records * 2}],
+            "cytof_10021": [
+                {"records": records * 2},
+                {"records": records * 2},
+                {"records": records},
+            ],
             "cytof_e4412": [
-                {"participants": [{"samples": records * 2}, {"samples": records}]}
+                {
+                    "participants": [
+                        {"samples": records},
+                        {"samples": records},
+                        {"samples": records * 2},
+                    ]
+                }
             ],
             "olink": {
                 "batches": [
-                    {"records": [{"number_of_samples": 2}, {"number_of_samples": 3}]},
-                    {"records": [{"number_of_samples": 5}]},
+                    {
+                        "records": [
+                            {"files": {"assay_npx": {"number_of_samples": 2}}},
+                            {"files": {"assay_npx": {"number_of_samples": 3}}},
+                        ]
+                    },
+                    {"records": [{"files": {"assay_npx": {"number_of_samples": 3}}}]},
                 ]
             },
         },
@@ -480,18 +500,19 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
     expected = sorted(
         [
             {
-                "cytof": 5.0,
-                "olink": 0.0,
+                "cytof": 9.0,
+                "olink": 8.0,
                 "trial_id": "tm2",
                 "file_size_bytes": 10,
                 "total_participants": 1,
                 "total_samples": 0,
-                "clinical_participants": 0,
+                "clinical_participants": 0.0,
                 "rna": 0.0,
                 "wes": 0.0,
                 "nanostring": 0.0,
                 "elisa": 0.0,
                 "h&e": 0.0,
+                "mif": 0.0,
             },
             {
                 "elisa": 7.0,
@@ -499,13 +520,14 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "olink": 0.0,
                 "trial_id": "tm1",
                 "file_size_bytes": 5,
-                "total_participants": 2.0,
-                "total_samples": 3.0,
+                "total_participants": 2,
+                "total_samples": 3,
                 "clinical_participants": 7.0,
                 "rna": 2.0,
                 "wes": 3.0,
                 "nanostring": 3.0,
                 "h&e": 5.0,
+                "mif": 5.0,
             },
         ],
         key=sorter,
