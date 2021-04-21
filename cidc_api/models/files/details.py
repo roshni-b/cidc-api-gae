@@ -209,25 +209,15 @@ details_dict = {
         "plain text statistics of sorted.bam file alignment",
         "A plain-text file of summary statistics of the alignment. Provides informaion useful for determining sample quality and discovering alignment errors.",
     ),
-    "/rna/analysis/star/downsampling.bam": FileDetails(
+    "/rna/analysis/star/.transcriptome.bam": FileDetails(
         "miscellaneous",
-        "bam file of downsampled aligned reads with index downsampling.bam.bai",
-        "A subset of the aligned reads in the standard BAM binary format, sorted by their coordinate in the genome (similar to `samtools sort`). Subsetting is done to speed the quality control done via RSeQC.",
+        "transcriptome bam file",
+        "A bam file containing the transcriptomefrom RNAseq expression analyses",
     ),
-    "/rna/analysis/star/downsampling.bam.bai": FileDetails(
+    "/rna/analysis/star/.Chimeric.out.junction": FileDetails(
         "miscellaneous",
-        "bam index file of downsampled aligned reads that accompanies downsampling.bam",
-        "The index for the subset of the aligned reads in the standard BAI binary format, sorted by their coordinate in the genome (similar to `samtools sort`). Subsetting is done to speed the quality control done via RSeQC.",
-    ),
-    "/rna/analysis/rseqc/downsampling_housekeeping.bam": FileDetails(
-        "miscellaneous",
-        "bam file of the downsampled aligned reads of housekeeping genes with index downsampling_housekeeping.bam.bai",
-        "A small subset of the reads aligned to housekeeping genes in the standard BAM binary format.",
-    ),
-    "/rna/analysis/rseqc/downsampling_housekeeping.bam.bai": FileDetails(
-        "miscellaneous",
-        "bam index file of the downsampled aligned reads of housekeeping genes that accompanies downsampling_housekeeping.bam",
-        "The index for the small subset of the reads aligned to housekeeping genes in the standard BAM binary format.",
+        "Chimeric junction output",
+        "Chimeric junction output for fusion calling",
     ),
     "/rna/analysis/rseqc/read_distrib.txt": FileDetails(
         "clinical",
