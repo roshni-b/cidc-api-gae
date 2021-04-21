@@ -169,14 +169,10 @@ assay_facets: Facets = {
                 "/rna/analysis/star/sorted.bam",
                 "/rna/analysis/star/sorted.bam.bai",
                 "/rna/analysis/star/sorted.bam.stat.txt",
-                "/rna/analysis/star/downsampling.bam",
-                "/rna/analysis/star/downsampling.bam.bai",
             ]
         ),
         "Quality": FacetConfig(
             [
-                "/rna/analysis/rseqc/downsampling_housekeeping.bam",
-                "/rna/analysis/rseqc/downsampling_housekeeping.bam.bai",
                 "/rna/analysis/rseqc/read_distrib.txt",
                 "/rna/analysis/rseqc/tin_score.summary.txt",
                 "/rna/analysis/rseqc/tin_score.txt",
