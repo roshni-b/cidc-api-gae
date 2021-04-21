@@ -169,8 +169,8 @@ assay_facets: Facets = {
                 "/rna/analysis/star/sorted.bam",
                 "/rna/analysis/star/sorted.bam.bai",
                 "/rna/analysis/star/sorted.bam.stat.txt",
-                "/rna/analysis/star/.transcriptome.bam",
-                "/rna/analysis/star/.Chimeric.out.junction",
+                "/rna/analysis/star/transcriptome_bam.bam",
+                "/rna/analysis/star/chimeric_out_junction.junction",
             ]
         ),
         "Quality": FacetConfig(

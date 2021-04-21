@@ -209,12 +209,12 @@ details_dict = {
         "plain text statistics of sorted.bam file alignment",
         "A plain-text file of summary statistics of the alignment. Provides informaion useful for determining sample quality and discovering alignment errors.",
     ),
-    "/rna/analysis/star/.transcriptome.bam": FileDetails(
+    "/rna/analysis/star/transcriptome_bam.bam": FileDetails(
         "miscellaneous",
         "transcriptome bam file",
         "A bam file containing the transcriptomefrom RNAseq expression analyses",
     ),
-    "/rna/analysis/star/.Chimeric.out.junction": FileDetails(
+    "/rna/analysis/star/chimeric_out_junction.junction": FileDetails(
         "miscellaneous",
         "Chimeric junction output",
         "Chimeric junction output for fusion calling",
