@@ -193,13 +193,11 @@ assay_facets: Facets = {
                 "/rna/analysis/salmon/salmon_quant.log",
             ]
         ),
-        "Microbiome": FacetConfig(["/rna/analysis/microbiome/_addSample_report.txt"]),
-        "Immune-Repertoire": FacetConfig(["/rna/analysis/trust4/_report.tsv"]),
-        "Fusion": FacetConfig(
-            ["/rna/analysis/fusion/fusion_predictions.abridged_addSample.tsv"]
-        ),
-        "MSI": FacetConfig(["/rna/analysis/msisensor/single/run_/_msisensor.txt"]),
-        "HLA": FacetConfig(["/rna/analysis/neoantigen/.genotype.json"]),
+        "Microbiome": FacetConfig(["/rna/analysis/microbiome/sample_report.txt"]),
+        "Immune-Repertoire": FacetConfig(["/rna/analysis/trust4/trust4_report.tsv"]),
+        "Fusion": FacetConfig(["/rna/analysis/fusion/fusion_predictions.tsv"]),
+        "MSI": FacetConfig(["/rna/analysis/msisensor/msisensor_report.txt"]),
+        "HLA": FacetConfig(["/rna/analysis/neoantigen/genotype.json"]),
     },
     "mIF": {
         "Source Images": FacetConfig(

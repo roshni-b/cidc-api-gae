@@ -279,27 +279,27 @@ details_dict = {
         "the log file produced by the Salmon analysis",
         "A plain-text file containing the time and output of all logging by Salmon during sample analysis.",
     ),
-    "/rna/analysis/microbiome/_addSample_report.txt": FileDetails(
+    "/rna/analysis/microbiome/sample_report.txt": FileDetails(
         "miscellaneous",
         "centrifuge summary output file",
         "Centrifuge output file contains name of a genome, taxonomic ID and rank, and also the proportion of this genome normalized by its genomic length",
     ),
-    "/rna/analysis/trust4/_report.tsv": FileDetails(
+    "/rna/analysis/trust4/trust4_report.tsv": FileDetails(
         "miscellaneous",
         "TRUST4 final report file",
         "This report file focuses on CDR3 and is compatible with other repertoire analysis tools, such as VDJTools.",
     ),
-    "/rna/analysis/fusion/fusion_predictions.abridged_addSample.tsv": FileDetails(
+    "/rna/analysis/fusion/fusion_predictions.tsv": FileDetails(
         "miscellaneous",
         "fusion analysis report file",
         "This report file contains valiated fusion gene pairs found in all samples including their gene expression.",
     ),
-    "/rna/analysis/msisensor/single/run_/_msisensor.txt": FileDetails(
+    "/rna/analysis/msisensor/msisensor_report.txt": FileDetails(
         "miscellaneous",
         "msisensor report file",
         "This report file contains MSI score this report file contains MSI score.",
     ),
-    "/rna/analysis/neoantigen/.genotype.json": FileDetails(
+    "/rna/analysis/neoantigen/genotype.json": FileDetails(
         "miscellaneous",
         "arcasHLA report file",
         "This report file contains MHC class I & II HLA alleles.",
