@@ -279,6 +279,11 @@ details_dict = {
         "the log file produced by the Salmon analysis",
         "A plain-text file containing the time and output of all logging by Salmon during sample analysis.",
     ),
+    "/rna/analysis/microbiome/_addSample_report.txt": FileDetails(
+        "miscellaneous",
+        "centrifuge summary output file",
+        "Centrifuge output file contains name of a genome, taxonomic ID and rank, and also the proportion of this genome normalized by its genomic length",
+    ),
     # Nanostring
     "/nanostring/.rcc": FileDetails(
         "source",

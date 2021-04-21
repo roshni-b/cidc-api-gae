@@ -193,6 +193,7 @@ assay_facets: Facets = {
                 "/rna/analysis/salmon/salmon_quant.log",
             ]
         ),
+        "Microbiome": FacetConfig(["/rna/analysis/microbiome/_addSample_report.txt"]),
     },
     "mIF": {
         "Source Images": FacetConfig(
