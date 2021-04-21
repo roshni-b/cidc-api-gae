@@ -289,6 +289,16 @@ details_dict = {
         "TRUST4 final report file",
         "This report file focuses on CDR3 and is compatible with other repertoire analysis tools, such as VDJTools.",
     ),
+    "/rna/analysis/fusion/fusion_predictions.abridged_addSample.tsv": FileDetails(
+        "miscellaneous",
+        "fusion analysis report file",
+        "This report file contains valiated fusion gene pairs found in all samples including their gene expression.",
+    ),
+    "/rna/analysis/msisensor/single/run_/_msisensor.txt": FileDetails(
+        "miscellaneous",
+        "msisensor report file",
+        "This report file contains MSI score this report file contains MSI score.",
+    ),
     # Nanostring
     "/nanostring/.rcc": FileDetails(
         "source",
