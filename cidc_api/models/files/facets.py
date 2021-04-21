@@ -194,6 +194,7 @@ assay_facets: Facets = {
             ]
         ),
         "Microbiome": FacetConfig(["/rna/analysis/microbiome/_addSample_report.txt"]),
+        "Immune-Repertoire": FacetConfig(["/rna/analysis/trust4/_report.tsv"]),
     },
     "mIF": {
         "Source Images": FacetConfig(

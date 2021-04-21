@@ -284,6 +284,11 @@ details_dict = {
         "centrifuge summary output file",
         "Centrifuge output file contains name of a genome, taxonomic ID and rank, and also the proportion of this genome normalized by its genomic length",
     ),
+    "/rna/analysis/trust4/_report.tsv": FileDetails(
+        "miscellaneous",
+        "TRUST4 final report file",
+        "This report file focuses on CDR3 and is compatible with other repertoire analysis tools, such as VDJTools.",
+    ),
     # Nanostring
     "/nanostring/.rcc": FileDetails(
         "source",
