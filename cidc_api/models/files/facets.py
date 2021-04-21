@@ -199,6 +199,7 @@ assay_facets: Facets = {
             ["/rna/analysis/fusion/fusion_predictions.abridged_addSample.tsv"]
         ),
         "MSI": FacetConfig(["/rna/analysis/msisensor/single/run_/_msisensor.txt"]),
+        "HLA": FacetConfig(["/rna/analysis/neoantigen/.genotype.json"]),
     },
     "mIF": {
         "Source Images": FacetConfig(

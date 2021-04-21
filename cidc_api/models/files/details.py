@@ -299,6 +299,11 @@ details_dict = {
         "msisensor report file",
         "This report file contains MSI score this report file contains MSI score.",
     ),
+    "/rna/analysis/neoantigen/.genotype.json": FileDetails(
+        "miscellaneous",
+        "arcasHLA report file",
+        "This report file contains MHC class I & II HLA alleles.",
+    ),
     # Nanostring
     "/nanostring/.rcc": FileDetails(
         "source",
