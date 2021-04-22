@@ -169,14 +169,12 @@ assay_facets: Facets = {
                 "/rna/analysis/star/sorted.bam",
                 "/rna/analysis/star/sorted.bam.bai",
                 "/rna/analysis/star/sorted.bam.stat.txt",
-                "/rna/analysis/star/downsampling.bam",
-                "/rna/analysis/star/downsampling.bam.bai",
+                "/rna/analysis/star/transcriptome_bam.bam",
+                "/rna/analysis/star/chimeric_out_junction.junction",
             ]
         ),
         "Quality": FacetConfig(
             [
-                "/rna/analysis/rseqc/downsampling_housekeeping.bam",
-                "/rna/analysis/rseqc/downsampling_housekeeping.bam.bai",
                 "/rna/analysis/rseqc/read_distrib.txt",
                 "/rna/analysis/rseqc/tin_score.summary.txt",
                 "/rna/analysis/rseqc/tin_score.txt",
@@ -195,6 +193,11 @@ assay_facets: Facets = {
                 "/rna/analysis/salmon/salmon_quant.log",
             ]
         ),
+        "Microbiome": FacetConfig(["/rna/analysis/microbiome/sample_report.txt"]),
+        "Immune-Repertoire": FacetConfig(["/rna/analysis/trust4/trust4_report.tsv"]),
+        "Fusion": FacetConfig(["/rna/analysis/fusion/fusion_predictions.tsv"]),
+        "MSI": FacetConfig(["/rna/analysis/msisensor/msisensor_report.txt"]),
+        "HLA": FacetConfig(["/rna/analysis/neoantigen/genotype.json"]),
     },
     "mIF": {
         "Source Images": FacetConfig(
