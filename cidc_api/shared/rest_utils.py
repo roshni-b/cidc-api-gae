@@ -48,6 +48,9 @@ def unmarshal_request(schema: BaseSchema, kwarg_name: str, load_sqla: bool = Tru
                     body = loaded_instance
                 # Run any model-defined field validations
                 loaded_instance.validate()
+            # The many ways that validation errors might get raised...
+            except ValueError as e:
+                raise UnprocessableEntity(str(e))
             except ValidationError as e:
                 raise UnprocessableEntity(e.messages)
             except ValidationMultiError as e:

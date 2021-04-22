@@ -6,6 +6,7 @@ from enum import Enum as EnumBaseClass
 from functools import wraps
 from io import BytesIO
 from typing import BinaryIO, Dict, Optional, List, Union, Callable, Tuple
+from jsonschema.exceptions import ValidationError
 from jsonschema.validators import validate
 
 import pandas as pd
@@ -33,6 +34,8 @@ from sqlalchemy import (
     literal_column,
     not_,
     literal,
+    and_,
+    or_,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -407,6 +410,17 @@ class IAMException(Exception):
     pass
 
 
+EXTRA_DATA_TYPES = ["participants info", "samples info"]
+ALL_UPLOAD_TYPES = set(
+    [
+        *prism.SUPPORTED_MANIFESTS,
+        *prism.SUPPORTED_ASSAYS,
+        *prism.SUPPORTED_ANALYSES,
+        *EXTRA_DATA_TYPES,
+    ]
+)
+
+
 class Permissions(CommonColumns):
     __tablename__ = "permissions"
     __table_args__ = (
@@ -431,14 +445,25 @@ class Permissions(CommonColumns):
         UniqueConstraint(
             "granted_to_user", "trial_id", "upload_type", name="unique_perms"
         ),
+        CheckConstraint("trial_id is not null or upload_type is not null"),
     )
 
     # If user who granted this permission is deleted, this permission will be deleted.
     # TODO: is this what we want?
     granted_by_user = Column(Integer)
     granted_to_user = Column(Integer, nullable=False, index=True)
-    trial_id = Column(String, nullable=False, index=True)
-    upload_type = Column(String, nullable=False)
+    trial_id = Column(String, index=True)
+    upload_type = Column(String)
+
+    # Shorthand to make code related to trial- and upload-type-level permissions
+    # easier to interpret.
+    EVERY = None
+
+    @validates("upload_type")
+    def validate_upload_type(self, key, value):
+        if value not in ALL_UPLOAD_TYPES and value != self.EVERY:
+            raise ValueError(f"cannot grant permission on invalid upload type: {value}")
+        return value
 
     @with_default_session
     def insert(self, session: Session, commit: bool = True, compute_etag: bool = True):
@@ -446,8 +471,17 @@ class Permissions(CommonColumns):
         Insert this permission record into the database and add a corresponding IAM policy binding
         on the GCS data bucket.
 
+        If only a trial_id value is provided, then the permission denotes access to all upload_types
+        for the given trial.
+
+        If only an upload_type value is provided, then the permission denotes access to data of that
+        upload_type for all trials.
+
         NOTE: values provided to the `commit` argument will be ignored. This method always commits.
         """
+        if self.upload_type == self.EVERY and self.trial_id == self.EVERY:
+            raise ValueError("A permission must have a trial id or upload type.")
+
         grantee = Users.find_by_id(self.granted_to_user)
         if grantee is None:
             raise IntegrityError(
@@ -488,8 +522,36 @@ class Permissions(CommonColumns):
             )
 
         logger.info(
-            f"admin-action: {grantor.email} gave {grantee.email} the permission {self.upload_type} on {self.trial_id}"
+            f"admin-action: {grantor.email} gave {grantee.email} the permission {self.upload_type or 'all assays'} on {self.trial_id or 'all trials'}"
         )
+
+        # If this is a permission granting the user access to all trials for
+        # a given upload type or all upload types for a given trial, delete
+        # any related trial-upload type specific permissions to avoid
+        # redundancy in the database and in conditional IAM bindings.
+        perms_to_delete = (
+            session.query(Permissions)
+            .filter(
+                Permissions.granted_to_user == self.granted_to_user,
+                # If inserting a cross-trial perm, then select relevant
+                # trial-specific perms for deletion.
+                Permissions.trial_id != self.EVERY
+                if self.trial_id == self.EVERY
+                else Permissions.trial_id == self.trial_id,
+                # If inserting a cross-upload type perm, then select relevant
+                # upload type-specific perms for deletion.
+                Permissions.upload_type != self.EVERY
+                if self.upload_type == self.EVERY
+                else Permissions.upload_type == self.upload_type,
+            )
+            .all()
+        )
+
+        # Add any related permission deletions to the insertion transaction.
+        # If a delete operation fails, all other deletes and the insertion will
+        # be rolled back.
+        for perm in perms_to_delete:
+            session.delete(perm)
 
         # Always commit, because we don't want to grant IAM download unless this insert succeeds.
         super().insert(session=session, commit=True, compute_etag=compute_etag)
@@ -501,9 +563,15 @@ class Permissions(CommonColumns):
         try:
             # Grant IAM permission in GCS only if db insert worked
             grant_download_access(grantee.email, self.trial_id, self.upload_type)
+            # Remove permissions staged for deletion, if any
+            for perm in perms_to_delete:
+                revoke_download_access(grantee.email, perm.trial_id, perm.upload_type)
         except Exception as e:
+            # Add back deleted permissions, if any
+            for perm in perms_to_delete:
+                perm.insert(session=session)
             # Delete the just-created permissions record
-            super().delete()
+            super().delete(session=session)
             raise IAMException("IAM grant failed.") from e
 
     @with_default_session
@@ -538,7 +606,7 @@ class Permissions(CommonColumns):
                 ) from e
 
         logger.info(
-            f"admin-action: {deleted_by_user.email} removed from {grantee.email} the permission {self.upload_type} on {self.trial_id}"
+            f"admin-action: {deleted_by_user.email} removed from {grantee.email} the permission {self.upload_type or 'all assays'} on {self.trial_id or 'all trials'}"
         )
         super().delete(session=session, commit=True)
 
@@ -551,12 +619,30 @@ class Permissions(CommonColumns):
     @staticmethod
     @with_default_session
     def find_for_user_trial_type(
-        user_id: int, trial_id: str, type_: str, session: Session
+        user_id: int, trial_id: str, upload_type: str, session: Session
     ):
-        """Check if a Permissions record exists for the given user, trial, and type."""
+        """
+        Check if a Permissions record exists for the given user, trial, and type.
+        The result may be a trial- or assay-level permission that encompasses the 
+        given trial id or upload type.
+        """
         return (
             session.query(Permissions)
-            .filter_by(granted_to_user=user_id, trial_id=trial_id, upload_type=type_)
+            .filter(
+                Permissions.granted_to_user == user_id,
+                (
+                    (Permissions.trial_id == trial_id)
+                    & (Permissions.upload_type == upload_type)
+                )
+                | (
+                    (Permissions.trial_id == Permissions.EVERY)
+                    & (Permissions.upload_type == upload_type)
+                )
+                | (
+                    (Permissions.trial_id == trial_id)
+                    & (Permissions.upload_type == Permissions.EVERY)
+                ),
+            )
             .first()
         )
 
@@ -1628,11 +1714,24 @@ class DownloadableFiles(CommonColumns):
         # Admins and NCI biobank users can view all files
         if user and not user.is_admin() and not user.is_nci_user():
             permissions = Permissions.find_for_user(user.id)
-            perm_set = [(p.trial_id, p.upload_type) for p in permissions]
-            file_tuples = tuple_(
+            full_trial_perms, full_type_perms, trial_type_perms = [], [], []
+            for perm in permissions:
+                if perm.upload_type is None:
+                    full_trial_perms.append(perm.trial_id)
+                elif perm.trial_id is None:
+                    full_type_perms.append(perm.upload_type)
+                else:
+                    trial_type_perms.append((perm.trial_id, perm.upload_type))
+            df_tuples = tuple_(
                 DownloadableFiles.trial_id, DownloadableFiles.upload_type
             )
-            file_filters.append(file_tuples.in_(perm_set))
+            file_filters.append(
+                or_(
+                    DownloadableFiles.trial_id.in_(full_trial_perms),
+                    DownloadableFiles.upload_type.in_(full_type_perms),
+                    df_tuples.in_(trial_type_perms),
+                )
+            )
 
         def filter_files(query: Query) -> Query:
             return query.filter(*file_filters)

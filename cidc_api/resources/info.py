@@ -8,7 +8,7 @@ from werkzeug.exceptions import NotFound, BadRequest
 from cidc_schemas import prism
 
 from ..shared.auth import public
-from ..models import TrialMetadata, DownloadableFiles
+from ..models import TrialMetadata, DownloadableFiles, EXTRA_DATA_TYPES
 
 info_bp = Blueprint("info", __name__)
 
@@ -32,9 +32,6 @@ def analyses():
 def manifests():
     """List all supported manifests"""
     return jsonify(prism.SUPPORTED_MANIFESTS)
-
-
-EXTRA_DATA_TYPES = ["participants info", "samples info"]
 
 
 @info_bp.route("extra_data_types", methods=["GET"])

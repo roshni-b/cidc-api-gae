@@ -2,6 +2,7 @@ pytest~=6.0.1
 black==19.3b0
 pre-commit==1.17.0
 ipython
+flask-shell-ipython
 ## plotly dash testing dependencies ##
 webdriver_manager
 percy

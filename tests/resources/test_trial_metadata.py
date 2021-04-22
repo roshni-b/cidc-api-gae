@@ -66,13 +66,13 @@ def setup_trial_metadata(cidc_api, user_id=None) -> Tuple[int, int]:
             Permissions(
                 granted_to_user=user_id,
                 trial_id=trial.trial_id,
-                upload_type="wes",
+                upload_type="olink",
                 granted_by_user=user_id,
             ).insert()
             Permissions(
                 granted_to_user=user_id,
                 trial_id=trial.trial_id,
-                upload_type="cytof",
+                upload_type="ihc",
                 granted_by_user=user_id,
             ).insert()
         return trial.id

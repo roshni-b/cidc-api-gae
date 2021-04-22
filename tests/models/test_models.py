@@ -549,13 +549,13 @@ def test_create_assay_upload(clean_db):
 
     # Should fail, since trial doesn't exist yet
     with pytest.raises(IntegrityError):
-        UploadJobs.create("wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri)
+        UploadJobs.create("wes_bam", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri)
     clean_db.rollback()
 
     TrialMetadata.create(TRIAL_ID, METADATA)
 
     new_job = UploadJobs.create(
-        "wes", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri
+        "wes_bam", EMAIL, gcs_file_map, metadata_patch, gcs_xlsx_uri
     )
     job = UploadJobs.find_by_id_and_email(new_job.id, PROFILE["email"])
     assert len(new_job.gcs_file_map) == len(job.gcs_file_map)
@@ -651,7 +651,7 @@ def test_assay_upload_ingestion_success(clean_db, monkeypatch, caplog):
     new_user = Users.create(PROFILE)
     trial = TrialMetadata.create(TRIAL_ID, METADATA)
     assay_upload = UploadJobs.create(
-        upload_type="cytof",
+        upload_type="ihc",
         uploader_email=EMAIL,
         gcs_file_map={},
         metadata={PROTOCOL_ID_FIELD_NAME: TRIAL_ID},
@@ -702,14 +702,14 @@ def test_create_downloadable_file_from_metadata(clean_db, monkeypatch):
     # Create files with empty or "null" additional metadata
     for nullish_value in ["null", None, {}]:
         df = DownloadableFiles.create_from_metadata(
-            TRIAL_ID, "wes", file_metadata, additional_metadata=nullish_value
+            TRIAL_ID, "wes_bam", file_metadata, additional_metadata=nullish_value
         )
         clean_db.refresh(df)
         assert df.additional_metadata == {}
 
     # Create the file
     DownloadableFiles.create_from_metadata(
-        TRIAL_ID, "wes", file_metadata, additional_metadata=additional_metadata
+        TRIAL_ID, "wes_bam", file_metadata, additional_metadata=additional_metadata
     )
 
     # Check that we created the file
@@ -730,7 +730,7 @@ def test_create_downloadable_file_from_metadata(clean_db, monkeypatch):
     # Check that artifact upload publishes
     DownloadableFiles.create_from_metadata(
         TRIAL_ID,
-        "wes",
+        "wes_bam",
         file_metadata,
         additional_metadata=additional_metadata,
         alert_artifact_upload=True,
@@ -743,7 +743,7 @@ def test_downloadable_files_additional_metadata_default(clean_db):
     TrialMetadata.create(TRIAL_ID, METADATA)
     df = DownloadableFiles(
         trial_id=TRIAL_ID,
-        upload_type="wes",
+        upload_type="wes_bam",
         object_url="10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
         file_size_bytes=1,
         md5_hash="hash1234",
@@ -945,9 +945,13 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
     _insert = MagicMock()
     monkeypatch.setattr(CommonColumns, "insert", _insert)
 
+    # if upload_type is invalid
+    with pytest.raises(ValueError, match="invalid upload type"):
+        Permissions(upload_type="foo", granted_to_user=user.id, trial_id=trial.trial_id)
+
     # if don't give granted_by_user
     perm = Permissions(
-        granted_to_user=user.id, trial_id=trial.trial_id, upload_type="wes"
+        granted_to_user=user.id, trial_id=trial.trial_id, upload_type="wes_bam"
     )
     with pytest.raises(IntegrityError, match="`granted_by_user` user must be given"):
         perm.insert()
@@ -958,7 +962,7 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
     perm = Permissions(
         granted_to_user=user.id,
         trial_id=trial.trial_id,
-        upload_type="wes",
+        upload_type="wes_bam",
         granted_by_user=999999,
     )
     with pytest.raises(IntegrityError, match="`granted_by_user` user must exist"):
@@ -970,7 +974,7 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
     perm = Permissions(
         granted_to_user=999999,
         trial_id=trial.trial_id,
-        upload_type="wes",
+        upload_type="wes_bam",
         granted_by_user=user.id,
     )
     with pytest.raises(IntegrityError, match="`granted_to_user` user must exist"):
@@ -982,7 +986,7 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
     perm = Permissions(
         granted_to_user=user.id,
         trial_id=trial.trial_id,
-        upload_type="wes",
+        upload_type="wes_bam",
         granted_by_user=user.id,
     )
     with caplog.at_level(logging.DEBUG):
@@ -990,7 +994,7 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
     _insert.assert_called_once()
     assert any(
         log_record.message.strip()
-        == f"admin-action: {user.email} gave {user.email} the permission wes on {trial.trial_id}"
+        == f"admin-action: {user.email} gave {user.email} the permission wes_bam on {trial.trial_id}"
         for log_record in caplog.records
     )
     gcloud_client.grant_download_access.assert_called_once()
@@ -1003,12 +1007,69 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
     perm = Permissions(
         granted_to_user=user.id,
         trial_id=trial.trial_id,
-        upload_type="cytof",
+        upload_type="ihc",
         granted_by_user=user.id,
     )
     perm.insert()
     _insert.assert_called_once()
     gcloud_client.grant_download_access.assert_not_called()
+
+
+@db_test
+def test_permissions_broad_perms(clean_db, monkeypatch):
+    gcloud_client = mock_gcloud_client(monkeypatch)
+    user = Users(email="test@user.com")
+    user.insert()
+    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
+    trial.insert()
+    other_trial = TrialMetadata(
+        trial_id="other-trial",
+        metadata_json={**METADATA, "protocol_identifier": "other-trial"},
+    )
+    other_trial.insert()
+    for ut in ["wes_fastq", "olink"]:
+        for tid in [trial.trial_id, other_trial.trial_id]:
+            Permissions(
+                granted_to_user=user.id,
+                trial_id=tid,
+                upload_type=ut,
+                granted_by_user=user.id,
+            ).insert()
+
+    # Can't insert a permission for access to all trials and assays
+    with pytest.raises(ValueError, match="must have a trial id or upload type"):
+        Permissions(granted_to_user=user.id, granted_by_user=user.id).insert()
+
+    # Inserting a trial-level permission should delete other more specific related perms.
+    trial_query = clean_db.query(Permissions).filter(
+        Permissions.trial_id == trial.trial_id
+    )
+    assert trial_query.count() == 2
+    Permissions(
+        trial_id=trial.trial_id, granted_to_user=user.id, granted_by_user=user.id
+    ).insert()
+    assert trial_query.count() == 1
+    perm = trial_query.one()
+    assert perm.trial_id == trial.trial_id
+    assert perm.upload_type is None
+
+    # Inserting an upload-level permission should delete other more specific related perms.
+    olink_query = clean_db.query(Permissions).filter(Permissions.upload_type == "olink")
+    assert olink_query.count() == 1
+    assert olink_query.one().trial_id == other_trial.trial_id
+    Permissions(
+        upload_type="olink", granted_to_user=user.id, granted_by_user=user.id
+    ).insert()
+    assert olink_query.count() == 1
+    perm = olink_query.one()
+    assert perm.trial_id is None
+    assert perm.upload_type == "olink"
+
+    # Getting perms for a particular user-trial-type returns broader perms
+    perm = Permissions.find_for_user_trial_type(user.id, trial.trial_id, "ihc")
+    assert perm is not None and perm.upload_type is None
+    perm = Permissions.find_for_user_trial_type(user.id, "some random trial", "olink")
+    assert perm is not None and perm.trial_id is None
 
 
 @db_test
@@ -1021,7 +1082,7 @@ def test_permissions_delete(clean_db, monkeypatch, caplog):
     perm = Permissions(
         granted_to_user=user.id,
         trial_id=trial.trial_id,
-        upload_type="wes",
+        upload_type="wes_bam",
         granted_by_user=user.id,
     )
     perm.insert()
@@ -1039,7 +1100,7 @@ def test_permissions_delete(clean_db, monkeypatch, caplog):
     gcloud_client.grant_download_access.assert_not_called()
     assert any(
         log_record.message.strip()
-        == f"admin-action: {user.email} removed from {user.email} the permission wes on {trial.trial_id}"
+        == f"admin-action: {user.email} removed from {user.email} the permission wes_bam on {trial.trial_id}"
         for log_record in caplog.records
     )
 
@@ -1064,7 +1125,7 @@ def test_permissions_delete(clean_db, monkeypatch, caplog):
     perm = Permissions(
         granted_to_user=user.id,
         trial_id=trial.trial_id,
-        upload_type="cytof",
+        upload_type="ihc",
         granted_by_user=user.id,
     )
     perm.insert()
@@ -1088,7 +1149,7 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
 
-    upload_types = ["wes", "cytof", "rna", "plasma"]
+    upload_types = ["wes_bam", "ihc", "rna_fastq", "plasma"]
     for upload_type in upload_types:
         Permissions(
             granted_to_user=user.id,
@@ -1124,7 +1185,7 @@ def test_permissions_grant_all_iam_permissions(clean_db, monkeypatch):
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
 
-    upload_types = ["wes", "cytof", "rna", "plasma"]
+    upload_types = ["wes_bam", "ihc", "rna_fastq", "plasma"]
     for upload_type in upload_types:
         Permissions(
             granted_to_user=user.id,
@@ -1158,7 +1219,7 @@ def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
 
-    upload_types = ["wes", "cytof", "rna", "plasma"]
+    upload_types = ["wes_bam", "ihc", "rna_fastq", "plasma"]
     for upload_type in upload_types:
         Permissions(
             granted_to_user=user.id,
@@ -1225,7 +1286,7 @@ def test_user_get_data_access_report(clean_db, monkeypatch):
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
 
-    upload_types = ["wes", "cytof"]
+    upload_types = ["wes_bam", "ihc"]
 
     # Note that admins don't need permissions to view data,
     # so we're deliberately issuing unnecessary permissions here.
@@ -1256,4 +1317,4 @@ def test_user_get_data_access_report(clean_db, monkeypatch):
         if user == admin_user:
             assert set(["*"]) == set(user_df.permissions)
         else:
-            assert set(user_df.permissions).issubset(["wes,cytof", "cytof,wes"])
+            assert set(user_df.permissions).issubset(["wes_bam,ihc", "ihc,wes_bam"])

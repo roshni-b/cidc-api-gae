@@ -198,23 +198,32 @@ def upload_xlsx_to_intake_bucket(
     return f"https://console.cloud.google.com/storage/browser/_details/{bucket_name}/{blob_name}"
 
 
-def grant_download_access(user_email: str, trial_id: str, upload_type: str):
+def grant_download_access(
+    user_email: str, trial_id: Optional[str], upload_type: Optional[str]
+):
     """
     Give a user download access to all objects in a trial of a particular upload type.
+
+    If trial_id is None, then grant access to all trials.
+
+    If upload_type is None, then grant access to all upload_types.
+
     If the user already has download access for this trial and upload type, regrant the
-    permission with a new, extended TTL. 
-    
+    permission with a new, extended TTL.
+
     Return the GCS URI to which access has been granted.
     """
     prefix = _build_trial_upload_prefix(trial_id, upload_type)
 
-    logger.info(f"Granting download access on {prefix}* to {user_email}")
+    logger.info(f"Granting download access on prefix {prefix} to {user_email}")
 
     bucket = _get_bucket(GOOGLE_DATA_BUCKET)
     grant_expiring_gcs_access(bucket, GOOGLE_DOWNLOAD_ROLE, user_email, prefix)
 
 
-def revoke_download_access(user_email: str, trial_id: str, upload_type: str):
+def revoke_download_access(
+    user_email: str, trial_id: Optional[str], upload_type: Optional[str]
+):
     """
     Revoke a user's download access to all objects in a trial of a particular upload type.
 
@@ -222,13 +231,17 @@ def revoke_download_access(user_email: str, trial_id: str, upload_type: str):
     """
     prefix = _build_trial_upload_prefix(trial_id, upload_type)
 
-    logger.info(f"Revoking download access on {prefix}* to {user_email}")
+    logger.info(f"Revoking download access on {prefix} from {user_email}")
 
     bucket = _get_bucket(GOOGLE_DATA_BUCKET)
     return revoke_expiring_gcs_access(bucket, GOOGLE_DOWNLOAD_ROLE, user_email, prefix)
 
 
-def _build_trial_upload_prefix(trial_id: str, upload_type: str) -> str:
+def _build_trial_upload_prefix(
+    trial_id: Optional[str], upload_type: Optional[str]
+) -> str:
+    trial_id = trial_id or "*"
+    upload_type = upload_type or "*"
     broad_upload_type = upload_type.lower().replace(" ", "_").split("_", 1)[0]
     return f"{trial_id}/{broad_upload_type}"
 
