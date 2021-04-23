@@ -89,7 +89,8 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
 
     client = cidc_api.test_client()
 
-    # A CIMAC user can list trials that they're allowed to see
+    # A CIMAC user can list trials that they're allowed to see via
+    # granular permissions
     res = client.get("/trial_metadata")
     assert res.status_code == 200
     assert len(res.json["_items"]) == 1
@@ -97,6 +98,15 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
     assert "file_bundle" not in res.json["_items"][0]
     assert "num_participants" not in res.json["_items"][0]
     assert "num_samples" not in res.json["_items"][0]
+
+    # A CIMAC user with a cross-trial permission can list all trials
+    with cidc_api.app_context():
+        Permissions(
+            granted_by_user=user_id, granted_to_user=user_id, upload_type="ihc"
+        ).insert()
+    res = client.get("/trial_metadata")
+    assert res.status_code == 200
+    assert len(res.json["_items"]) == 2
 
     # Allowed users can get all trials
     for role in trial_modifier_roles:
