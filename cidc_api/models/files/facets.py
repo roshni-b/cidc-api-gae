@@ -90,7 +90,7 @@ assay_facets: Facets = {
     },
     "WES": {
         "Source": FacetConfig(
-            ["/wes/r1_.fastq.gz", "/wes/r2_.fastq.gz", "/wes/reads_.bam"]
+            ["/wes/r1_L.fastq.gz", "/wes/r2_L.fastq.gz", "/wes/reads_.bam"]
         ),
         "Germline": FacetConfig(
             [
