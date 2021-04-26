@@ -834,7 +834,7 @@ def test_create_downloadable_file_from_blob(clean_db, monkeypatch):
 
 def test_downloadable_files_data_category_prefix():
     """Check that data_category_prefix's are derived as expected"""
-    file_w_category = DownloadableFiles(facet_group="/wes/r1_.fastq.gz")
+    file_w_category = DownloadableFiles(facet_group="/wes/r1_L.fastq.gz")
     assert file_w_category.data_category_prefix == "WES"
 
     file_no_category = DownloadableFiles()
@@ -877,7 +877,7 @@ def test_downloadable_files_get_related_files(clean_db):
         create_df("/cytof_analysis/source.fcs", {"path.to.cimac_id": cimac_id_2}),
         create_df("/cytof_analysis/reports.zip"),
         create_df("/cytof_analysis/analysis.zip"),
-        create_df("/wes/r1_.fastq.gz"),
+        create_df("/wes/r1_L.fastq.gz"),
     ]
 
     # Based on setup, we expect the following disjoint sets of related files:
