@@ -135,7 +135,7 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
                 ("cytof_10021", "/cytof_10021/spike_in.fcs"),
                 ("cytof_10021", "/cytof_10021/source_.fcs"),
                 ("cytof_10021", "/cytof_10021_analysis/profiling.csv"),
-                ("wes", "/wes/r1_.fastq.gz"),
+                ("wes", "/wes/r1_L.fastq.gz"),
             ]
         ):
             DownloadableFiles(

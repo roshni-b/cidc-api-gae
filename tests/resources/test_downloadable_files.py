@@ -59,7 +59,7 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
         )
 
     wes_file = make_file(
-        trial_id_1, "wes/.../reads_123.bam", "wes_bam", "/wes/r1_.fastq.gz"
+        trial_id_1, "wes/.../reads_123.bam", "wes_bam", "/wes/r1_L.fastq.gz"
     )
     cytof_file = make_file(
         trial_id_2,
@@ -200,7 +200,7 @@ def test_get_related_files(cidc_api, clean_db, monkeypatch):
             trial_id=trial_id_1,
             upload_type="wes",
             object_url=object_url,
-            facet_group="/wes/r2_.fastq.gz",  # this is what makes this file "related"
+            facet_group="/wes/r2_L.fastq.gz",  # this is what makes this file "related"
             uploaded_timestamp=datetime.now(),
             file_size_bytes=0,
         ).insert()
