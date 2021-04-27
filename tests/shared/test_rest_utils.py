@@ -46,15 +46,13 @@ def test_unmarshal_request(empty_app: Flask):
             endpoint_json(s, p, a)
 
     # Invalid JSON should raise 422
-    with empty_app.test_request_context(json={"granted_to_user": 1}):
-        with pytest.raises(
-            UnprocessableEntity, match="Missing data for required field"
-        ):
+    with empty_app.test_request_context(
+        json={"granted_to_user": 1, "upload_type": "foo"}
+    ):
+        with pytest.raises(UnprocessableEntity, match="foo"):
             endpoint_sqla(s, p, a)
 
-        with pytest.raises(
-            UnprocessableEntity, match="Missing data for required field"
-        ):
+        with pytest.raises(UnprocessableEntity, match="foo"):
             endpoint_json(s, p, a)
 
     # Valid JSON should be happily accepted
@@ -78,7 +76,8 @@ def test_marshal_response(empty_app):
 
     with empty_app.test_request_context():
         res = endpoint(s, p, a)
-        assert res.json == perm_json
+        # result will also include db utility fields - e.g., _etag, _created...
+        assert set(res.json.items()).issuperset(set(perm_json.items()))
 
     # Test a well-behaved multi-item endpoint
     @marshal_permissions

@@ -32,41 +32,45 @@ def setup_user(cidc_api, monkeypatch) -> int:
         return current_user.id
 
 
-trial_id = "test-trial"
-upload_types = ["wes", "cytof"]
+trial_id_1 = "test-trial-1"
+trial_id_2 = "test-trial-2"
+upload_types = ["wes_bam", "cytof_10021"]
 
 
 def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
     """Insert two downloadable files into the database."""
     metadata_json = {
-        "protocol_identifier": trial_id,
+        "protocol_identifier": trial_id_1,
         "allowed_collection_event_names": [],
         "allowed_cohort_names": [],
         "participants": [],
     }
-    trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
+    trial_1 = TrialMetadata(trial_id=trial_id_1, metadata_json=metadata_json)
+    trial_2 = TrialMetadata(trial_id=trial_id_2, metadata_json=metadata_json)
 
-    def make_file(object_url, upload_type, facet_group) -> DownloadableFiles:
+    def make_file(trial_id, object_url, upload_type, facet_group) -> DownloadableFiles:
         return DownloadableFiles(
             trial_id=trial_id,
             upload_type=upload_type,
-            object_url=object_url,
+            object_url=f"{trial_id}/{object_url}",
             facet_group=facet_group,
             uploaded_timestamp=datetime.now(),
             file_size_bytes=0,
         )
 
     wes_file = make_file(
-        f"{trial_id}/wes/.../reads_123.bam", "wes", "/wes/r1_.fastq.gz"
+        trial_id_1, "wes/.../reads_123.bam", "wes_bam", "/wes/r1_L.fastq.gz"
     )
     cytof_file = make_file(
-        f"{trial_id}/cytof/.../analysis.zip",
-        "cytof",
+        trial_id_2,
+        "cytof/.../analysis.zip",
+        "cytof_10021",
         "/cytof_10021_analysis/analysis.zip",
     )
 
     with cidc_api.app_context():
-        trial.insert()
+        trial_1.insert()
+        trial_2.insert()
         wes_file.insert()
         cytof_file.insert()
 
@@ -86,22 +90,26 @@ def test_list_downloadable_files(cidc_api, clean_db, monkeypatch):
     assert len(res.json["_items"]) == 0
     assert res.json["_meta"]["total"] == 0
 
-    # Give the user one permission
-    with cidc_api.app_context():
-        perm = Permissions(
-            granted_to_user=user_id,
-            trial_id=trial_id,
-            upload_type=upload_types[0],
-            granted_by_user=user_id,
-        )
-        perm.insert()
+    # Test a couple different permission configurations that should
+    # produce the same result in this case.
+    for kwargs in [
+        {"trial_id": trial_id_1, "upload_type": upload_types[0]},
+        {"upload_type": upload_types[0]},
+        {"trial_id": trial_id_1},
+    ]:
+        # Give the user one permission
+        with cidc_api.app_context():
+            perm = Permissions(
+                granted_to_user=user_id, granted_by_user=user_id, **kwargs
+            )
+            perm.insert()
 
-    # Non-admins can view files for which they have permission
-    res = client.get("/downloadable_files")
-    assert res.status_code == 200
-    assert len(res.json["_items"]) == 1
-    assert res.json["_meta"]["total"] == 1
-    assert res.json["_items"][0]["id"] == file_id_1
+        # Non-admins can view files for which they have permission
+        res = client.get("/downloadable_files")
+        assert res.status_code == 200
+        assert len(res.json["_items"]) == 1
+        assert res.json["_meta"]["total"] == 1
+        assert res.json["_items"][0]["id"] == file_id_1
 
     # Non-admin filter queries exclude files they aren't allowed to view
     res = client.get(f"/downloadable_files?facets=Assay Type|CyTOF|Analysis Results")
@@ -156,7 +164,7 @@ def test_get_downloadable_file(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         perm = Permissions(
             granted_to_user=user_id,
-            trial_id=trial_id,
+            trial_id=trial_id_1,
             upload_type=upload_types[0],
             granted_by_user=user_id,
         )
@@ -189,10 +197,10 @@ def test_get_related_files(cidc_api, clean_db, monkeypatch):
     object_url = "/foo/bar"
     with cidc_api.app_context():
         DownloadableFiles(
-            trial_id=trial_id,
+            trial_id=trial_id_1,
             upload_type="wes",
             object_url=object_url,
-            facet_group="/wes/r2_.fastq.gz",  # this is what makes this file "related"
+            facet_group="/wes/r2_L.fastq.gz",  # this is what makes this file "related"
             uploaded_timestamp=datetime.now(),
             file_size_bytes=0,
         ).insert()
@@ -205,7 +213,7 @@ def test_get_related_files(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         perm = Permissions(
             granted_to_user=user_id,
-            trial_id=trial_id,
+            trial_id=trial_id_1,
             upload_type=upload_types[0],
             granted_by_user=user_id,
         )
@@ -246,7 +254,7 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         perm = Permissions(
             granted_to_user=user_id,
-            trial_id=trial_id,
+            trial_id=trial_id_1,
             upload_type=upload_types[0],
             granted_by_user=user_id,
         )
@@ -258,7 +266,7 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
     assert "text/tsv" in res.headers["Content-Type"]
     assert "filename=filelist.tsv" in res.headers["Content-Disposition"]
     assert res.data.decode("utf-8") == (
-        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/wes/.../reads_123.bam\t{trial_id}_wes_..._reads_123.bam\n"
+        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id_1}/wes/.../reads_123.bam\t{trial_id_1}_wes_..._reads_123.bam\n"
     )
 
     # Admins don't need permissions to get files
@@ -266,8 +274,8 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
     res = client.post(url, json=short_file_list)
     assert res.status_code == 200
     assert res.data.decode("utf-8") == (
-        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/wes/.../reads_123.bam\t{trial_id}_wes_..._reads_123.bam\n"
-        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id}/cytof/.../analysis.zip\t{trial_id}_cytof_..._analysis.zip\n"
+        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id_1}/wes/.../reads_123.bam\t{trial_id_1}_wes_..._reads_123.bam\n"
+        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id_2}/cytof/.../analysis.zip\t{trial_id_2}_cytof_..._analysis.zip\n"
     )
 
     # Clear inserted file records
@@ -280,7 +288,7 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
         for id in long_file_list:
             DownloadableFiles(
                 id=id,
-                trial_id=trial_id,
+                trial_id=trial_id_1,
                 object_url=str(id),
                 upload_type="",
                 file_size_bytes=0,
@@ -316,7 +324,7 @@ def test_get_filter_facets(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         perm = Permissions(
             granted_to_user=user_id,
-            trial_id=trial_id,
+            trial_id=trial_id_1,
             upload_type=upload_types[0],
             granted_by_user=user_id,
         )
@@ -329,7 +337,10 @@ def test_get_filter_facets(cidc_api, clean_db, monkeypatch):
     make_admin(user_id, cidc_api)
     res = client.get("/downloadable_files/filter_facets")
     assert res.status_code == 200
-    assert res.json["trial_ids"] == [{"label": trial_id, "count": 2}]
+    assert res.json["trial_ids"] == [
+        {"label": trial_id_1, "count": 1},
+        {"label": trial_id_2, "count": 1},
+    ]
     check_facet_counts(res.json["facets"], wes_count=1, cytof_count=1)
 
     # Trial facets are governed by data category facets
@@ -370,7 +381,7 @@ def test_get_download_url(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         perm = Permissions(
             granted_to_user=user_id,
-            trial_id=trial_id,
+            trial_id=trial_id_1,
             upload_type=upload_types[0],
             granted_by_user=user_id,
         )

@@ -83,7 +83,7 @@ def test_info_data_overview(cidc_api, clean_db):
                 trial_id="1",
                 upload_type="wes",
                 object_url=str(i),
-                facet_group="/wes/r2_.fastq.gz",  # this is what makes this file "related"
+                facet_group="/wes/r2_L.fastq.gz",  # this is what makes this file "related"
                 uploaded_timestamp=datetime.now(),
                 file_size_bytes=2,
             ).insert()

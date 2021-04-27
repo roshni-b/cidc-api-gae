@@ -1,3 +1,4 @@
+from cidc_api.models.models import ALL_UPLOAD_TYPES
 from unittest.mock import MagicMock
 from datetime import datetime
 from typing import Tuple
@@ -58,7 +59,7 @@ def setup_permissions(cidc_api, monkeypatch) -> Tuple[int, int]:
                 upload_type=assay,
             ).insert()
 
-        create_permission(current_user.id, "wes")
+        create_permission(current_user.id, "ihc")
         create_permission(current_user.id, "olink")
         create_permission(other_user.id, "olink")
 
@@ -129,9 +130,6 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     gcloud_client = mock_gcloud_client(monkeypatch)
     current_user_id, other_user_id = setup_permissions(cidc_api, monkeypatch)
 
-    with cidc_api.app_context():
-        current_user = Users.find_by_id(current_user_id)
-
     client = cidc_api.test_client()
 
     # Non-admins should be blocked from posting to this endpoint
@@ -146,7 +144,7 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     perm = {
         "granted_to_user": other_user_id,
         "trial_id": TRIAL_ID,
-        "upload_type": "bar",
+        "upload_type": "ihc",
     }
 
     # When an IAM grant error occurs, the permission db record shouldn't be created
@@ -158,6 +156,12 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         assert clean_db.query(Permissions).filter_by(**perm).all() == []
     gcloud_client.grant_download_access.side_effect = None
+
+    # Admins can't create permissions with invalid upload types
+    gcloud_client.reset_mocks()
+    res = client.post("permissions", json={**perm, "upload_type": "foo"})
+    assert res.status_code == 422
+    assert "invalid upload type: foo" in res.json["_error"]["message"]
 
     # Admins should be able to create new permissions
     gcloud_client.reset_mocks()
@@ -187,12 +191,17 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     gcloud_client.grant_download_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
+    with cidc_api.app_context():
+        clean_db.query(Permissions).delete()
+        clean_db.commit()
+
     # The permission grantee must have <= GOOGLE_MAX_DOWNLOAD_PERMISSIONS
     perm["granted_to_user"] = current_user_id
     inserts_fail_eventually = False
-    for i in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS):
+    upload_types = list(ALL_UPLOAD_TYPES)
+    for i in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS + 1):
         gcloud_client.reset_mocks()
-        perm["upload_type"] = f"upload-type-{str(i)}"
+        perm["upload_type"] = upload_types[i]
         res = client.post("permissions", json=perm)
         if res.status_code != 201:
             assert res.status_code == 400
