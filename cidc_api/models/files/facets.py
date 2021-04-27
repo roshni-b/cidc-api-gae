@@ -277,7 +277,28 @@ clinical_facets: Facets = {
     ),
 }
 
-analysis_ready_facets = {"Olink": FacetConfig(["npx|analysis_ready|csv"])}
+analysis_ready_facets = {
+    "Olink": FacetConfig(["npx|analysis_ready|csv"],),
+    "CyTOF": FacetConfig(
+        [
+            "csv|cell counts compartment",
+            "csv|cell counts assignment",
+            "csv|cell counts profiling",
+        ],
+        "Summary cell counts, combined across all samples in the trial",
+    ),
+    "IHC": FacetConfig(["csv|ihc marker combined"],),
+    "Nanostring": FacetConfig(
+        ["/nanostring/normalized_data.csv"],
+        "tabulated data across all samples in a batch",
+    ),
+    "RNA": FacetConfig(["/rna/analysis/salmon/quant.sf"],),
+    "WES": FacetConfig(["/wes/analysis/report.tar.gz"],),
+    "TCR": FacetConfig(
+        ["/tcr_analysis/tra_clone.csv", "/tcr_analysis/trb_clone.csv"],
+        "Data files from TCRseq analysis indicating TRA & TRB clones UMI counts",
+    ),
+}
 
 facets_dict: Dict[str, Facets] = {
     "Assay Type": assay_facets,
