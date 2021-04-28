@@ -27,7 +27,7 @@ assay_facets: Facets = {
         ),
         "Data": FacetConfig(
             ["/nanostring/raw_data.csv", "/nanostring/normalized_data.csv"],
-            "tabulated data across all samples in a batch",
+            "Tabulated data across all samples in a batch",
         ),
     },
     "CyTOF": {
