@@ -1,4 +1,5 @@
 import traceback
+import logging
 
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -36,26 +37,6 @@ validate_api_auth(app)
 
 # Add dashboard endpoints to the API
 register_dashboards(app)
-
-
-@app.after_request
-def junk_records_bug_SIMULATION(response):
-    """
-    Write junk user records to the database on every request as part of
-    a quarterly incident response simulation exercise.
-    """
-    # Do these imports here so we don't forget to clean them up
-    # when the exercise is over.
-    from uuid import uuid4
-    from .models import Users
-
-    # Since some tests rely on specific counts of records being present
-    # in the DB, running this code during tests would cause them to fail.
-    if not app.config["TESTING"]:
-        logger.info("[INDICENT SIMULATION] writing junk user record to database")
-        Users(email=f"INCIDENT_SIMULATION_{uuid4()}@whoops.com").insert()
-
-    return response
 
 
 @app.errorhandler(Exception)
