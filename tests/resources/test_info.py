@@ -1,4 +1,5 @@
 import os
+import shutil
 from datetime import datetime
 
 from cidc_schemas import prism
@@ -126,22 +127,22 @@ def test_templates(cidc_api):
     res = client.get(f"{INFO_ENDPOINT}/templates/foo/bar")
     assert res.status_code == 404
 
-    # Existing manifest
+    # Generate and get a valid manifest
     pbmc_path = os.path.join(
         cidc_api.config["TEMPLATES_DIR"], "manifests", "pbmc_template.xlsx"
     )
-    with open(pbmc_path, "rb") as f:
-        real_pbmc_file = f.read()
+    assert not os.path.exists(pbmc_path)
     res = client.get(f"{INFO_ENDPOINT}/templates/manifests/pbmc")
     assert res.status_code == 200
-    assert res.data == real_pbmc_file
+    with open(pbmc_path, "rb") as f:
+        assert res.data == f.read()
 
-    # Existing assay
+    # Generate and get a valid assay
     olink_path = os.path.join(
         cidc_api.config["TEMPLATES_DIR"], "metadata", "olink_template.xlsx"
     )
-    with open(olink_path, "rb") as f:
-        real_olink_file = f.read()
+    assert not os.path.exists(olink_path)
     res = client.get(f"{INFO_ENDPOINT}/templates/metadata/olink")
     assert res.status_code == 200
-    assert res.data == real_olink_file
+    with open(olink_path, "rb") as f:
+        assert res.data == f.read()

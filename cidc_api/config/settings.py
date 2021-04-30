@@ -6,7 +6,8 @@ in the `SETTINGS` dictionary defined at the bottom of this file.
 """
 
 import tempfile
-from os import environ, path
+import shutil
+from os import environ, path, mkdir
 
 from dotenv import load_dotenv
 
@@ -29,12 +30,19 @@ ALLOWED_CLIENT_URL = environ.get("ALLOWED_CLIENT_URL")
 IS_GUNICORN = "gunicorn" in environ.get("SERVER_SOFTWARE", "")
 
 ### Configure miscellaneous constants ###
-TEMPLATES_DIR = path.join("/tmp", "templates")
 MIN_CLI_VERSION = "0.9.9"
 PAGINATION_PAGE_SIZE = 25
 MAX_PAGINATION_PAGE_SIZE = 200
 INACTIVE_USER_DAYS = 60
 MAX_THREADPOOL_WORKERS = 32
+TEMPLATES_DIR = path.join("/tmp", "templates")
+# Also, set up the directories for holding generated templates
+if path.exists(TEMPLATES_DIR):
+    shutil.rmtree(TEMPLATES_DIR)
+mkdir(TEMPLATES_DIR)
+for family in ["manifests", "metadata", "analyses"]:
+    family_dir = path.join(TEMPLATES_DIR, family)
+    mkdir(family_dir)
 
 ### Configure prism encrypt ###
 if not TESTING:
