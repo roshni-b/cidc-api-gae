@@ -2,6 +2,10 @@ runtime: python37
 env: standard
 entrypoint: gunicorn cidc_api.app:app
 instance_class: F2
+# Same config as app.prod.yaml, except we permit scaling to 0 instances.
+automatic_scaling:
+  max_concurrent_requests: 50
+  target_cpu_utilization: .95
 
 handlers:
   # Force HTTPS on all requests
