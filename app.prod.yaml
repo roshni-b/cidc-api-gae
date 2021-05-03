@@ -2,8 +2,18 @@ runtime: python37
 env: standard
 entrypoint: gunicorn cidc_api.app:app
 instance_class: F2
+# These scaling config values are intended to prevent GAE from
+# spinning up addditional instances too eagerly.
 automatic_scaling:
+  # Always have at least one instance running and ready
+  # to handle requests.
   min_instances: 1
+  # Our gunicorn server should comfortably handle
+  # this many concurrent requests.
+  max_concurrent_requests: 50
+  # Most of our endpoint operations are I/O-bound,
+  # so we are unlikely to exceed this.
+  target_cpu_utilization: .95
 
 handlers:
   # Force HTTPS on all requests
