@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 from typing import Tuple
+from unittest.mock import MagicMock, call
 
 from cidc_api.models import (
     Users,
@@ -55,7 +56,7 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
             object_url=f"{trial_id}/{object_url}",
             facet_group=facet_group,
             uploaded_timestamp=datetime.now(),
-            file_size_bytes=0,
+            file_size_bytes=int(51 * 1e6),  # 51MB
         )
 
     wes_file = make_file(
@@ -239,11 +240,11 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
 
     client = cidc_api.test_client()
 
-    # A JSON body containing a file ID list must be provided
-    res = client.post("/downloadable_files/filelist")
-    assert res.status_code == 422
+    url = "/downloadable_files/filelist"
 
-    url = f"/downloadable_files/filelist"
+    # A JSON body containing a file ID list must be provided
+    res = client.post(url)
+    assert res.status_code == 422
 
     # User has no permissions, so no files should be found
     short_file_list = {"file_ids": [file_id_1, file_id_2]}
@@ -283,22 +284,103 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
         clean_db.query(DownloadableFiles).delete()
 
     # Filelists don't get paginated
-    long_file_list = list(range(1000, 2000))
+    ids = []
     with cidc_api.app_context():
-        for id in long_file_list:
-            DownloadableFiles(
-                id=id,
+        for id in range(1000):
+            df = DownloadableFiles(
                 trial_id=trial_id_1,
                 object_url=str(id),
                 upload_type="",
                 file_size_bytes=0,
                 uploaded_timestamp=datetime.now(),
-            ).insert()
+            )
+            df.insert()
+            ids.append(df.id)
 
-    res = client.post(url, json={"file_ids": long_file_list})
+    res = client.post(url, json={"file_ids": ids})
     assert res.status_code == 200
     # newly inserted files + EOF newline
-    assert len(res.data.decode("utf-8").split("\n")) == len(long_file_list) + 1
+    assert len(res.data.decode("utf-8").split("\n")) == len(ids) + 1
+
+
+def test_create_compressed_batch(cidc_api, clean_db, monkeypatch):
+    user_id = setup_user(cidc_api, monkeypatch)
+    file_id_1, file_id_2 = setup_downloadable_files(cidc_api)
+    with cidc_api.app_context():
+        url_1 = DownloadableFiles.find_by_id(file_id_1).object_url
+        url_2 = DownloadableFiles.find_by_id(file_id_2).object_url
+
+    client = cidc_api.test_client()
+
+    url = "/downloadable_files/compressed_batch"
+
+    # A JSON body containing a file ID list must be provided
+    res = client.post(url)
+    assert res.status_code == 422
+
+    # User has no permissions, so no files should be found
+    short_file_list = {"file_ids": [file_id_1, file_id_2]}
+    res = client.post(url, json=short_file_list)
+    assert res.status_code == 404
+
+    # Give the user one permission
+    with cidc_api.app_context():
+        perm = Permissions(
+            granted_to_user=user_id,
+            trial_id=trial_id_1,
+            upload_type=upload_types[0],
+            granted_by_user=user_id,
+        )
+        perm.insert()
+
+    # Mock GCS client
+    blob = MagicMock()
+    bucket = MagicMock()
+    bucket.blob.return_value = blob
+    monkeypatch.setattr(
+        "cidc_api.resources.downloadable_files.gcloud_client._get_bucket",
+        lambda _: bucket,
+    )
+    signed_url = "fake/signed/url"
+    monkeypatch.setattr(
+        "cidc_api.resources.downloadable_files.gcloud_client.get_signed_url",
+        lambda *_: signed_url,
+    )
+
+    # User has one permission, s0 the endpoint should try to create
+    # a compressed batch file with the single file the user has
+    # access to in it.
+    res = client.post(url, json=short_file_list)
+    assert res.status_code == 200
+    assert res.json == signed_url
+    print(bucket.get_blob.call_args_list)
+    bucket.get_blob.assert_called_with(url_1)
+    blob.upload_from_filename.assert_called_once()
+
+    bucket.reset_mock()
+    blob.reset_mock()
+
+    make_admin(user_id, cidc_api)
+
+    # Admin has access to both files, but together they are too large
+    res = client.post(url, json=short_file_list)
+    assert res.status_code == 400
+    assert "batch too large" in res.json["_error"]["message"]
+    bucket.get_blob.assert_not_called()
+    blob.upload_from_filename.assert_not_called()
+
+    # Decrease the size of one of the files and try again
+    with cidc_api.app_context():
+        df = DownloadableFiles.find_by_id(file_id_1)
+        df.file_size_bytes = 1
+        df.update()
+
+    res = client.post(url, json=short_file_list)
+    assert res.status_code == 200
+    assert res.json == signed_url
+    assert call(url_1) in bucket.get_blob.call_args_list
+    assert call(url_2) in bucket.get_blob.call_args_list
+    blob.upload_from_filename.assert_called_once()
 
 
 def test_get_filter_facets(cidc_api, clean_db, monkeypatch):

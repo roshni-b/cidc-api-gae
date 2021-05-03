@@ -27,7 +27,7 @@ assay_facets: Facets = {
         ),
         "Data": FacetConfig(
             ["/nanostring/raw_data.csv", "/nanostring/normalized_data.csv"],
-            "tabulated data across all samples in a batch",
+            "Tabulated data across all samples in a batch",
         ),
     },
     "CyTOF": {
@@ -255,10 +255,14 @@ assay_facets: Facets = {
                 "/tcr/replicate_/i2.fastq.gz",
             ]
         ),
-        "Misc.": FacetConfig(["/tcr/SampleSheet.csv" "/tcr/summary_info.csv"]),
+        "Misc.": FacetConfig(["/tcr/SampleSheet.csv" "/tcr_analysis/summary_info.csv"]),
         "Analysis Data": FacetConfig(
-            ["/tcr_analysis/tra_clone.csv", "/tcr_analysis/trb_clone.csv"],
-            "Data files from TCRseq analysis indicating TRA & TRB clones UMI counts",
+            [
+                "/tcr_analysis/tra_clone.csv",
+                "/tcr_analysis/trb_clone.csv",
+                "/tcr_analysis/report_trial.tar.gz",
+            ],
+            "Data files and Report from TCRseq analysis indicating TRA & TRB clones' UMI counts",
         ),
     },
     "ELISA": {"Data": FacetConfig(["/elisa/assay.xlsx"])},

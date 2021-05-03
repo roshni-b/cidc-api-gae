@@ -5,7 +5,7 @@ import re
 from flask import Blueprint, jsonify, current_app as app, send_file
 from werkzeug.exceptions import NotFound, BadRequest
 
-from cidc_schemas import prism
+from cidc_schemas import prism, template
 
 from ..shared.auth import public
 from ..models import TrialMetadata, DownloadableFiles, EXTRA_DATA_TYPES
@@ -75,13 +75,23 @@ def templates(template_family, template_type):
     elif not re.match(_al_under, template_type):
         raise BadRequest(f"Invalid template type: {template_type}")
 
-    filename = f"{template_type}_template.xlsx"
-    path = os.path.join(app.config["TEMPLATES_DIR"], template_family, filename)
+    schema_path = os.path.join(
+        "templates", template_family, f"{template_type}_template.json"
+    )
+    template_filename = f"{template_type}_template.xlsx"
+    template_path = os.path.join(
+        app.config["TEMPLATES_DIR"], template_family, template_filename
+    )
 
-    # Check that the template exists
-    if not os.path.exists(path):
-        raise NotFound(
-            f"No template found for the given template family and template type"
-        )
+    # Generate the empty template if it doesn't exist yet
+    if not os.path.exists(template_path):
+        try:
+            template.generate_empty_template(schema_path, template_path)
+        except FileNotFoundError:
+            raise NotFound(
+                f"No template found for the given template family and template type"
+            )
 
-    return send_file(path, as_attachment=True, attachment_filename=filename)
+    return send_file(
+        template_path, as_attachment=True, attachment_filename=template_filename
+    )

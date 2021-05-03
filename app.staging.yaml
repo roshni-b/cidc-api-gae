@@ -22,6 +22,7 @@ env_variables:
   GOOGLE_SECRETS_BUCKET: "cidc-secrets-staging"
   GOOGLE_INTAKE_BUCKET: "cidc-intake-staging"
   GOOGLE_UPLOAD_BUCKET: "cidc-uploads-staging"
+  GOOGLE_EPHEMERAL_BUCKET: "cidc-ephemeral-staging"
   GOOGLE_UPLOAD_TOPIC: "uploads"
   GOOGLE_EMAILS_TOPIC: "emails"
   GOOGLE_PATIENT_SAMPLE_TOPIC: "patient_sample_update"

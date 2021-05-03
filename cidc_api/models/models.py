@@ -1931,9 +1931,12 @@ class DownloadableFiles(CommonColumns):
 
     @classmethod
     @with_default_session
-    def get_total_bytes(cls, session: Session) -> int:
+    def get_total_bytes(
+        cls, session: Session, filter_: Callable[[Query], Query] = lambda q: q
+    ) -> int:
         """Get the total number of bytes of data stored across all files."""
-        total_bytes = session.query(func.sum(cls.file_size_bytes)).one()[0]
+        filtered_query = filter_(session.query(func.sum(cls.file_size_bytes)))
+        total_bytes = filtered_query.one()[0]
         return int(total_bytes)
 
     @classmethod
