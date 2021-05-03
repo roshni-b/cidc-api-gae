@@ -57,9 +57,9 @@ assay_facets: Facets = {
         ),
         "Combined Cell Counts": FacetConfig(
             [
-                "csv|cell counts compartment",
-                "csv|cell counts assignment",
-                "csv|cell counts profiling",
+                "/cytof_analysis/combined_cell_counts_compartment.csv",
+                "/cytof_analysis/combined_cell_counts_assignment.csv",
+                "/cytof_analysis/combined_cell_counts_profiling.csv",
             ],
             "Summary cell counts, combined across all samples in the trial",
         ),
@@ -285,16 +285,16 @@ analysis_ready_facets = {
     "Olink": FacetConfig(["npx|analysis_ready|csv"]),
     "CyTOF": FacetConfig(
         [
-            "csv|cell counts compartment",
-            "csv|cell counts assignment",
-            "csv|cell counts profiling",
+            "/cytof_analysis/combined_cell_counts_compartment.csv",
+            "/cytof_analysis/combined_cell_counts_assignment.csv",
+            "/cytof_analysis/combined_cell_counts_profiling.csv",
         ],
         "Summary cell counts, combined across all samples in the trial",
     ),
     "IHC": FacetConfig(["csv|ihc marker combined"]),
     "Nanostring": FacetConfig(
         ["/nanostring/normalized_data.csv"],
-        "tabulated data across all samples in a batch",
+        "Tabulated data across all samples in a batch",
     ),
     "RNA": FacetConfig(["/rna/analysis/salmon/quant.sf"]),
     "WES": FacetConfig(["/wes/analysis/report.tar.gz"]),
