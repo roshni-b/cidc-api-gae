@@ -447,6 +447,7 @@ class Permissions(CommonColumns):
         ),
         CheckConstraint("trial_id is not null or upload_type is not null"),
     )
+    __mapper_args__ = {"confirm_deleted_rows": False}
 
     # If user who granted this permission is deleted, this permission will be deleted.
     # TODO: is this what we want?
