@@ -1122,6 +1122,7 @@ class TrialMetadata(CommonColumns):
         ```python
             {
                 "trial_id": ...,
+                "expected_assays": ..., # list of assays the trial should have data for
                 "file_size_bytes": ..., # total file size for the trial
                 "clinical_participants": ..., # number of participants with clinical data
                 "wes": ..., # wes sample count
@@ -1265,6 +1266,15 @@ class TrialMetadata(CommonColumns):
                 jsonb_array_elements(batches->'participants') participant
         """
 
+        # Extract an array of expected assays or an empty array if expected assays is null.
+        expected_assays_subquery = """
+            select
+                trial_id,
+                coalesce(metadata_json->'expected_assays', '[]'::jsonb) as expected_assays
+            from
+                trial_metadata
+        """
+
         # All the subqueries produce the same set of columns, so UNION ALL
         # them together into a single query, aggregating results into
         # trial-level JSON dictionaries with the shape described in the docstring.
@@ -1272,7 +1282,9 @@ class TrialMetadata(CommonColumns):
         # de-duplication within subquery results.
         combined_query = f"""
             select
-                jsonb_object_agg(key, value) || jsonb_object_agg('trial_id', trial_id)
+                jsonb_object_agg(key, value)
+                || jsonb_object_agg('trial_id', q2.trial_id)
+                || jsonb_object_agg('expected_assays', expected_assays)
             from (
                 select
                     trial_id,
@@ -1299,7 +1311,9 @@ class TrialMetadata(CommonColumns):
                 ) q1
                 group by trial_id, key
             ) q2
-            group by trial_id;
+            join ({expected_assays_subquery}) q3
+            on q2.trial_id = q3.trial_id
+            group by q2.trial_id;
         """
 
         # Run the query and extract the trial-level summary dictionaries
