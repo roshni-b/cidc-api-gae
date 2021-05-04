@@ -425,6 +425,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         # deliberately override METADATA['protocol_identifier']
         "protocol_identifier": "tm1",
         "participants": [{"samples": [1, 2]}, {"samples": [3]}],
+        "expected_assays": ["ihc", "olink"],
         "assays": {
             "wes": [{"records": records * 3}],
             "rna": [{"records": records * 2}],
@@ -500,6 +501,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
     expected = sorted(
         [
             {
+                "expected_assays": [],
                 "cytof": 9.0,
                 "olink": 8.0,
                 "trial_id": "tm2",
@@ -515,6 +517,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "mif": 0.0,
             },
             {
+                "expected_assays": ["ihc", "olink"],
                 "elisa": 7.0,
                 "cytof": 0.0,
                 "olink": 0.0,
