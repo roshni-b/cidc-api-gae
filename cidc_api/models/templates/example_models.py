@@ -1,6 +1,7 @@
 from sqlalchemy import (
     ARRAY,
     Boolean,
+    CheckConstraint,
     Column,
     Date,
     Enum as SqlEnum,
@@ -148,6 +149,7 @@ class Cohort(CommonColumns):
 
 
 class CollectionEventSpecimenTypes(CommonColumns):
+    # Pulled out as separate class so there's no need for a SpecimenTypes -> CollectionEvent Foreign Key
     collection_event_id = Column(
         Integer, ForeignKey("CollectionEvent.id"), nullable=False
     )
@@ -168,6 +170,7 @@ class CollectionEvent(CommonColumns):
 
 
 class SpecimenTypes(CommonColumns):
+    # Pulled out as a separate class do to the self Foreign Key
     specimen_type = Column(String, nullable=False)
     intended_assays = Column(AssaysEnum)
     parent_type_id = Column(Integer, ForeignKey("SpecimenTypes.id"), nullable=True)
@@ -177,6 +180,11 @@ class SpecimenTypes(CommonColumns):
 
 
 class Participant(CommonColumns):
+    __table_args__ = (
+        CheckConstraint("cimac_participant_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}$'"),
+        CheckConstraint("cidc_participant_id ~ '^CIDC-\\w+-\\w+$'"),
+    )
+
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
     cimac_participant_id = Column(
         String,
@@ -231,6 +239,11 @@ class Participant(CommonColumns):
 
 
 class Sample(CommonColumns):
+    __table_args__ = (
+        CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
+        CheckConstraint("cidc_id ~ '^CIDC-\\w+-\\w+-\\w+$'"),
+    )
+
     cimac_id = Column(
         String,
         nullable=False,
@@ -499,6 +512,8 @@ class Sample(CommonColumns):
 
 
 class Aliquot(CommonColumns):
+    __table_args__ = CheckConstraint("slide_number ~ '^[0-9]{1,2}$'")
+
     sample_id = Column(Integer, ForeignKey(Sample.id), nullable=False)
     slide_number = Column(
         String,
