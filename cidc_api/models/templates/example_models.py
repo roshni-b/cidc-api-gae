@@ -1,10 +1,8 @@
 from sqlalchemy import (
-    ARRAY,
-    Boolean,
     CheckConstraint,
     Column,
     Date,
-    Enum as SqlEnum,
+    Enum,
     ForeignKey,
     Number,
     String,
@@ -13,10 +11,10 @@ from sqlalchemy.orm import relationship
 
 from .models import CommonColumns
 
-AssaysEnum = SqlEnum(
+AssaysEnum = Enum(
     "Olink", "WES", "RNAseq", "IHC", "CyTOF", "H&E", "ELISA", "mIF", "mIHC", "TCRseq",
 )
-ConcentrationUnits = SqlEnum(
+ConcentrationUnits = Enum(
     "Nanogram per Microliter",
     "Milligram per Milliliter",
     "Micrograms per Microliter",
@@ -24,7 +22,7 @@ ConcentrationUnits = SqlEnum(
     "Not Reported",
     "Other",
 )
-MaterialUnits = SqlEnum(
+MaterialUnits = Enum(
     "Microliters",
     "Milliliters",
     "Nanogram per Microliter",
@@ -35,14 +33,14 @@ MaterialUnits = SqlEnum(
     "Not Reported",
     "Other",
 )
-Replacement = SqlEnum(
+Replacement = Enum(
     "Replacement Not Requested",
     "Replacement Requested",
     "Replacement Tested",
     "Not Reported",
     "Other",
 )
-SampleTypes = SqlEnum(
+SampleTypes = Enum(
     "Tumor Tissue",
     "Normal Tissue",
     "Skin Tissue",
@@ -54,7 +52,7 @@ SampleTypes = SqlEnum(
     "Not Reported",
     "Other",
 )
-VolumeUnits = SqlEnum("Microliter", "Milliliter", "Not Reported", "Other")
+VolumeUnits = Enum("Microliter", "Milliliter", "Not Reported", "Other")
 
 
 class ClinicalTrial(CommonColumns):
@@ -180,19 +178,17 @@ class SpecimenTypes(CommonColumns):
 
 
 class Participant(CommonColumns):
-    __table_args__ = (
-        CheckConstraint("cimac_participant_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}$'"),
-        CheckConstraint("cidc_participant_id ~ '^CIDC-\\w+-\\w+$'"),
-    )
-
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
     cimac_participant_id = Column(
         String,
+        CheckConstraint("cimac_participant_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}$'"),
         nullable=False,
         doc="Participant identifier assigned by the CIMAC-CIDC Network. Formated as: C?????? (first 7 characters of CIMAC ID)",
     )
     cidc_participant_id = Column(
-        String, doc="The generated, CIDC-internal identifier for this participant."
+        String,
+        CheckConstraint("cidc_participant_id ~ '^CIDC-\\w+-\\w+$'"),
+        doc="The generated, CIDC-internal identifier for this participant.",
     )
     participant_id = Column(
         String,
@@ -201,11 +197,11 @@ class Participant(CommonColumns):
     )
     cohort_id = Column(Integer, ForeignKey(Cohort.id))
     gender = Column(
-        SqlEnum("Male", "Female", "Not Specified", "Other"),
+        Enum("Male", "Female", "Not Specified", "Other"),
         doc="Identifies the gender of the participant.",
     )
     race = Column(
-        SqlEnum(
+        Enum(
             "American Indian/Alaska Native",
             "Asian",
             "Black/African American",
@@ -218,7 +214,7 @@ class Participant(CommonColumns):
         doc="NIH Racial and Ethnic Categories and Definitions for NIH Diversity Programs and for Other Reporting Purposes (NOT-OD-15-089),  Release Date: April 8, 2015.",
     )
     ethnicity = Column(
-        SqlEnum(
+        Enum(
             "Hispanic or Latino",
             "Not Hispanic or Latino",
             "Not reported",
@@ -239,18 +235,16 @@ class Participant(CommonColumns):
 
 
 class Sample(CommonColumns):
-    __table_args__ = (
-        CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
-        CheckConstraint("cidc_id ~ '^CIDC-\\w+-\\w+-\\w+$'"),
-    )
-
     cimac_id = Column(
         String,
+        CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
         nullable=False,
         doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
     )
     cidc_id = Column(
-        String, doc="The generated, CIDC-internal identifier for this sample."
+        String,
+        CheckConstraint("cidc_id ~ '^CIDC-\\w+-\\w+-\\w+$'"),
+        doc="The generated, CIDC-internal identifier for this sample.",
     )
     shipping_entry_number = Column(
         Integer,
@@ -303,11 +297,11 @@ class Sample(CommonColumns):
     )
     sample_type = Column(SampleTypes, nullable=False, doc="Type of sample sent.")
     type_of_tumor_sample = Column(
-        SqlEnum("Metastatic Tumor", "Primary Tumor", "Not Reported", "Other"),
+        Enum("Metastatic Tumor", "Primary Tumor", "Not Reported", "Other"),
         doc="The type of tumor sample obtained (primary or metastatic).",
     )
     sample_collection_procedure = Column(
-        SqlEnum(
+        Enum(
             "Blood Draw",
             "Excision",
             "Core Biopsy",
@@ -327,7 +321,7 @@ class Sample(CommonColumns):
         Integer, doc="The biopsy core number from which the sample was used."
     )
     fixation_stabilization_type = Column(
-        SqlEnum(
+        Enum(
             "Archival FFPE",
             "Fresh Specimen",
             "Frozen Specimen",
@@ -340,7 +334,7 @@ class Sample(CommonColumns):
         doc="Type of specimen fixation or stabilization that was employed by the site directly after collection.",
     )
     type_of_primary_container = Column(
-        SqlEnum(
+        Enum(
             "Sodium heparin",
             "Blood specimen container with EDTA",
             "Potassium EDTA",
@@ -374,7 +368,7 @@ class Sample(CommonColumns):
         doc="Quantity of the processed sample (e.g. number of slides cut for DNA extraction).",
     )
     processed_sample_derivative = Column(
-        SqlEnum(
+        Enum(
             "Tumor DNA",
             "Tumor RNA",
             "Germline DNA",
@@ -399,36 +393,57 @@ class Sample(CommonColumns):
     )
     tumor_tissue_total_area_percentage = Column(
         Number,
+        CheckConstraint(
+            "tumor_tissue_total_area_percentage >= 0 and tumor_tissue_total_area_percentage <= 100"
+        ),
         doc="Score the percentage of tumor (including tumor bed) tissue area of the slide (e.g. vs non-malignant or normal tissue)",
     )
     viable_tumor_area_percentage = Column(
         Number,
+        CheckConstraint(
+            "viable_tumor_area_percentage >= 0 and viable_tumor_area_percentage <= 100"
+        ),
         doc="Score the percentage of viable tumor cells comprising the tumor bed area",
     )
     viable_stroma_area_percentage = Column(
         Number,
+        CheckConstraint(
+            "viable_stroma_area_percentage >= 0 and viable_stroma_area_percentage <= 100"
+        ),
         doc="Score the evaluation of stromal elements (this indicates the % area of tumor bed occupied by non-tumor cells, including inflammatory cells [lymphocytes, histiocytes, etc], endothelial cells, fibroblasts, etc)",
     )
     necrosis_area_percentage = Column(
-        Number, doc="Score the percentage area of necrosis"
+        Number,
+        CheckConstraint(
+            "necrosis_area_percentage >= 0 and necrosis_area_percentage <= 100"
+        ),
+        doc="Score the percentage area of necrosis",
     )
     fibrosis_area_percentage = Column(
-        Number, doc="Score the percentage area of Fibrosis"
+        Number,
+        CheckConstraint(
+            "fibrosis_area_percentage >= 0 and fibrosis_area_percentage <= 100"
+        ),
+        doc="Score the percentage area of Fibrosis",
     )
     din = Column(
         Number,
+        CheckConstraint("din >= 0 and din <= 10"),
         doc="Provides a DNA Integrity Number as an indication of extraction quality (values of 1-10)",
     )
     a260_a280 = Column(
         Number,
+        CheckConstraint("a260_a280 >= 0 and a260_a280 <= 2"),
         doc="Provides an absorbance percentage ratio indicating purity of DNA (values of 0 to 2)",
     )
     a260_a230 = Column(
         Number,
+        CheckConstraint("a260_a230 >= 0 and a260_a230 <= 3"),
         doc="Provides an absorbance percentage ratio indicating presence of contaminants (values of 0 to 3)",
     )
     pbmc_viability = Column(
         Number,
+        CheckConstraint("pbmc_viability >= 0 and pbmc_viability <= 100"),
         doc="Receiving site determines the percent recovered cells that are viable after thawing.",
     )
     pbmc_recovery = Column(
@@ -436,7 +451,7 @@ class Sample(CommonColumns):
         doc="Receiving site determines number for PBMCs per vial recovered upon receipt.",
     )
     pbmc_resting_period_used = Column(
-        SqlEnum("Yes", "No", "Not Reported", "Other"),
+        Enum("Yes", "No", "Not Reported", "Other"),  # should be Boolean, nullable=True
         doc="Receiving site indicates if a resting period was used after PBMC recovery.",
     )
     material_used = Column(
@@ -455,18 +470,20 @@ class Sample(CommonColumns):
         MaterialUnits, doc="Units for the amount of material remaining."
     )
     material_storage_condition = Column(
-        SqlEnum("RT", "4oC", "(-20)oC", "(-80)oC", "LN", "Not Reported", "Other"),
+        Enum("RT", "4oC", "(-20)oC", "(-80)oC", "LN", "Not Reported", "Other"),
         doc="Storage condition of the material once it was received.",
     )
     quality_of_sample = Column(
-        SqlEnum("Pass", "Fail", "Not Reported", "Other"),
+        Enum(
+            "Pass", "Fail", "Not Reported", "Other"
+        ),  # could be Boolean, nullable=True
         doc="Final status of sample after QC and pathology review.",
     )
     sample_replacement = Column(
         Replacement, doc="Indication if sample replacement is/was requested."
     )
     residual_sample_use = Column(
-        SqlEnum(
+        Enum(
             "Sample Returned",
             "Sample Sent to Another Lab",
             "Sample received from CIMAC",
@@ -477,7 +494,7 @@ class Sample(CommonColumns):
     )
     comments = Column(String, doc="Comments on sample testing.")
     diagnosis_verification = Column(
-        SqlEnum(
+        Enum(
             "Local pathology review was not consistent",
             "Local pathology review was consistent with site of tissue procurement diagnostic pathology report",
             "Not Available",
@@ -512,11 +529,13 @@ class Sample(CommonColumns):
 
 
 class Aliquot(CommonColumns):
-    __table_args__ = CheckConstraint("slide_number ~ '^[0-9]{1,2}$'")
 
     sample_id = Column(Integer, ForeignKey(Sample.id), nullable=False)
     slide_number = Column(
-        String,
+        String,  # should be Integer
+        CheckConstraint(
+            "slide_number ~ '^[0-9]{1,2}$'"
+        ),  # should be "slide_number >= 0 and slide_number < 100"
         nullable=False,
         doc="Two digit number that indicates the sequential order of slide cuts, assigned by the CIMAC-CIDC Network.",
     )
@@ -527,7 +546,7 @@ class Aliquot(CommonColumns):
         doc="Status of aliquot if replacement is/was requested.",
     )
     aliquot_status = Column(
-        SqlEnum(
+        Enum(
             "Aliquot Returned",
             "Aliquot Exhausted",
             "Remainder used for other Assay",
@@ -538,7 +557,7 @@ class Aliquot(CommonColumns):
         doc="Status of aliquot used for other assay, exhausted, destroyed, or returned.",
     )
     material_extracted = Column(
-        SqlEnum("DNA", "RNA", "cfDNA", "Other"),
+        Enum("DNA", "RNA", "cfDNA", "Other"),
         doc="The type of biological material that was extracted from this aliquot.",
     )
     extracted_concentration = Column(
@@ -565,7 +584,7 @@ class Shipment(CommonColumns):
         doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
     )
     assay_priority = Column(
-        SqlEnum(
+        Enum(
             "1",
             "2",
             "3",
@@ -589,7 +608,7 @@ class Shipment(CommonColumns):
     )
     assay_type = Column(AssaysEnum, nullable=False, doc="Assay and sample type used.")
     courier = Column(
-        SqlEnum("FEDEX", "USPS", "UPS", "Inter-Site Delivery"),
+        Enum("FEDEX", "USPS", "UPS", "Inter-Site Delivery"),
         nullable=False,
         doc="Courier utilized for shipment.",
     )
@@ -604,7 +623,7 @@ class Shipment(CommonColumns):
         doc="Courier account number to pay for shipping if available. Example: 45465732.",
     )
     shipping_condition = Column(
-        SqlEnum(
+        Enum(
             "Frozen_Dry_Ice",
             "Frozen_Shipper",
             "Ice_Pack",
@@ -618,7 +637,7 @@ class Shipment(CommonColumns):
     date_shipped = Column(Date, nullable=False, doc="Date of shipment.")
     date_received = Column(Date, nullable=False, doc="Date of receipt.")
     quality_of_shipment = Column(
-        SqlEnum(
+        Enum(
             "Specimen shipment received in good condition",
             "Specimen shipment received in poor condition",
             "Not Reported",
@@ -632,7 +651,7 @@ class Shipment(CommonColumns):
         String, nullable=False, doc="Physical shipping address of the destination."
     )
     receiving_party = Column(
-        SqlEnum(
+        Enum(
             "MDA_Wistuba",
             "MDA_Bernatchez",
             "MDA_Al-Atrash",
