@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    ARRAY,
     Boolean,
     Column,
     Date,
@@ -8,7 +9,6 @@ from sqlalchemy import (
     String,
 )
 from sqlalchemy.orm import relationship
-from typing import List
 
 from .models import CommonColumns
 
@@ -97,14 +97,20 @@ class Cohort(CommonColumns):
     trial = relationship(ClinicalTrial, back_populates="allowed_cohort_names")
 
 
+class CollectionEventSpecimenTypes(CommonColumns):
+    collection_event_id = Column(Integer, ForeignKey("CollectionEvent.id"), nullable=False)
+    specimen_type_id = Column(Integer, ForeignKey("SpecimenTypes.id"), nullable)
+
+    collection_event = relationship("CollectionEvent", back_populates="specimen_types")
+
+
 class CollectionEvent(CommonColumns):
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
     event_name = Column(String, nullable=False)
 
-    specimen_types: List(SpecimenTypes)
-
-    trial = relationship(ClinicalTrial, back_populates="collection_event_list")
     samples = relationship("Sample", back_populates="collection_event")
+    specimen_types = relationship(CollectionEventSpecimenTypes, back_populates="collection_event")
+    trial = relationship(ClinicalTrial, back_populates="collection_event_list")
 
 
 class SpecimenTypes(CommonColumns):
