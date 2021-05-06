@@ -13,16 +13,7 @@ from sqlalchemy.orm import relationship
 from .models import CommonColumns
 
 AssaysEnum = SqlEnum(
-    "Olink",
-    "WES",
-    "RNAseq",
-    "IHC",
-    "CyTOF",
-    "H&E",
-    "ELISA",
-    "mIF",
-    "mIHC",
-    "TCRseq",
+    "Olink", "WES", "RNAseq", "IHC", "CyTOF", "H&E", "ELISA", "mIF", "mIHC", "TCRseq",
 )
 ConcentrationUnits = SqlEnum(
     "Nanogram per Microliter",
@@ -50,43 +41,102 @@ Replacement = SqlEnum(
     "Not Reported",
     "Other",
 )
+SampleTypes = SqlEnum(
+    "Tumor Tissue",
+    "Normal Tissue",
+    "Skin Tissue",
+    "Blood",
+    "Bone Marrow",
+    "Cerebrospinal Fluid",
+    "Lymph Node",
+    "Stool",
+    "Not Reported",
+    "Other",
+)
 VolumeUnits = SqlEnum("Microliter", "Milliliter", "Not Reported", "Other")
 
 
 class ClinicalTrial(CommonColumns):
-    protocol_identifier = Column(String, nullable=False, unique=True)
-    nct_id = Column(String)
-    nci_id = Column(String)
-    trial_name = Column(String)
-    trial_description = Column(String)
-    trial_organization = Column(String)
-    grant_or_affiliated_network = Column(String)
-    trial_status = Column(String)
-    biobank = Column(String)
-    lead_cimac_pis = Column(String)
-    lead_cimac_contacts = Column(String)
-    lead_trial_staff = Column(String)
-    justification = Column(String)
-    biomarker_plan = Column(String)
-    data_sharing_plan = Column(String)
+    protocol_identifier = Column(
+        String,
+        nullable=False,
+        unique=True,
+        doc="Trial identifier used by lead organization, ie. Center for Experimental Therapeutics Program (CTEP) ID or Industry Sponsored ID.  This is usually a short identifier. Example: E4412.",
+    )
+    nct_id = Column(String, doc="ClinicalTrials.gov identifier. Example: NCT03731260.")
+    nci_id = Column(String, doc="NCI Trial Identifier. Example: NCI22345.")
+    trial_name = Column(String, doc="Name of clinical trial.")
+    trial_description = Column(String, doc="A brief description of the clinical trial.")
+    trial_organization = Column(
+        String,
+        doc="Name of the primary organization that oversees the clinical trial. Example: ECOG-ACRIN, SWOG, etc.",
+    )
+    grant_or_affiliated_network = Column(
+        String,
+        doc="The primary organization providing grant funding and supporting the trial.",
+    )
+    trial_status = Column(
+        String, doc="What stage the clinical trial is at in its process."
+    )
+    biobank = Column(
+        String,
+        doc="The primary organization responsible for storing biospecimens from this study.",
+    )
+    lead_cimac_pis = Column(
+        String, doc="The PI(s) from the CIMAC-CIDC network responsible for this study."
+    )
+    lead_cimac_contacts = Column(String, doc="A list of contacts for this trial.")
+    lead_trial_staff = Column(
+        String, doc="The names of lead trial staff members other than the PIs."
+    )
+    justification = Column(
+        String,
+        doc="A description of the reasons why this study could provide insight into molecular biomarkers of immunotherapy.",
+    )
+    biomarker_plan = Column(
+        String,
+        doc="A description of the objectives and hypotheses for the proposed biomarkers.",
+    )
+    data_sharing_plan = Column(
+        String,
+        doc="A description of the rules governing data sharing and publications.",
+    )
 
-    # expected_assays : List[str]
-    # assays : List[Assay]
-    # analysis : List[Analysis]
-    # clinical_data : ClinicalData
-    # schema : artifact_image
+    # expected_assays : List[str], doc="A list of assays the CIDC expects to receive for this trial."
+    # assays : List[Assay], doc="Assays for this trial"
+    # analysis : List[Analysis], doc="Analyses for this trial"
+    # clinical_data : ClinicalData, doc="Clinical data for this trial"
+    # schema : artifact_image, doc="An image of the schema of this trial."
 
-    cohort_list = relationship("Cohort", back_populates="trial")
-    collection_event_list = relationship("CollectionEvent", back_populates="trial")
-    shipments = relationship("Shipment", back_populates="trial")
-    participants = relationship("Participant", back_populates="trial")
+    cohort_list = relationship(
+        "Cohort",
+        back_populates="trial",
+        doc="The collection of all cohorts related to this trial.",
+    )
+    collection_event_list = relationship(
+        "CollectionEvent",
+        back_populates="trial",
+        doc="The collection of all collection events related to this trial.",
+    )
+    shipments = relationship(
+        "Shipment",
+        back_populates="trial",
+        doc="The collection of all shipments related to this trial.",
+    )
+    participants = relationship(
+        "Participant",
+        back_populates="trial",
+        doc="The collection of participants in this trial.",
+    )
 
     @property
     def allowed_cohort_names(self):
+        """Allowed values for Participant.cohort_name for this trial."""
         return [c.name for c in self.cohort_list]
 
     @property
     def allowed_collection_event_names(self):
+        """Allowed values for Sample.collection_event_name for this trial."""
         return [ce.name for ce in self.collection_event_list]
 
 
@@ -98,7 +148,9 @@ class Cohort(CommonColumns):
 
 
 class CollectionEventSpecimenTypes(CommonColumns):
-    collection_event_id = Column(Integer, ForeignKey("CollectionEvent.id"), nullable=False)
+    collection_event_id = Column(
+        Integer, ForeignKey("CollectionEvent.id"), nullable=False
+    )
     specimen_type_id = Column(Integer, ForeignKey("SpecimenTypes.id"), nullable)
 
     collection_event = relationship("CollectionEvent", back_populates="specimen_types")
@@ -109,7 +161,9 @@ class CollectionEvent(CommonColumns):
     event_name = Column(String, nullable=False)
 
     samples = relationship("Sample", back_populates="collection_event")
-    specimen_types = relationship(CollectionEventSpecimenTypes, back_populates="collection_event")
+    specimen_types = relationship(
+        CollectionEventSpecimenTypes, back_populates="collection_event"
+    )
     trial = relationship(ClinicalTrial, back_populates="collection_event_list")
 
 
@@ -124,11 +178,24 @@ class SpecimenTypes(CommonColumns):
 
 class Participant(CommonColumns):
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
-    cimac_participant_id = Column(String, nullable=False)
-    cidc_participant_id = Column(String)
-    participant_id = Column(String, nullable=False)
+    cimac_participant_id = Column(
+        String,
+        nullable=False,
+        doc="Participant identifier assigned by the CIMAC-CIDC Network. Formated as: C?????? (first 7 characters of CIMAC ID)",
+    )
+    cidc_participant_id = Column(
+        String, doc="The generated, CIDC-internal identifier for this participant."
+    )
+    participant_id = Column(
+        String,
+        nullable=False,
+        doc="Trial Participant Identifier. Crypto-hashed after upload.",
+    )
     cohort_id = Column(Integer, ForeignKey(Cohort.id))
-    gender = Column(SqlEnum("Male", "Female", "Not Specified", "Other"))
+    gender = Column(
+        SqlEnum("Male", "Female", "Not Specified", "Other"),
+        doc="Identifies the gender of the participant.",
+    )
     race = Column(
         SqlEnum(
             "American Indian/Alaska Native",
@@ -139,7 +206,8 @@ class Participant(CommonColumns):
             "Not Reported",
             "Unknown",
             "Other",
-        )
+        ),
+        doc="NIH Racial and Ethnic Categories and Definitions for NIH Diversity Programs and for Other Reporting Purposes (NOT-OD-15-089),  Release Date: April 8, 2015.",
     )
     ethnicity = Column(
         SqlEnum(
@@ -148,7 +216,8 @@ class Participant(CommonColumns):
             "Not reported",
             "Unknown",
             "Other",
-        )
+        ),
+        doc="NIH Racial and Ethnic Categories and Definitions for NIH Diversity Programs and for Other Reporting Purposes (NOT-OD-15-089),  Release Date: April 8, 2015.",
     )
 
     # clinical: dict
@@ -162,26 +231,67 @@ class Participant(CommonColumns):
 
 
 class Sample(CommonColumns):
-    cimac_id = Column(String, nullable=False)
-    cidc_id = Column(String)
-    shipping_entry_number = Column(Integer)
-    box_number = Column(String)
-    surgical_pathology_report_id = Column(String)
-    clinical_report_id = Column(String)
-    parent_sample_id = Column(String, nullable=False)
-    processed_sample_id = Column(String)
-    site_description = Column(String)
-    topography_code = Column(String)
-    topography_description = Column(String)
-    histology_behavior = Column(String)
-    histology_behavior_description = Column(String)
+    cimac_id = Column(
+        String,
+        nullable=False,
+        doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
+    )
+    cidc_id = Column(
+        String, doc="The generated, CIDC-internal identifier for this sample."
+    )
+    shipping_entry_number = Column(
+        Integer,
+        doc="Provides a numbered identifier for patient (sample) entry in a shipment manifest.",
+    )
+    box_number = Column(
+        String,
+        doc="Identifier if sample shipment container includes multiple boxes for each assay.",
+    )
+    surgical_pathology_report_id = Column(
+        String,
+        doc="A unique identifier so someone can find the surgical pathology report.",
+    )
+    clinical_report_id = Column(
+        String, doc="A unique identifier so someone can find the clinical report."
+    )
+    parent_sample_id = Column(
+        String,
+        nullable=False,
+        doc="Sample identifier assigned by the biorepository site. Crypto-hashed after upload.",
+    )
+    processed_sample_id = Column(
+        String,
+        doc="Aliquot identifier assigned by the biorepository site. Crypto-hashed after upload.",
+    )
+    site_description = Column(
+        String, doc="Descritpion of the topography category. e.g LUNG AND BRONCHUS"
+    )
+    topography_code = Column(
+        String,
+        doc="ICD-0-3 topography site code from which a specimen was isolated. e.g. C34.1",
+    )
+    topography_description = Column(
+        String, doc="ICD-0-3 site code description. e.g. Upper lobe, lung"
+    )
+    histology_behavior = Column(
+        String, doc="ICD-0-3 code for histology and behavior. e.g. 9665/3"
+    )
+    histology_behavior_description = Column(
+        String,
+        doc="ICD-0-3 histology and behavior code description. e.g. Hodgkin lymphoma, nod. scler., grade 1",
+    )
     collection_event_id = Column(
         Integer, ForeignKey(CollectionEvent.id), nullable=False
     )
-    sample_location = Column(String, nullable=False)
-    sample_type_id = Column(Integer, ForeignKey(SampleType.id), nullable=False)
+    sample_location = Column(
+        String,
+        nullable=False,
+        doc="Sample location within the shipping container. Example: A1.",
+    )
+    sample_type = Column(SampleTypes, nullable=False, doc="Type of sample sent.")
     type_of_tumor_sample = Column(
-        SqlEnum("Metastatic Tumor", "Primary Tumor", "Not Reported", "Other")
+        SqlEnum("Metastatic Tumor", "Primary Tumor", "Not Reported", "Other"),
+        doc="The type of tumor sample obtained (primary or metastatic).",
     )
     sample_collection_procedure = Column(
         SqlEnum(
@@ -197,9 +307,12 @@ class Sample(CommonColumns):
             "Fine-Needle Aspiration",
             "Not Reported",
             "Other",
-        )
+        ),
+        doc="Indicates the specimen source of the sample shipped. Example: Na Heparin blood draw aliquots (2 of three), FFPE block #52",
     )
-    core_number = Column(Integer)
+    core_number = Column(
+        Integer, doc="The biopsy core number from which the sample was used."
+    )
     fixation_stabilization_type = Column(
         SqlEnum(
             "Archival FFPE",
@@ -210,7 +323,8 @@ class Sample(CommonColumns):
             "Thaw-Lyse",
             "Not Reported",
             "Other",
-        )
+        ),
+        doc="Type of specimen fixation or stabilization that was employed by the site directly after collection.",
     )
     type_of_primary_container = Column(
         SqlEnum(
@@ -221,16 +335,31 @@ class Sample(CommonColumns):
             "Stool collection container with DNA stabilizer",
             "Not Reported",
             "Other",
-        )
+        ),
+        doc="The format in which the sample was sent.",
     )
-    sample_volume = Column(Number)
-    sample_volume_units = Column(VolumeUnits)
-    processed_sample_type_id = Column(Integer, ForeignKey(SampleType.id))
-    processed_sample_volume = Column(Number)
-    processed_sample_volume_units = Column(VolumeUnits)
-    processed_sample_concentration = Column(Number)
-    processed_sample_concentration_units = Column(ConcentrationUnits)
-    processed_sample_quantity = Column(Number)
+    sample_volume = Column(
+        Number, doc="Volume of the parent sample (e.g. Heparin tube volume)"
+    )
+    sample_volume_units = Column(VolumeUnits, doc="Unit for the parent sample volume.")
+    processed_sample_type = Column(
+        SampleTypes,
+        doc="The type of processing that was performed on the collected specimen by the Biobank for storage.",
+    )
+    processed_sample_volume = Column(Number, doc="Volume of the processed sample.")
+    processed_sample_volume_units = Column(
+        VolumeUnits, doc="Volume units of the processed sample."
+    )
+    processed_sample_concentration = Column(
+        Number, doc="The concentration of the processed sample.",
+    )
+    processed_sample_concentration_units = Column(
+        ConcentrationUnits, doc="The concentration units for the processed sample."
+    )
+    processed_sample_quantity = Column(
+        Number,
+        doc="Quantity of the processed sample (e.g. number of slides cut for DNA extraction).",
+    )
     processed_sample_derivative = Column(
         SqlEnum(
             "Tumor DNA",
@@ -239,32 +368,90 @@ class Sample(CommonColumns):
             "Circulating Tumor-Derived DNA",
             "Not Reported",
             "Other",
-        )
+        ),
+        doc="The type of derivative or analyte extracted from the specimen to be shipped for testing.",
     )
-    sample_derivative_volume = Column(Number)
-    sample_derivative_volume_units = Column(VolumeUnits)
-    sample_derivative_concentration = Column(Number)
-    sample_derivative_concentration_units = Column(ConcentrationUnits)
-    tumor_tissue_total_area_percentage = Column(Number)
-    viable_tumor_area_percentage = Column(Number)
-    viable_stroma_area_percentage = Column(Number)
-    necrosis_area_percentage = Column(Number)
-    fibrosis_area_percentage = Column(Number)
-    din = Column(Number)
-    a260_a280 = Column(Number)
-    a260_a230 = Column(Number)
-    pbmc_viability = Column(Number)
-    pbmc_recovery = Column(Number)
-    pbmc_resting_period_used = Column(SqlEnum("Yes", "No", "Not Reported", "Other"))
-    material_used = Column(Number)
-    material_used_units = Column(MaterialUnits)
-    material_remaining = Column(Number)
-    material_remaining_units = Column(MaterialUnits)
+    sample_derivative_volume = Column(
+        Number, doc="Volume of the analyte or derivative shipped."
+    )
+    sample_derivative_volume_units = Column(
+        VolumeUnits, doc="Volume units of each analyte or derivative shipped."
+    )
+    sample_derivative_concentration = Column(
+        Number, doc="The concentration of analyte or derivative shipped."
+    )
+    sample_derivative_concentration_units = Column(
+        ConcentrationUnits,
+        doc="The concentration units for the analyte or derivative shipped.",
+    )
+    tumor_tissue_total_area_percentage = Column(
+        Number,
+        doc="Score the percentage of tumor (including tumor bed) tissue area of the slide (e.g. vs non-malignant or normal tissue)",
+    )
+    viable_tumor_area_percentage = Column(
+        Number,
+        doc="Score the percentage of viable tumor cells comprising the tumor bed area",
+    )
+    viable_stroma_area_percentage = Column(
+        Number,
+        doc="Score the evaluation of stromal elements (this indicates the % area of tumor bed occupied by non-tumor cells, including inflammatory cells [lymphocytes, histiocytes, etc], endothelial cells, fibroblasts, etc)",
+    )
+    necrosis_area_percentage = Column(
+        Number, doc="Score the percentage area of necrosis"
+    )
+    fibrosis_area_percentage = Column(
+        Number, doc="Score the percentage area of Fibrosis"
+    )
+    din = Column(
+        Number,
+        doc="Provides a DNA Integrity Number as an indication of extraction quality (values of 1-10)",
+    )
+    a260_a280 = Column(
+        Number,
+        doc="Provides an absorbance percentage ratio indicating purity of DNA (values of 0 to 2)",
+    )
+    a260_a230 = Column(
+        Number,
+        doc="Provides an absorbance percentage ratio indicating presence of contaminants (values of 0 to 3)",
+    )
+    pbmc_viability = Column(
+        Number,
+        doc="Receiving site determines the percent recovered cells that are viable after thawing.",
+    )
+    pbmc_recovery = Column(
+        Number,
+        doc="Receiving site determines number for PBMCs per vial recovered upon receipt.",
+    )
+    pbmc_resting_period_used = Column(
+        SqlEnum("Yes", "No", "Not Reported", "Other"),
+        doc="Receiving site indicates if a resting period was used after PBMC recovery.",
+    )
+    material_used = Column(
+        Number,
+        doc="Receiving site indicates how much material was used for assay purposes.",
+    )
+    material_used_units = Column(
+        MaterialUnits,
+        doc="Units for the amount of material used; should be the same value as Specimen Analyte units.",
+    )
+    material_remaining = Column(
+        Number,
+        doc="Receiving site indicates how much material remains after assay use.",
+    )
+    material_remaining_units = Column(
+        MaterialUnits, doc="Units for the amount of material remaining."
+    )
     material_storage_condition = Column(
-        SqlEnum("RT", "4oC", "(-20)oC", "(-80)oC", "LN", "Not Reported", "Other")
+        SqlEnum("RT", "4oC", "(-20)oC", "(-80)oC", "LN", "Not Reported", "Other"),
+        doc="Storage condition of the material once it was received.",
     )
-    quality_of_sample = Column(SqlEnum("Pass", "Fail", "Not Reported", "Other"))
-    sample_replacement = Column(Replacement)
+    quality_of_sample = Column(
+        SqlEnum("Pass", "Fail", "Not Reported", "Other"),
+        doc="Final status of sample after QC and pathology review.",
+    )
+    sample_replacement = Column(
+        Replacement, doc="Indication if sample replacement is/was requested."
+    )
     residual_sample_use = Column(
         SqlEnum(
             "Sample Returned",
@@ -272,9 +459,10 @@ class Sample(CommonColumns):
             "Sample received from CIMAC",
             "Not Reported",
             "Other",
-        )
+        ),
+        doc="Indication if sample was sent to another location or returned back to biorepository.",
     )
-    comments = Column(String)
+    comments = Column(String, doc="Comments on sample testing.")
     diagnosis_verification = Column(
         SqlEnum(
             "Local pathology review was not consistent",
@@ -282,19 +470,21 @@ class Sample(CommonColumns):
             "Not Available",
             "Not Reported",
             "Other",
-        )
+        ),
+        doc="Indicates whether the local pathology review was consistent with the diagnostic pathology report.",
     )
-    intended_assay = Column(String)
+    intended_assay = Column(
+        AssaysEnum,
+        doc="The assay that this sample is expected to be used as input for.",
+    )
 
-    aliquots = relationship("Aliquot", back_populates="sample")
+    aliquots = relationship(
+        "Aliquot",
+        back_populates="sample",
+        doc="Pertaining to a portion (volume or weight) of the whole.",
+    )
     collection_event = relationship("CollectionEvent", back_populates="samples")
     participant = relationship("Participant", back_populates="samples")
-    processed_sample_type = relationship(
-        "SampleType", primaryjoin="Sample.processed_sample_type_id == SampleType.id"
-    )
-    sample_type = relationship(
-        "SampleType", primaryjoin="Sample.sample_type_id == SampleType.id"
-    )
 
     # if teype_of_sample == "Blood"
     # type_of_primary_container is not None
@@ -310,9 +500,17 @@ class Sample(CommonColumns):
 
 class Aliquot(CommonColumns):
     sample_id = Column(Integer, ForeignKey(Sample.id), nullable=False)
-    slide_number = Column(String, nullable=False)
-    quantity = Column(Integer)
-    aliquot_replacement = Column(Replacement, nullable=False)
+    slide_number = Column(
+        String,
+        nullable=False,
+        doc="Two digit number that indicates the sequential order of slide cuts, assigned by the CIMAC-CIDC Network.",
+    )
+    quantity = Column(Integer, doc="Quantity of each aliquot shipped.")
+    aliquot_replacement = Column(
+        Replacement,
+        nullable=False,
+        doc="Status of aliquot if replacement is/was requested.",
+    )
     aliquot_status = Column(
         SqlEnum(
             "Aliquot Returned",
@@ -322,13 +520,23 @@ class Aliquot(CommonColumns):
             "Other",
         ),
         nullable=False,
+        doc="Status of aliquot used for other assay, exhausted, destroyed, or returned.",
     )
-    material_extracted = Column(SqlEnum("DNA", "RNA", "cfDNA", "Other"))
-    extracted_concentration = Column(String)
+    material_extracted = Column(
+        SqlEnum("DNA", "RNA", "cfDNA", "Other"),
+        doc="The type of biological material that was extracted from this aliquot.",
+    )
+    extracted_concentration = Column(
+        String,
+        doc="The concentration of biological material that was extracted from this aliquot.",
+    )
     aliquot_amount = Column(
-        String
+        String, doc="The amount of extracted aliquot shipped. Example: 400 ng"
     )  # RECHECK Should this be moved to Sample or renamed?
-    lymphocyte_influx = Column(String)
+    lymphocyte_influx = Column(
+        String,
+        doc="Extent of lymphocytic infiltration into the tumor stroma or surrounding environment. Example: 2",
+    )
 
     sample = relationship(Sample, back_populates="aliquots")
 
@@ -336,7 +544,11 @@ class Aliquot(CommonColumns):
 class Shipment(CommonColumns):
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
 
-    manifest_id = Column(String, nullable=False)
+    manifest_id = Column(
+        String,
+        nullable=False,
+        doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
+    )
     assay_priority = Column(
         SqlEnum(
             "1",
@@ -358,16 +570,24 @@ class Shipment(CommonColumns):
             "Other",
         ),
         nullable=False,
+        doc="Priority of the assay as it appears on the intake form.",
     )
-    assay_type = Column(
-        AssaysEnum,
-        nullable=False,
-    )
+    assay_type = Column(AssaysEnum, nullable=False, doc="Assay and sample type used.")
     courier = Column(
-        SqlEnum("FEDEX", "USPS", "UPS", "Inter-Site Delivery"), nullable=False
+        SqlEnum("FEDEX", "USPS", "UPS", "Inter-Site Delivery"),
+        nullable=False,
+        doc="Courier utilized for shipment.",
     )
-    tracking_number = Column(String, nullable=False)
-    account_number = Column(String, nullable=False)
+    tracking_number = Column(
+        String,
+        nullable=False,
+        doc="Air bill number assigned to shipment. Example: 4567788343.",
+    )
+    account_number = Column(
+        String,
+        nullable=False,
+        doc="Courier account number to pay for shipping if available. Example: 45465732.",
+    )
     shipping_condition = Column(
         SqlEnum(
             "Frozen_Dry_Ice",
@@ -378,9 +598,10 @@ class Shipment(CommonColumns):
             "Other",
         ),
         nullable=False,
+        doc="Type of shipment made.",
     )
-    date_shipped = Column(Date, nullable=False)
-    date_received = Column(Date, nullable=False)
+    date_shipped = Column(Date, nullable=False, doc="Date of shipment.")
+    date_received = Column(Date, nullable=False, doc="Date of receipt.")
     quality_of_shipment = Column(
         SqlEnum(
             "Specimen shipment received in good condition",
@@ -389,9 +610,12 @@ class Shipment(CommonColumns):
             "Other",
         ),
         nullable=False,
+        doc="Indication that specimens were received in good condition.",
     )
-    ship_from = Column(String, nullable=False)
-    ship_to = Column(String, nullable=False)
+    ship_from = Column(String, nullable=False, doc="Contact information for shipment.")
+    ship_to = Column(
+        String, nullable=False, doc="Physical shipping address of the destination."
+    )
     receiving_party = Column(
         SqlEnum(
             "MDA_Wistuba",
@@ -413,6 +637,7 @@ class Shipment(CommonColumns):
             "FNLCR_MoCha",
         ),
         nullable=False,
+        doc="Site where sample was shipped to be assayed.",
     )
 
     trial = relationship(ClinicalTrial, back_populates="shipments")
