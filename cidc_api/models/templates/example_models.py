@@ -343,6 +343,9 @@ class Sample(CommonColumns):
             "Not Reported",
             "Other",
         ),
+        CheckConstraint(
+            "type_of_sample != 'blood' or type_of_primary_container is not null"
+        ),
         doc="The format in which the sample was sent.",
     )
     sample_volume = Column(
