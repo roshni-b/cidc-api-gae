@@ -1,5 +1,6 @@
 from enum import Enum
 from datetime import date, time
+from dataclasses import dataclass
 from typing import Optional, Dict, Callable, Any, List
 
 import xlsxwriter
@@ -40,6 +41,7 @@ class Entry:
         self.pytype = self.sqltype.python_type
 
 
+@dataclass
 class WorksheetConfig:
     """
     A worksheet within a metadata spreadsheet. A worksheet has a name, a list
@@ -48,15 +50,9 @@ class WorksheetConfig:
     etc. etc...
     """
 
-    def __init__(
-        self,
-        name: str,
-        preamble_rows: List[Entry] = [],
-        data_columns: Dict[str, List[Entry]] = {},
-    ):
-        self.name = name
-        self.preamble_rows = preamble_rows
-        self.data_columns = data_columns
+    name: str
+    preamble_rows: List[Entry]
+    data_columns: Dict[str, List[Entry]]
 
 
 class RowType(Enum):
@@ -103,8 +99,6 @@ def _format_validation_range(
 
 
 class ExcelStyles:
-    """Data class containing format specifications used in `XlTemplateWriter`"""
-
     COLUMN_WIDTH = 30
 
     TITLE_STYLE_PROPS = {
@@ -170,6 +164,7 @@ class ExcelStyles:
         self.DIRECTIVE_STYLE = workbook.add_format(self.DIRECTIVE_STYLE_PROPS)
 
 
+@dataclass
 class MetadataTemplate:
     """
     A metadata template. Must have attributes `upload_type` and `worksheets` defined.
@@ -182,28 +177,25 @@ class MetadataTemplate:
     DATA_ROWS = 2000
     DATA_DICT_SHEETNAME = "Data Dictionary"
 
-    @classmethod
-    def read(cls, filename: str):
+    def read(self, filename: str):
         """
         Extract a list of SQLAlchemy models in insertion order from a populated
         instance of this template.
         """
         ...
 
-    @classmethod
-    def write(cls, filename: str):
+    def write(self, filename: str):
         """
         Generate an empty excel file for this template type.
         """
         workbook = xlsxwriter.Workbook(filename)
         styles = ExcelStyles(workbook)
-        cls._write_legend(workbook, styles)
-        enum_ranges = cls._write_data_dict(workbook, styles)
-        cls._write_worksheets(workbook, styles, enum_ranges)
+        self._write_legend(workbook, styles)
+        enum_ranges = self._write_data_dict(workbook, styles)
+        self._write_worksheets(workbook, styles, enum_ranges)
         workbook.close()
 
-    @classmethod
-    def _write_legend(cls, workbook: xlsxwriter.Workbook, styles: ExcelStyles):
+    def _write_legend(self, workbook: xlsxwriter.Workbook, styles: ExcelStyles):
         ws = workbook.add_worksheet("Legend")
         ws.protect()
         ws.set_column(1, 100, width=styles.COLUMN_WIDTH)
@@ -211,13 +203,13 @@ class MetadataTemplate:
         row = 0
         ws.write(row, 1, f"LEGEND", styles.DATA_STYLE)
 
-        for config in cls.worksheet_configs:
+        for config in self.worksheet_configs:
             row += 1
             ws.write(row, 1, f"Legend for tab {config.name!r}", styles.TITLE_STYLE)
 
             for entry in config.preamble_rows:
                 row += 1
-                cls._write_legend_item(ws, row, entry, styles.PREAMBLE_STYLE)
+                self._write_legend_item(ws, row, entry, styles.PREAMBLE_STYLE)
 
             for section_name, section_entries in config.data_columns.items():
                 row += 1
@@ -230,11 +222,10 @@ class MetadataTemplate:
 
                 for entry in section_entries:
                     row += 1
-                    cls._write_legend_item(ws, row, entry, styles.HEADER_STYLE)
+                    self._write_legend_item(ws, row, entry, styles.HEADER_STYLE)
 
-    @classmethod
     def _write_legend_item(
-        cls,
+        self,
         ws: xlsxwriter.workbook.Worksheet,
         row: int,
         entry: Entry,
@@ -245,11 +236,10 @@ class MetadataTemplate:
         ws.write(row, 2, entry.sqltype.__class__.__name__)
         ws.write(row, 3, entry.doc)
 
-    @classmethod
     def _write_data_dict(
-        cls, workbook: xlsxwriter.Workbook, styles: ExcelStyles
+        self, workbook: xlsxwriter.Workbook, styles: ExcelStyles
     ) -> Dict[str, str]:
-        ws = workbook.add_worksheet(cls.DATA_DICT_SHEETNAME)
+        ws = workbook.add_worksheet(self.DATA_DICT_SHEETNAME)
         ws.protect()
         ws.set_column(1, 100, width=styles.COLUMN_WIDTH)
 
@@ -259,33 +249,32 @@ class MetadataTemplate:
         # ranges of enum values to be used for validation
         data_dict_mapping = {}
 
-        for config in cls.worksheet_configs:
+        for config in self.worksheet_configs:
             for entry in config.preamble_rows:
-                rows = cls._write_data_dict_item(ws, col, entry, styles.PREAMBLE_STYLE)
+                rows = self._write_data_dict_item(ws, col, entry, styles.PREAMBLE_STYLE)
                 if rows > 0:
                     # saving Data Dict range to use for validation
                     data_dict_mapping[entry.name] = _format_validation_range(
-                        rows, col, cls.DATA_DICT_SHEETNAME
+                        rows, col, self.DATA_DICT_SHEETNAME
                     )
                     col += 1
 
             for section_entries in config.data_columns.values():
                 for entry in section_entries:
-                    rows = cls._write_data_dict_item(
+                    rows = self._write_data_dict_item(
                         ws, col, entry, styles.HEADER_STYLE
                     )
                     if rows > 0:
                         # saving Data Dict range to use for validation
                         data_dict_mapping[entry.name] = _format_validation_range(
-                            rows, col, cls.DATA_DICT_SHEETNAME
+                            rows, col, self.DATA_DICT_SHEETNAME
                         )
                         col += 1
 
         return data_dict_mapping
 
-    @classmethod
     def _write_data_dict_item(
-        cls,
+        self,
         ws: xlsxwriter.workbook.Worksheet,
         col: int,
         entry: Entry,
@@ -303,15 +292,14 @@ class MetadataTemplate:
 
         return len(entry.enums)
 
-    @classmethod
     def _write_worksheets(
-        cls,
+        self,
         workbook: xlsxwriter.Workbook,
         styles: ExcelStyles,
         enum_ranges: Dict[str, str],
     ):
         """Write content to the given worksheet"""
-        for config in cls.worksheet_configs:
+        for config in self.worksheet_configs:
             ws = workbook.add_worksheet(config.name)
             ws.set_column(0, 100, width=styles.COLUMN_WIDTH)
 
@@ -319,7 +307,7 @@ class MetadataTemplate:
             col = 1
 
             # WORKSHEET TITLE
-            cls._write_type_annotation(ws, row, RowType.TITLE)
+            self._write_type_annotation(ws, row, RowType.TITLE)
             preamble_range = xl_range(row, 1, row, 2)
             ws.merge_range(preamble_range, config.name.upper(), styles.TITLE_STYLE)
 
@@ -327,21 +315,21 @@ class MetadataTemplate:
             row += 1
             for entry in config.preamble_rows:
                 # Write row type and entity name
-                cls._write_type_annotation(ws, row, RowType.PREAMBLE)
+                self._write_type_annotation(ws, row, RowType.PREAMBLE)
                 ws.write(row, 1, entry.name.upper(), styles.PREAMBLE_STYLE)
-                cls._write_comment(ws, row, 1, entry, styles)
+                self._write_comment(ws, row, 1, entry, styles)
 
                 # Format value cells next to entity name
                 ws.write(row, 2, "", styles.PREAMBLE_STYLE)
 
                 # Add data validation if appropriate
                 value_cell = xl_rowcol_to_cell(row, 2)
-                cls._write_validation(ws, value_cell, entry, enum_ranges)
+                self._write_validation(ws, value_cell, entry, enum_ranges)
                 row += 1
 
             # DATA SECTION HEADERS
             row += 1
-            cls._write_type_annotation(ws, row, RowType.SKIP)
+            self._write_type_annotation(ws, row, RowType.SKIP)
             start_col = 1
             for section_header, section_entries in config.data_columns.items():
                 section_width = len(section_entries)
@@ -361,30 +349,28 @@ class MetadataTemplate:
 
             # DATA SECTION TYPE ANNOTATIONS
             row += 1
-            cls._write_type_annotation(ws, row, RowType.HEADER)
-            annotations = [RowType.DATA.value] * cls.DATA_ROWS
+            self._write_type_annotation(ws, row, RowType.HEADER)
+            annotations = [RowType.DATA.value] * self.DATA_ROWS
             ws.write_column(row + 1, 0, annotations)
 
             # DATA SECTION ROWS
             for section_entries in config.data_columns.values():
                 for entry in section_entries:
                     ws.write(row, col, entry.name.upper(), styles.HEADER_STYLE)
-                    cls._write_comment(ws, row, col, entry, styles)
+                    self._write_comment(ws, row, col, entry, styles)
 
                     # Write validation to data cells below header cell
-                    data_range = xl_range(row + 1, col, row + cls.DATA_ROWS, col)
-                    cls._write_validation(ws, data_range, entry, enum_ranges)
+                    data_range = xl_range(row + 1, col, row + self.DATA_ROWS, col)
+                    self._write_validation(ws, data_range, entry, enum_ranges)
                     col += 1
 
-    @classmethod
     def _write_type_annotation(
-        cls, ws: xlsxwriter.workbook.Worksheet, row: int, row_type: RowType
+        self, ws: xlsxwriter.workbook.Worksheet, row: int, row_type: RowType
     ):
         ws.write(row, 0, row_type.value)
 
-    @classmethod
     def _write_comment(
-        cls,
+        self,
         ws: xlsxwriter.workbook.Worksheet,
         row: int,
         col: int,
@@ -403,21 +389,19 @@ class MetadataTemplate:
         if comment:
             ws.write_comment(row, col, comment, styles.COMMENT_STYLE)
 
-    @classmethod
     def _write_validation(
-        cls,
+        self,
         ws: xlsxwriter.workbook.Worksheet,
         cell_range: str,
         entry: Entry,
         enum_ranges: Dict[str, str],
     ):
-        validation = cls._get_validation(cell_range, entry, enum_ranges)
+        validation = self._get_validation(cell_range, entry, enum_ranges)
         if validation:
             ws.data_validation(cell_range, validation)
 
-    @classmethod
     def _get_validation(
-        cls, cell_range: str, entry: Entry, data_dict_validations: dict
+        self, cell_range: str, entry: Entry, data_dict_validations: dict
     ) -> Optional[dict]:
         if entry.enums and len(entry.enums) > 0:
             data_dict_validation_range = data_dict_validations[entry.name]
@@ -426,7 +410,7 @@ class MetadataTemplate:
         elif entry.pytype == date:
             return {
                 "validate": "custom",
-                "value": cls._make_date_validation_string(cell_range),
+                "value": self._make_date_validation_string(cell_range),
                 "error_message": "Please enter date in format mm/dd/yyyy",
             }
         elif entry.pytype == time:
@@ -452,9 +436,9 @@ class MetadataTemplate:
 from cidc_api.models.models import Permissions, TrialMetadata, UploadJobs
 
 
-class PBMCTemplate(MetadataTemplate):
-    upload_type = "pbmc"
-    worksheet_configs = [
+PBMCTemplate = MetadataTemplate(
+    upload_type="pbmc",
+    worksheet_configs=[
         WorksheetConfig(
             "sheet1",
             [Entry(TrialMetadata.trial_id)],
@@ -471,7 +455,8 @@ class PBMCTemplate(MetadataTemplate):
                 "section2": [Entry(Permissions.upload_type)],
             },
         ),
-    ]
+    ],
+)
 
 
 if __name__ == "__main__":
