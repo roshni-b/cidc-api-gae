@@ -4,6 +4,7 @@ from sqlalchemy import (
     Date,
     Enum,
     ForeignKey,
+    ForeignKeyConstraint,
     Numeric,
     String,
 )
@@ -150,18 +151,6 @@ class Cohort(CommonColumns):
     trial = relationship(ClinicalTrial, back_populates="allowed_cohort_names")
 
 
-class CollectionEventSpecimenTypes(CommonColumns):
-    # Pulled out as separate class so there's no need for a SpecimenTypes -> CollectionEvent Foreign Key
-    __tablename__ = "collection_event_specimen_types"
-
-    collection_event_id = Column(
-        Integer, ForeignKey("CollectionEvent.id"), nullable=False
-    )
-    specimen_type_id = Column(Integer, ForeignKey("SpecimenTypes.id"), nullable=False)
-
-    collection_event = relationship("CollectionEvent", back_populates="specimen_types")
-
-
 class CollectionEvent(CommonColumns):
     __tablename__ = "collection_events"
 
@@ -187,6 +176,124 @@ class SpecimenTypes(CommonColumns):
     parent_type = relationship("SpecimenTypes", back_populates="derivatives")
 
 
+class CollectionEventSpecimenTypes(CommonColumns):
+    # Pulled out as separate class so there's no need for a SpecimenTypes -> CollectionEvent Foreign Key
+    __tablename__ = "collection_event_specimen_types"
+
+    collection_event_id = Column(
+        Integer, ForeignKey(CollectionEvent.id), nullable=False
+    )
+    specimen_type_id = Column(Integer, ForeignKey(SpecimenTypes.id), nullable=False)
+
+    collection_event = relationship(CollectionEvent, back_populates="specimen_types")
+
+
+class Shipment(CommonColumns):
+    __tablename__ = "shipments"
+
+    trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
+
+    manifest_id = Column(
+        String,
+        nullable=False,
+        # not unique as cidc-schemas uses mergeStrategy: append
+        doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
+    )
+    assay_priority = Column(
+        Enum(
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "Not Reported",
+            "Other",
+        ),
+        nullable=False,
+        doc="Priority of the assay as it appears on the intake form.",
+    )
+    assay_type = Column(AssaysEnum, nullable=False, doc="Assay and sample type used.")
+    courier = Column(
+        Enum("FEDEX", "USPS", "UPS", "Inter-Site Delivery"),
+        nullable=False,
+        doc="Courier utilized for shipment.",
+    )
+    tracking_number = Column(
+        String,
+        nullable=False,
+        doc="Air bill number assigned to shipment. Example: 4567788343.",
+    )
+    account_number = Column(
+        String,
+        nullable=False,
+        doc="Courier account number to pay for shipping if available. Example: 45465732.",
+    )
+    shipping_condition = Column(
+        Enum(
+            "Frozen_Dry_Ice",
+            "Frozen_Shipper",
+            "Ice_Pack",
+            "Ambient",
+            "Not Reported",
+            "Other",
+        ),
+        nullable=False,
+        doc="Type of shipment made.",
+    )
+    date_shipped = Column(Date, nullable=False, doc="Date of shipment.")
+    date_received = Column(Date, nullable=False, doc="Date of receipt.")
+    quality_of_shipment = Column(
+        Enum(
+            "Specimen shipment received in good condition",
+            "Specimen shipment received in poor condition",
+            "Not Reported",
+            "Other",
+        ),
+        nullable=False,
+        doc="Indication that specimens were received in good condition.",
+    )
+    ship_from = Column(String, nullable=False, doc="Contact information for shipment.")
+    ship_to = Column(
+        String, nullable=False, doc="Physical shipping address of the destination."
+    )
+    receiving_party = Column(
+        Enum(
+            "MDA_Wistuba",
+            "MDA_Bernatchez",
+            "MDA_Al-Atrash",
+            "MSSM_Gnjatic",
+            "MSSM_Rahman",
+            "MSSM_Kim-Schulze",
+            "MSSM_Bongers",
+            "DFCI_Wu",
+            "DFCI_Hodi",
+            "DFCI_Severgnini",
+            "DFCI_Livak",
+            "Broad_Cibulskis",
+            "Stanf_Maecker",
+            "Stanf_Bendall",
+            "NCH",
+            "Adaptive",
+            "FNLCR_MoCha",
+        ),
+        nullable=False,
+        doc="Site where sample was shipped to be assayed.",
+    )
+
+    trial = relationship(ClinicalTrial, back_populates="shipments")
+    samples = relationship("Sample", back_populates="shipment")
+
+
 class Participant(CommonColumns):
     __tablename__ = "participants"
 
@@ -195,6 +302,7 @@ class Participant(CommonColumns):
         String,
         CheckConstraint("cimac_participant_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}$'"),
         nullable=False,
+        unique=True,
         doc="Participant identifier assigned by the CIMAC-CIDC Network. Formated as: C?????? (first 7 characters of CIMAC ID)",
     )
     cidc_participant_id = Column(
@@ -207,7 +315,7 @@ class Participant(CommonColumns):
         nullable=False,
         doc="Trial Participant Identifier. Crypto-hashed after upload.",
     )
-    cohort_id = Column(Integer, ForeignKey(Cohort.id))
+    cohort_id = Column(Integer)
     gender = Column(
         Enum("Male", "Female", "Not Specified", "Other"),
         doc="Identifies the gender of the participant.",
@@ -241,6 +349,10 @@ class Participant(CommonColumns):
     trial = relationship("ClinicalTrial", back_populates="participants")
     samples = relationship("Sample", back_populates="participant")
 
+    __table_args__ = (
+        ForeignKeyConstraint([trial_id, cohort_id], [Cohort.trial_id, Cohort.id]),
+    )
+
     @property
     def cohort_name(self):
         return self.cohort.name
@@ -249,10 +361,18 @@ class Participant(CommonColumns):
 class Sample(CommonColumns):
     __tablename__ = "samples"
 
+    trial_id = Column(Integer, nullable=False)
+    participant_id = Column(Integer, nullable=False)
+    collection_event_id = Column(Integer, nullable=False)
+    shipment_id = Column(
+        Integer, nullable=True
+    )  # doesn't have to be associated with a shipment
+
     cimac_id = Column(
         String,
         CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
         nullable=False,
+        unique=True,
         doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
     )
     cidc_id = Column(
@@ -300,9 +420,6 @@ class Sample(CommonColumns):
     histology_behavior_description = Column(
         String,
         doc="ICD-0-3 histology and behavior code description. e.g. Hodgkin lymphoma, nod. scler., grade 1",
-    )
-    collection_event_id = Column(
-        Integer, ForeignKey(CollectionEvent.id), nullable=False
     )
     sample_location = Column(
         String,
@@ -532,9 +649,18 @@ class Sample(CommonColumns):
     )
     collection_event = relationship("CollectionEvent", back_populates="samples")
     participant = relationship("Participant", back_populates="samples")
+    shipment = relationship("Shipment", back_populates="samples")
 
-    # if teype_of_sample == "Blood"
-    # type_of_primary_container is not None
+    __table_args__ = (
+        ForeignKeyConstraint(
+            [trial_id, participant_id], [Participant.trial_id, Participant.id]
+        ),
+        ForeignKeyConstraint(
+            [trial_id, collection_event_id],
+            [CollectionEvent.trial_id, CollectionEvent.id],
+        ),
+        ForeignKeyConstraint([trial_id, shipment_id], [Shipment.trial_id, Shipment.id]),
+    )
 
     @property
     def collection_event_name(self):
@@ -555,6 +681,7 @@ class Aliquot(CommonColumns):
             "slide_number ~ '^[0-9]{1,2}$'"
         ),  # should be "slide_number >= 0 and slide_number < 100"
         nullable=False,
+        unique=True,
         doc="Two digit number that indicates the sequential order of slide cuts, assigned by the CIMAC-CIDC Network.",
     )
     quantity = Column(Integer, doc="Quantity of each aliquot shipped.")
@@ -591,107 +718,3 @@ class Aliquot(CommonColumns):
     )
 
     sample = relationship(Sample, back_populates="aliquots")
-
-
-class Shipment(CommonColumns):
-    __tablename__ = "shipments"
-
-    trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
-
-    manifest_id = Column(
-        String,
-        nullable=False,
-        doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
-    )
-    assay_priority = Column(
-        Enum(
-            "1",
-            "2",
-            "3",
-            "4",
-            "5",
-            "6",
-            "7",
-            "8",
-            "9",
-            "10",
-            "11",
-            "12",
-            "13",
-            "14",
-            "15",
-            "Not Reported",
-            "Other",
-        ),
-        nullable=False,
-        doc="Priority of the assay as it appears on the intake form.",
-    )
-    assay_type = Column(AssaysEnum, nullable=False, doc="Assay and sample type used.")
-    courier = Column(
-        Enum("FEDEX", "USPS", "UPS", "Inter-Site Delivery"),
-        nullable=False,
-        doc="Courier utilized for shipment.",
-    )
-    tracking_number = Column(
-        String,
-        nullable=False,
-        doc="Air bill number assigned to shipment. Example: 4567788343.",
-    )
-    account_number = Column(
-        String,
-        nullable=False,
-        doc="Courier account number to pay for shipping if available. Example: 45465732.",
-    )
-    shipping_condition = Column(
-        Enum(
-            "Frozen_Dry_Ice",
-            "Frozen_Shipper",
-            "Ice_Pack",
-            "Ambient",
-            "Not Reported",
-            "Other",
-        ),
-        nullable=False,
-        doc="Type of shipment made.",
-    )
-    date_shipped = Column(Date, nullable=False, doc="Date of shipment.")
-    date_received = Column(Date, nullable=False, doc="Date of receipt.")
-    quality_of_shipment = Column(
-        Enum(
-            "Specimen shipment received in good condition",
-            "Specimen shipment received in poor condition",
-            "Not Reported",
-            "Other",
-        ),
-        nullable=False,
-        doc="Indication that specimens were received in good condition.",
-    )
-    ship_from = Column(String, nullable=False, doc="Contact information for shipment.")
-    ship_to = Column(
-        String, nullable=False, doc="Physical shipping address of the destination."
-    )
-    receiving_party = Column(
-        Enum(
-            "MDA_Wistuba",
-            "MDA_Bernatchez",
-            "MDA_Al-Atrash",
-            "MSSM_Gnjatic",
-            "MSSM_Rahman",
-            "MSSM_Kim-Schulze",
-            "MSSM_Bongers",
-            "DFCI_Wu",
-            "DFCI_Hodi",
-            "DFCI_Severgnini",
-            "DFCI_Livak",
-            "Broad_Cibulskis",
-            "Stanf_Maecker",
-            "Stanf_Bendall",
-            "NCH",
-            "Adaptive",
-            "FNLCR_MoCha",
-        ),
-        nullable=False,
-        doc="Site where sample was shipped to be assayed.",
-    )
-
-    trial = relationship(ClinicalTrial, back_populates="shipments")
