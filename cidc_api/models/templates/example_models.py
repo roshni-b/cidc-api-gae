@@ -6,6 +6,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Numeric,
+    Integer,
     String,
 )
 from sqlalchemy.orm import relationship
@@ -14,7 +15,7 @@ from ..config.db import BaseModel
 
 
 AssaysEnum = Enum(
-    "Olink", "WES", "RNAseq", "IHC", "CyTOF", "H&E", "ELISA", "mIF", "mIHC", "TCRseq",
+    "Olink", "WES", "RNAseq", "IHC", "CyTOF", "H&E", "ELISA", "mIF", "mIHC", "TCRseq"
 )
 ConcentrationUnits = Enum(
     "Nanogram per Microliter",
@@ -462,7 +463,7 @@ class Sample(BaseModel):
         VolumeUnits, doc="Volume units of the processed sample."
     )
     processed_sample_concentration = Column(
-        Numeric, doc="The concentration of the processed sample.",
+        Numeric, doc="The concentration of the processed sample."
     )
     processed_sample_concentration_units = Column(
         ConcentrationUnits, doc="The concentration units for the processed sample."
@@ -533,7 +534,7 @@ class Sample(BaseModel):
     din = Column(
         Numeric,
         CheckConstraint("din >= 0 and din <= 10"),
-        doc="Provides a DNA Integrity Number as an indication of extraction quality (values of 1-10)",
+        doc="Provides a DNA Integrity Numeric as an indication of extraction quality (values of 1-10)",
     )
     a260_a280 = Column(
         Numeric,

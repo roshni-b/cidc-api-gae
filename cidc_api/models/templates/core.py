@@ -1,11 +1,23 @@
+from collections import defaultdict
+from cidc_api.models.models import CommonColumns
 from enum import Enum
 from datetime import date, time
 from dataclasses import dataclass
-from typing import Optional, Dict, Callable, Any, List
+from warnings import filterwarnings
+from typing import Optional, Dict, Callable, Any, List, Tuple
 
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
+import openpyxl
 from sqlalchemy import Column, Enum as SqlEnum
+
+
+filterwarnings(
+    action="ignore",
+    category=UserWarning,
+    message="Data Validation extension is not supported",
+    module="openpyxl",
+)
 
 
 class Entry:
@@ -30,9 +42,10 @@ class Entry:
         encrypt: bool = False,
     ):
         self.column = column
-        self.name = name if name else column.name.replace("_", " ").upper()
+        self.name = name if name else column.name.replace("_", " ")
         self.gcs_uri_format = gcs_uri_format
-        self.process_as = process_as
+        self.process_as = process_as or {}
+        # TODO use encryption
         self.encrypt = encrypt
 
         self.doc = column.doc
@@ -40,19 +53,25 @@ class Entry:
         self.enums = self.sqltype.enums if isinstance(self.sqltype, SqlEnum) else None
         self.pytype = self.sqltype.python_type
 
+    def get_column_mapping(self, value: str) -> Dict[Column, Any]:
+        column_mapping = {self.column: self.pytype(value)}
+        for column, process in self.process_as.items():
+            column_mapping[column] = process(value)
+        return column_mapping
+
 
 @dataclass
 class WorksheetConfig:
     """
     A worksheet within a metadata spreadsheet. A worksheet has a name, a list
     of `preamble_rows` and a dictionary mapping data column group headers to lists
-    of `data_columns`.
+    of `data_sections`.
     etc. etc...
     """
 
     name: str
-    preamble_rows: List[Entry]
-    data_columns: Dict[str, List[Entry]]
+    preamble: List[Entry]
+    data_sections: List[Tuple[str, List[Entry]]]
 
 
 class RowType(Enum):
@@ -177,12 +196,57 @@ class MetadataTemplate:
     DATA_ROWS = 2000
     DATA_DICT_SHEETNAME = "Data Dictionary"
 
-    def read(self, filename: str):
+    def read(self, filename: str) -> List[CommonColumns]:
         """
         Extract a list of SQLAlchemy models in insertion order from a populated
         instance of this template.
         """
-        ...
+        workbook = openpyxl.load_workbook(filename)
+
+        for config in self.worksheet_configs:
+            preamble_rows = []
+            data_rows = []
+            for row in workbook[config.name].iter_rows():
+                row_type = row_type_from_string(row[0].value)
+                if row_type == RowType.PREAMBLE:
+                    preamble_rows.append(row)
+                elif row_type == RowType.DATA:
+                    data_rows.append(row)
+
+            if len(preamble_rows) != len(config.preamble):
+                raise Exception(
+                    f"Expected {len(config.preamble)} preamble rows but saw {len(preamble_rows)}"
+                )
+
+            model_dicts: List[Dict[Column, Any]] = []
+            preamble_dict = {}
+            for i, row in enumerate(preamble_rows):
+                cell = row[2].value
+                entry = config.preamble[i]
+                preamble_dict.update(entry.get_column_mapping(cell))
+            model_dicts.append(preamble_dict)
+
+            data_configs = [
+                entry for _, entries in config.data_sections for entry in entries
+            ]
+            for row in data_rows:
+                if all(cell.value is None for cell in row[1:]):
+                    continue
+                data_dict = {}
+                for i, entry in enumerate(data_configs, 1):
+                    cell = row[i].value
+                    data_dict.update(entry.get_column_mapping(cell))
+                model_dicts.append(data_dict)
+
+            models = []
+            for model_dict in model_dicts:
+                model_groups = defaultdict(dict)
+                for column, value in model_dict.items():
+                    model_groups[column.class_][column.name] = value
+                for model, kwargs in model_groups.items():
+                    models.append(model(**kwargs))
+
+            print(models)
 
     def write(self, filename: str):
         """
@@ -207,11 +271,11 @@ class MetadataTemplate:
             row += 1
             ws.write(row, 1, f"Legend for tab {config.name!r}", styles.TITLE_STYLE)
 
-            for entry in config.preamble_rows:
+            for entry in config.preamble:
                 row += 1
                 self._write_legend_item(ws, row, entry, styles.PREAMBLE_STYLE)
 
-            for section_name, section_entries in config.data_columns.items():
+            for section_name, section_entries in config.data_sections:
                 row += 1
                 ws.write(
                     row,
@@ -232,7 +296,7 @@ class MetadataTemplate:
         style: xlsxwriter.workbook.Format,
     ):
         """ Writes a property with its type, description, and example if any."""
-        ws.write(row, 1, entry.name.upper(), style)
+        ws.write(row, 1, entry.name, style)
         ws.write(row, 2, entry.sqltype.__class__.__name__)
         ws.write(row, 3, entry.doc)
 
@@ -250,7 +314,7 @@ class MetadataTemplate:
         data_dict_mapping = {}
 
         for config in self.worksheet_configs:
-            for entry in config.preamble_rows:
+            for entry in config.preamble:
                 rows = self._write_data_dict_item(ws, col, entry, styles.PREAMBLE_STYLE)
                 if rows > 0:
                     # saving Data Dict range to use for validation
@@ -259,7 +323,7 @@ class MetadataTemplate:
                     )
                     col += 1
 
-            for section_entries in config.data_columns.values():
+            for _, section_entries in config.data_sections:
                 for entry in section_entries:
                     rows = self._write_data_dict_item(
                         ws, col, entry, styles.HEADER_STYLE
@@ -284,7 +348,7 @@ class MetadataTemplate:
             return 0
 
         # Write the data dict column header
-        ws.write(0, col, entry.name.upper(), style)
+        ws.write(0, col, entry.name, style)
 
         # Write the data dict column values
         for i, enum_value in enumerate(entry.enums):
@@ -309,14 +373,14 @@ class MetadataTemplate:
             # WORKSHEET TITLE
             self._write_type_annotation(ws, row, RowType.TITLE)
             preamble_range = xl_range(row, 1, row, 2)
-            ws.merge_range(preamble_range, config.name.upper(), styles.TITLE_STYLE)
+            ws.merge_range(preamble_range, config.name, styles.TITLE_STYLE)
 
             # PREAMBLE ROWS
             row += 1
-            for entry in config.preamble_rows:
+            for entry in config.preamble:
                 # Write row type and entity name
                 self._write_type_annotation(ws, row, RowType.PREAMBLE)
-                ws.write(row, 1, entry.name.upper(), styles.PREAMBLE_STYLE)
+                ws.write(row, 1, entry.name, styles.PREAMBLE_STYLE)
                 self._write_comment(ws, row, 1, entry, styles)
 
                 # Format value cells next to entity name
@@ -331,7 +395,7 @@ class MetadataTemplate:
             row += 1
             self._write_type_annotation(ws, row, RowType.SKIP)
             start_col = 1
-            for section_header, section_entries in config.data_columns.items():
+            for section_header, section_entries in config.data_sections:
                 section_width = len(section_entries)
                 end_col = start_col + section_width - 1
                 if end_col - start_col > 0:
@@ -354,9 +418,9 @@ class MetadataTemplate:
             ws.write_column(row + 1, 0, annotations)
 
             # DATA SECTION ROWS
-            for section_entries in config.data_columns.values():
+            for _, section_entries in config.data_sections:
                 for entry in section_entries:
-                    ws.write(row, col, entry.name.upper(), styles.HEADER_STYLE)
+                    ws.write(row, col, entry.name, styles.HEADER_STYLE)
                     self._write_comment(ws, row, col, entry, styles)
 
                     # Write validation to data cells below header cell
