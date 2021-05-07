@@ -56,7 +56,7 @@ VolumeUnits = Enum("Microliter", "Milliliter", "Not Reported", "Other")
 
 
 class ClinicalTrial(CommonColumns):
-    __table_name__ = "clinical_trials"
+    __tablename__ = "clinical_trials"
 
     protocol_identifier = Column(
         String,
@@ -142,7 +142,7 @@ class ClinicalTrial(CommonColumns):
 
 
 class Cohort(CommonColumns):
-    __table_name__ = "cohorts"
+    __tablename__ = "cohorts"
 
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
     cohort_name = Column(String, nullable=False)
@@ -152,7 +152,7 @@ class Cohort(CommonColumns):
 
 class CollectionEventSpecimenTypes(CommonColumns):
     # Pulled out as separate class so there's no need for a SpecimenTypes -> CollectionEvent Foreign Key
-    __table_name__ = "collection_event_specimen_types"
+    __tablename__ = "collection_event_specimen_types"
 
     collection_event_id = Column(
         Integer, ForeignKey("CollectionEvent.id"), nullable=False
@@ -163,7 +163,7 @@ class CollectionEventSpecimenTypes(CommonColumns):
 
 
 class CollectionEvent(CommonColumns):
-    __table_name__ = "collection_events"
+    __tablename__ = "collection_events"
 
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
     event_name = Column(String, nullable=False)
@@ -177,7 +177,7 @@ class CollectionEvent(CommonColumns):
 
 class SpecimenTypes(CommonColumns):
     # Pulled out as a separate class do to the self Foreign Key
-    __table_name__ = "specimen_types"
+    __tablename__ = "specimen_types"
 
     specimen_type = Column(String, nullable=False)
     intended_assays = Column(AssaysEnum)
@@ -188,7 +188,7 @@ class SpecimenTypes(CommonColumns):
 
 
 class Participant(CommonColumns):
-    __table_name__ = "participants"
+    __tablename__ = "participants"
 
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
     cimac_participant_id = Column(
@@ -247,7 +247,7 @@ class Participant(CommonColumns):
 
 
 class Sample(CommonColumns):
-    __table_name__ = "samples"
+    __tablename__ = "samples"
 
     cimac_id = Column(
         String,
@@ -546,7 +546,7 @@ class Sample(CommonColumns):
 
 
 class Aliquot(CommonColumns):
-    __table_name__ = "aliquots"
+    __tablename__ = "aliquots"
 
     sample_id = Column(Integer, ForeignKey(Sample.id), nullable=False)
     slide_number = Column(
@@ -594,7 +594,7 @@ class Aliquot(CommonColumns):
 
 
 class Shipment(CommonColumns):
-    __table_name__ = "shipments"
+    __tablename__ = "shipments"
 
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
 
