@@ -8,7 +8,7 @@ from sqlalchemy import (
     String,
 )
 from sqlalchemy.orm import relationship
-from .models import CommonColumns
+from cidc_api.models import CommonColumns
 
 
 AssaysEnum = Enum(
@@ -56,6 +56,8 @@ VolumeUnits = Enum("Microliter", "Milliliter", "Not Reported", "Other")
 
 
 class ClinicalTrial(CommonColumns):
+    __table_name__ = "clinical_trials"
+
     protocol_identifier = Column(
         String,
         nullable=False,
@@ -140,6 +142,8 @@ class ClinicalTrial(CommonColumns):
 
 
 class Cohort(CommonColumns):
+    __table_name__ = "cohorts"
+
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
     cohort_name = Column(String, nullable=False)
 
@@ -148,6 +152,8 @@ class Cohort(CommonColumns):
 
 class CollectionEventSpecimenTypes(CommonColumns):
     # Pulled out as separate class so there's no need for a SpecimenTypes -> CollectionEvent Foreign Key
+    __table_name__ = "collection_event_specimen_types"
+
     collection_event_id = Column(
         Integer, ForeignKey("CollectionEvent.id"), nullable=False
     )
@@ -157,6 +163,8 @@ class CollectionEventSpecimenTypes(CommonColumns):
 
 
 class CollectionEvent(CommonColumns):
+    __table_name__ = "collection_events"
+
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
     event_name = Column(String, nullable=False)
 
@@ -169,6 +177,8 @@ class CollectionEvent(CommonColumns):
 
 class SpecimenTypes(CommonColumns):
     # Pulled out as a separate class do to the self Foreign Key
+    __table_name__ = "specimen_types"
+
     specimen_type = Column(String, nullable=False)
     intended_assays = Column(AssaysEnum)
     parent_type_id = Column(Integer, ForeignKey("SpecimenTypes.id"), nullable=True)
@@ -178,6 +188,8 @@ class SpecimenTypes(CommonColumns):
 
 
 class Participant(CommonColumns):
+    __table_name__ = "participants"
+
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
     cimac_participant_id = Column(
         String,
@@ -235,6 +247,8 @@ class Participant(CommonColumns):
 
 
 class Sample(CommonColumns):
+    __table_name__ = "samples"
+
     cimac_id = Column(
         String,
         CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
@@ -532,6 +546,7 @@ class Sample(CommonColumns):
 
 
 class Aliquot(CommonColumns):
+    __table_name__ = "aliquots"
 
     sample_id = Column(Integer, ForeignKey(Sample.id), nullable=False)
     slide_number = Column(
@@ -579,6 +594,8 @@ class Aliquot(CommonColumns):
 
 
 class Shipment(CommonColumns):
+    __table_name__ = "shipments"
+
     trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
 
     manifest_id = Column(
