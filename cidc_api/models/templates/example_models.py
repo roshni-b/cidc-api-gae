@@ -4,12 +4,12 @@ from sqlalchemy import (
     Date,
     Enum,
     ForeignKey,
-    Number,
+    Numeric,
     String,
 )
 from sqlalchemy.orm import relationship
-
 from .models import CommonColumns
+
 
 AssaysEnum = Enum(
     "Olink", "WES", "RNAseq", "IHC", "CyTOF", "H&E", "ELISA", "mIF", "mIHC", "TCRseq",
@@ -151,7 +151,7 @@ class CollectionEventSpecimenTypes(CommonColumns):
     collection_event_id = Column(
         Integer, ForeignKey("CollectionEvent.id"), nullable=False
     )
-    specimen_type_id = Column(Integer, ForeignKey("SpecimenTypes.id"), nullable)
+    specimen_type_id = Column(Integer, ForeignKey("SpecimenTypes.id"), nullable=False)
 
     collection_event = relationship("CollectionEvent", back_populates="specimen_types")
 
@@ -349,25 +349,25 @@ class Sample(CommonColumns):
         doc="The format in which the sample was sent.",
     )
     sample_volume = Column(
-        Number, doc="Volume of the parent sample (e.g. Heparin tube volume)"
+        Numeric, doc="Volume of the parent sample (e.g. Heparin tube volume)"
     )
     sample_volume_units = Column(VolumeUnits, doc="Unit for the parent sample volume.")
     processed_sample_type = Column(
         SampleTypes,
         doc="The type of processing that was performed on the collected specimen by the Biobank for storage.",
     )
-    processed_sample_volume = Column(Number, doc="Volume of the processed sample.")
+    processed_sample_volume = Column(Numeric, doc="Volume of the processed sample.")
     processed_sample_volume_units = Column(
         VolumeUnits, doc="Volume units of the processed sample."
     )
     processed_sample_concentration = Column(
-        Number, doc="The concentration of the processed sample.",
+        Numeric, doc="The concentration of the processed sample.",
     )
     processed_sample_concentration_units = Column(
         ConcentrationUnits, doc="The concentration units for the processed sample."
     )
     processed_sample_quantity = Column(
-        Number,
+        Numeric,
         doc="Quantity of the processed sample (e.g. number of slides cut for DNA extraction).",
     )
     processed_sample_derivative = Column(
@@ -382,75 +382,75 @@ class Sample(CommonColumns):
         doc="The type of derivative or analyte extracted from the specimen to be shipped for testing.",
     )
     sample_derivative_volume = Column(
-        Number, doc="Volume of the analyte or derivative shipped."
+        Numeric, doc="Volume of the analyte or derivative shipped."
     )
     sample_derivative_volume_units = Column(
         VolumeUnits, doc="Volume units of each analyte or derivative shipped."
     )
     sample_derivative_concentration = Column(
-        Number, doc="The concentration of analyte or derivative shipped."
+        Numeric, doc="The concentration of analyte or derivative shipped."
     )
     sample_derivative_concentration_units = Column(
         ConcentrationUnits,
         doc="The concentration units for the analyte or derivative shipped.",
     )
     tumor_tissue_total_area_percentage = Column(
-        Number,
+        Numeric,
         CheckConstraint(
             "tumor_tissue_total_area_percentage >= 0 and tumor_tissue_total_area_percentage <= 100"
         ),
         doc="Score the percentage of tumor (including tumor bed) tissue area of the slide (e.g. vs non-malignant or normal tissue)",
     )
     viable_tumor_area_percentage = Column(
-        Number,
+        Numeric,
         CheckConstraint(
             "viable_tumor_area_percentage >= 0 and viable_tumor_area_percentage <= 100"
         ),
         doc="Score the percentage of viable tumor cells comprising the tumor bed area",
     )
     viable_stroma_area_percentage = Column(
-        Number,
+        Numeric,
         CheckConstraint(
             "viable_stroma_area_percentage >= 0 and viable_stroma_area_percentage <= 100"
         ),
         doc="Score the evaluation of stromal elements (this indicates the % area of tumor bed occupied by non-tumor cells, including inflammatory cells [lymphocytes, histiocytes, etc], endothelial cells, fibroblasts, etc)",
     )
     necrosis_area_percentage = Column(
-        Number,
+        Numeric,
         CheckConstraint(
             "necrosis_area_percentage >= 0 and necrosis_area_percentage <= 100"
         ),
         doc="Score the percentage area of necrosis",
     )
     fibrosis_area_percentage = Column(
-        Number,
+        Numeric,
         CheckConstraint(
             "fibrosis_area_percentage >= 0 and fibrosis_area_percentage <= 100"
         ),
         doc="Score the percentage area of Fibrosis",
     )
     din = Column(
-        Number,
+        Numeric,
         CheckConstraint("din >= 0 and din <= 10"),
         doc="Provides a DNA Integrity Number as an indication of extraction quality (values of 1-10)",
     )
     a260_a280 = Column(
-        Number,
+        Numeric,
         CheckConstraint("a260_a280 >= 0 and a260_a280 <= 2"),
         doc="Provides an absorbance percentage ratio indicating purity of DNA (values of 0 to 2)",
     )
     a260_a230 = Column(
-        Number,
+        Numeric,
         CheckConstraint("a260_a230 >= 0 and a260_a230 <= 3"),
         doc="Provides an absorbance percentage ratio indicating presence of contaminants (values of 0 to 3)",
     )
     pbmc_viability = Column(
-        Number,
+        Numeric,
         CheckConstraint("pbmc_viability >= 0 and pbmc_viability <= 100"),
         doc="Receiving site determines the percent recovered cells that are viable after thawing.",
     )
     pbmc_recovery = Column(
-        Number,
+        Numeric,
         doc="Receiving site determines number for PBMCs per vial recovered upon receipt.",
     )
     pbmc_resting_period_used = Column(
@@ -458,7 +458,7 @@ class Sample(CommonColumns):
         doc="Receiving site indicates if a resting period was used after PBMC recovery.",
     )
     material_used = Column(
-        Number,
+        Numeric,
         doc="Receiving site indicates how much material was used for assay purposes.",
     )
     material_used_units = Column(
@@ -466,7 +466,7 @@ class Sample(CommonColumns):
         doc="Units for the amount of material used; should be the same value as Specimen Analyte units.",
     )
     material_remaining = Column(
-        Number,
+        Numeric,
         doc="Receiving site indicates how much material remains after assay use.",
     )
     material_remaining_units = Column(

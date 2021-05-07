@@ -429,35 +429,3 @@ class MetadataTemplate:
     @staticmethod
     def _make_date_validation_string(cell_range: str) -> str:
         return f'=AND(ISNUMBER({cell_range}),LEFT(CELL("format",{cell_range}),1)="D")'
-
-
-### Template example ###
-
-from cidc_api.models.models import Permissions, TrialMetadata, UploadJobs
-
-
-PBMCTemplate = MetadataTemplate(
-    upload_type="pbmc",
-    worksheet_configs=[
-        WorksheetConfig(
-            "sheet1",
-            [Entry(TrialMetadata.trial_id)],
-            {
-                "section1": [Entry(UploadJobs.status, name="Upload Status")],
-                "section2": [Entry(Permissions.upload_type)],
-            },
-        ),
-        WorksheetConfig(
-            "sheet2",
-            [Entry(TrialMetadata.trial_id)],
-            {
-                "section1": [Entry(UploadJobs.status, name="Upload Status")],
-                "section2": [Entry(Permissions.upload_type)],
-            },
-        ),
-    ],
-)
-
-
-if __name__ == "__main__":
-    PBMCTemplate.write("test.xlsx")
