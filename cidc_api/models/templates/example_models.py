@@ -149,6 +149,7 @@ class Cohort(CommonColumns):
     cohort_name = Column(String, nullable=False)
 
     trial = relationship(ClinicalTrial, back_populates="allowed_cohort_names")
+    participant_id = relationship("Participant", back_populates="cohort")
 
 
 class CollectionEvent(CommonColumns):
@@ -158,34 +159,7 @@ class CollectionEvent(CommonColumns):
     event_name = Column(String, nullable=False)
 
     samples = relationship("Sample", back_populates="collection_event")
-    specimen_types = relationship(
-        CollectionEventSpecimenTypes, back_populates="collection_event"
-    )
     trial = relationship(ClinicalTrial, back_populates="collection_event_list")
-
-
-class SpecimenTypes(CommonColumns):
-    # Pulled out as a separate class do to the self Foreign Key
-    __tablename__ = "specimen_types"
-
-    specimen_type = Column(String, nullable=False)
-    intended_assays = Column(AssaysEnum)
-    parent_type_id = Column(Integer, ForeignKey("SpecimenTypes.id"), nullable=True)
-
-    derivatives = relationship("SpecimenTypes", back_populates="parent_type")
-    parent_type = relationship("SpecimenTypes", back_populates="derivatives")
-
-
-class CollectionEventSpecimenTypes(CommonColumns):
-    # Pulled out as separate class so there's no need for a SpecimenTypes -> CollectionEvent Foreign Key
-    __tablename__ = "collection_event_specimen_types"
-
-    collection_event_id = Column(
-        Integer, ForeignKey(CollectionEvent.id), nullable=False
-    )
-    specimen_type_id = Column(Integer, ForeignKey(SpecimenTypes.id), nullable=False)
-
-    collection_event = relationship(CollectionEvent, back_populates="specimen_types")
 
 
 class Shipment(CommonColumns):
@@ -196,7 +170,7 @@ class Shipment(CommonColumns):
     manifest_id = Column(
         String,
         nullable=False,
-        # not unique as cidc-schemas uses mergeStrategy: append
+        unique=False,  # not unique as cidc-schemas used mergeStrategy: append
         doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
     )
     assay_priority = Column(
@@ -305,11 +279,6 @@ class Participant(CommonColumns):
         unique=True,
         doc="Participant identifier assigned by the CIMAC-CIDC Network. Formated as: C?????? (first 7 characters of CIMAC ID)",
     )
-    cidc_participant_id = Column(
-        String,
-        CheckConstraint("cidc_participant_id ~ '^CIDC-\\w+-\\w+$'"),
-        doc="The generated, CIDC-internal identifier for this participant.",
-    )
     participant_id = Column(
         String,
         nullable=False,
@@ -346,8 +315,9 @@ class Participant(CommonColumns):
 
     # clinical: dict
 
-    trial = relationship("ClinicalTrial", back_populates="participants")
+    cohort = relationship(Cohort, back_populates="participants")
     samples = relationship("Sample", back_populates="participant")
+    trial = relationship(ClinicalTrial, back_populates="participants")
 
     __table_args__ = (
         ForeignKeyConstraint([trial_id, cohort_id], [Cohort.trial_id, Cohort.id]),
@@ -374,11 +344,6 @@ class Sample(CommonColumns):
         nullable=False,
         unique=True,
         doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
-    )
-    cidc_id = Column(
-        String,
-        CheckConstraint("cidc_id ~ '^CIDC-\\w+-\\w+-\\w+$'"),
-        doc="The generated, CIDC-internal identifier for this sample.",
     )
     shipping_entry_number = Column(
         Integer,
