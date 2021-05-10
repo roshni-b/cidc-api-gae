@@ -145,7 +145,7 @@ class ClinicalTrial(BaseModel):
 class Cohort(BaseModel):
     __tablename__ = "cohorts"
 
-    trial_identifier = Column(
+    trial_id = Column(
         String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
     )
     cohort_name = Column(
@@ -159,7 +159,7 @@ class Cohort(BaseModel):
 class CollectionEvent(BaseModel):
     __tablename__ = "collection_events"
 
-    trial_identifier = Column(
+    trial_id = Column(
         String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
     )
     event_name = Column(
@@ -173,7 +173,7 @@ class CollectionEvent(BaseModel):
 class Shipment(BaseModel):
     __tablename__ = "shipments"
 
-    trial_identifier = Column(
+    trial_id = Column(
         String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
     )
 
@@ -280,13 +280,13 @@ class Shipment(BaseModel):
 class Participant(BaseModel):
     __tablename__ = "participants"
 
-    trial_identifier = Column(
-        String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
+    trial_id = Column(
+        String, ForeignKey(ClinicalTrial.protocol_identifier), nullable=False
     )
     cimac_participant_id = Column(
         String,
         CheckConstraint("cimac_participant_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}$'"),
-        primary_key=True,  # both True allows for use as multi Foreign Key
+        primary_key=True,  # allows for use as Foreign Key; guaranteed globally unique
         doc="Participant identifier assigned by the CIMAC-CIDC Network. Formated as: C?????? (first 7 characters of CIMAC ID)",
     )
     participant_id = Column(
@@ -330,16 +330,14 @@ class Participant(BaseModel):
     trial = relationship(ClinicalTrial, back_populates="participants")
 
     __table_args__ = (
-        ForeignKeyConstraint(
-            [trial_identifier, cohort_name], [Cohort.trial_identifier, Cohort.name]
-        ),
+        ForeignKeyConstraint([trial_id, cohort_name], [Cohort.trial_id, Cohort.name]),
     )
 
 
 class Sample(BaseModel):
     __tablename__ = "samples"
 
-    trial_id = Column(Integer, primary_key=True)
+    trial_id = Column(Integer, nullable=False)
     participant_id = Column(Integer, nullable=False)
     collection_event_name = Column(String, nullable=False)
     shipment_manifest_id = Column(
@@ -349,7 +347,7 @@ class Sample(BaseModel):
     cimac_id = Column(
         String,
         CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
-        primary_key=True,  # both True allows for use as multi Foreign Key
+        primary_key=True,  # allows for use as Foreign Key; guaranteed globally unique
         doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
     )
     shipping_entry_number = Column(
@@ -625,16 +623,15 @@ class Sample(BaseModel):
 
     __table_args__ = (
         ForeignKeyConstraint(
-            [trial_identifier, cimac_participant_id],
-            [Participant.trial_identifier, Participant.cimac_id],
+            [trial_id, cimac_participant_id],
+            [Participant.trial_id, Participant.cimac_id],
         ),
         ForeignKeyConstraint(
-            [trial_identifier, collection_event_name],
-            [CollectionEvent.trial_identifier, CollectionEvent.name],
+            [trial_id, collection_event_name],
+            [CollectionEvent.trial_id, CollectionEvent.name],
         ),
         ForeignKeyConstraint(
-            [trial_identifier, shipment_manifest_id],
-            [Shipment.trial_identifier, Shipment.manifest_id],
+            [trial_id, shipment_manifest_id], [Shipment.trial_id, Shipment.manifest_id],
         ),
     )
 
