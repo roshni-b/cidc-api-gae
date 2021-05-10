@@ -1,7 +1,10 @@
-from core import MetadataTemplate, WorksheetConfig, Entry
+from .core import MetadataTemplate, WorksheetConfig, Entry
 
 ### Template example ###
-from example_models import ClinicalTrial, Participant, Sample, Shipment
+from .example_models import CollectionEvent, Cohort, Participant, Sample, Shipment
+
+identity = lambda v: v
+cimac_id_to_cimac_participant_id = lambda cimac_id: cimac_id[:7]
 
 PBMCTemplate = MetadataTemplate(
     upload_type="pbmc",
@@ -9,8 +12,18 @@ PBMCTemplate = MetadataTemplate(
         WorksheetConfig(
             "Shipment",
             [
-                Entry(ClinicalTrial.protocol_identifier),
-                Entry(Shipment.manifest_id),
+                Entry(
+                    Shipment.trial_id,
+                    name="protocol identifier",
+                    process_as={
+                        Participant.trial_id: identity,
+                        Sample.trial_id: identity,
+                    },
+                ),
+                Entry(
+                    Shipment.manifest_id,
+                    process_as={Sample.shipment_manifest_id: identity},
+                ),
                 Entry(Shipment.assay_priority),
                 Entry(Shipment.assay_type),
                 Entry(Shipment.receiving_party),
@@ -31,14 +44,17 @@ PBMCTemplate = MetadataTemplate(
             [],
             {
                 "Path Concordance Verification": [
-                    Entry(Participant.participant_id),
+                    Entry(Participant.trial_participant_id),
                     Entry(
                         Sample.cimac_id,
-                        process_as={Participant.cimac_participant_id: lambda x: x[:7],},
+                        process_as={
+                            Participant.cimac_participant_id: cimac_id_to_cimac_participant_id,
+                            Sample.cimac_participant_id: cimac_id_to_cimac_participant_id,
+                        },
                     ),
                     Entry(Sample.surgical_pathology_report_id),
                     Entry(Sample.clinical_report_id),
-                    Entry(Sample.collection_event_name),
+                    Entry(CollectionEvent.event_name),
                     Entry(Sample.diagnosis_verification),
                 ],
                 "ICD-0-3 Code/Description": [
@@ -49,7 +65,7 @@ PBMCTemplate = MetadataTemplate(
                     Entry(Sample.histology_behavior_description),
                 ],
                 "Demographics": [
-                    Entry(Participant.gender, nmae="Sex"),
+                    Entry(Participant.gender, name="Sex"),
                     Entry(Participant.race),
                     Entry(Participant.ethnicity),
                 ],
@@ -61,14 +77,16 @@ PBMCTemplate = MetadataTemplate(
             {
                 "IDs": [
                     Entry(Sample.shipping_entry_number),
-                    Entry(Sample.collection_event_name),
-                    Entry(Sample.cohort_name),
-                    Entry(Participant.participant_id),
+                    Entry(CollectionEvent.event_name),
+                    Entry(Cohort.cohort_name),
+                    Entry(Participant.trial_participant_id),
                     Entry(Sample.parent_sample_id),
                     Entry(Sample.processed_sample_id),
                     Entry(
                         Sample.cimac_id,
-                        process_as={Participant.cimac_participant_id: lambda x: x[:7]},
+                        process_as={
+                            Participant.cimac_participant_id: cimac_id_to_cimac_participant_id
+                        },
                     ),
                 ],
                 "Filled by Biorepository": [
@@ -102,4 +120,4 @@ PBMCTemplate = MetadataTemplate(
 
 
 if __name__ == "__main__":
-    PBMCTemplate.write("test.xlsx")
+    PBMCTemplate.read("pbmc_test.xlsx")

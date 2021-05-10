@@ -255,6 +255,12 @@ class CommonColumns(BaseModel):  # type: ignore
         """Run custom validations on attributes set on this instance."""
         pass
 
+    @classmethod
+    def get_unique_columns(cls):
+        return [
+            column for column in cls.__table__.c if column.unique or column.primary_key
+        ]
+
 
 class CIDCRole(EnumBaseClass):
     ADMIN = "cidc-admin"

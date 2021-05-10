@@ -1,15 +1,17 @@
+import datetime
 from collections import defaultdict
-from cidc_api.models.models import CommonColumns
 from enum import Enum
-from datetime import date, time
 from dataclasses import dataclass
+from mimetypes import guess_type
 from warnings import filterwarnings
-from typing import Optional, Dict, Callable, Any, List, Tuple
+from typing import Optional, Dict, Callable, Any, List
 
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
 import openpyxl
 from sqlalchemy import Column, Enum as SqlEnum
+
+from .example_models import MetadataModel
 
 
 filterwarnings(
@@ -38,15 +40,12 @@ class Entry:
         column: Column,
         name: Optional[str] = None,
         gcs_uri_format: Optional[str] = None,
-        process_as: Optional[Dict[Column, Callable[[str], Any]]] = None,
-        encrypt: bool = False,
+        process_as: Dict[Column, Callable[[str], Any]] = {},
     ):
         self.column = column
         self.name = name if name else column.name.replace("_", " ")
         self.gcs_uri_format = gcs_uri_format
-        self.process_as = process_as or {}
-        # TODO use encryption
-        self.encrypt = encrypt
+        self.process_as = process_as
 
         self.doc = column.doc
         self.sqltype = column.type
@@ -54,13 +53,26 @@ class Entry:
         self.pytype = self.sqltype.python_type
 
     def get_column_mapping(self, value: str) -> Dict[Column, Any]:
-        column_mapping = {self.column: self.pytype(value)}
-        for column, process in self.process_as.items():
-            column_mapping[column] = process(value)
+        try:
+            # Handle date/time parsing funkiness
+            if self.pytype == datetime.time:
+                processed_value = datetime.datetime.strptime(value, "%H:%M").time()
+            elif self.pytype == datetime.date:
+                processed_value = datetime.datetime.strptime(value, "%m/%d/%Y").date()
+            else:
+                processed_value = self.pytype(value)
+
+            column_mapping = {self.column: processed_value}
+
+            for column, process in self.process_as.items():
+                column_mapping[column] = process(value)
+        except Exception as e:
+            raise Exception(
+                f"Error processing {self.name}={value}({type(value)}) as {self.pytype}: {e}"
+            )
         return column_mapping
 
 
-@dataclass
 class WorksheetConfig:
     """
     A worksheet within a metadata spreadsheet. A worksheet has a name, a list
@@ -71,7 +83,23 @@ class WorksheetConfig:
 
     name: str
     preamble: List[Entry]
-    data_sections: List[Tuple[str, List[Entry]]]
+    data_sections: Dict[str, List[Entry]]
+
+    def __init__(
+        self, name: str, preamble: List[Entry], data_sections: Dict[str, List[Entry]]
+    ):
+        self.name = name
+        self.preamble = preamble
+        self.data_sections = data_sections
+
+        self.distinct_models = self._get_distinct_models()
+
+    def _get_distinct_models(self) -> List[MetadataModel]:
+        entries = self.preamble + [
+            entry for entries in self.data_sections.values() for entry in entries
+        ]
+
+        return list(set([entry.column.class_ for entry in entries]))
 
 
 class RowType(Enum):
@@ -196,13 +224,24 @@ class MetadataTemplate:
     DATA_ROWS = 2000
     DATA_DICT_SHEETNAME = "Data Dictionary"
 
-    def read(self, filename: str) -> List[CommonColumns]:
+    def __init__(self, upload_type: str, worksheet_configs: List[WorksheetConfig]):
+        self.upload_type = upload_type
+        self.worksheet_configs = worksheet_configs
+
+        self.distinct_models = list(
+            set(model for cfg in worksheet_configs for model in cfg.distinct_models)
+        )
+
+    def read(self, filename: str) -> List[MetadataModel]:
         """
         Extract a list of SQLAlchemy models in insertion order from a populated
         instance of this template.
         """
-        workbook = openpyxl.load_workbook(filename)
+        workbook = openpyxl.load_workbook(filename, data_only=True)
 
+        models: List[MetadataModel] = []
+
+        # Extract partial model instances from the template
         for config in self.worksheet_configs:
             preamble_rows = []
             data_rows = []
@@ -220,6 +259,7 @@ class MetadataTemplate:
 
             model_dicts: List[Dict[Column, Any]] = []
             preamble_dict = {}
+            # {<column instance>: <processed value, ...}
             for i, row in enumerate(preamble_rows):
                 cell = row[2].value
                 entry = config.preamble[i]
@@ -227,7 +267,7 @@ class MetadataTemplate:
             model_dicts.append(preamble_dict)
 
             data_configs = [
-                entry for _, entries in config.data_sections for entry in entries
+                entry for entries in config.data_sections.values() for entry in entries
             ]
             for row in data_rows:
                 if all(cell.value is None for cell in row[1:]):
@@ -238,7 +278,6 @@ class MetadataTemplate:
                     data_dict.update(entry.get_column_mapping(cell))
                 model_dicts.append(data_dict)
 
-            models = []
             for model_dict in model_dicts:
                 model_groups = defaultdict(dict)
                 for column, value in model_dict.items():
@@ -246,7 +285,12 @@ class MetadataTemplate:
                 for model, kwargs in model_groups.items():
                     models.append(model(**kwargs))
 
-            print(models)
+        # De-duplicate and combine model instances
+        model_groups = {
+            (model.class_, *model.unique_field_values()): model for model in models
+        }
+
+        print(model_groups)
 
     def write(self, filename: str):
         """
@@ -275,7 +319,7 @@ class MetadataTemplate:
                 row += 1
                 self._write_legend_item(ws, row, entry, styles.PREAMBLE_STYLE)
 
-            for section_name, section_entries in config.data_sections:
+            for section_name, section_entries in config.data_sections.items():
                 row += 1
                 ws.write(
                     row,
@@ -323,7 +367,7 @@ class MetadataTemplate:
                     )
                     col += 1
 
-            for _, section_entries in config.data_sections:
+            for section_entries in config.data_sections.values():
                 for entry in section_entries:
                     rows = self._write_data_dict_item(
                         ws, col, entry, styles.HEADER_STYLE
@@ -395,7 +439,7 @@ class MetadataTemplate:
             row += 1
             self._write_type_annotation(ws, row, RowType.SKIP)
             start_col = 1
-            for section_header, section_entries in config.data_sections:
+            for section_header, section_entries in config.data_sections.items():
                 section_width = len(section_entries)
                 end_col = start_col + section_width - 1
                 if end_col - start_col > 0:
@@ -418,7 +462,7 @@ class MetadataTemplate:
             ws.write_column(row + 1, 0, annotations)
 
             # DATA SECTION ROWS
-            for _, section_entries in config.data_sections:
+            for section_entries in config.data_sections.values():
                 for entry in section_entries:
                     ws.write(row, col, entry.name, styles.HEADER_STYLE)
                     self._write_comment(ws, row, col, entry, styles)
@@ -451,7 +495,7 @@ class MetadataTemplate:
                     comment += "\n" + entry.gcs_uri_format["template_comment"]
 
         if comment:
-            ws.write_comment(row, col, comment, styles.COMMENT_STYLE)
+            ws.write_comment(row, col, comment, styles.COMMENT_STYLE_PROPS)
 
     def _write_validation(
         self,
@@ -471,18 +515,18 @@ class MetadataTemplate:
             data_dict_validation_range = data_dict_validations[entry.name]
             return {"validate": "list", "source": data_dict_validation_range}
 
-        elif entry.pytype == date:
+        elif entry.pytype == datetime.date:
             return {
                 "validate": "custom",
                 "value": self._make_date_validation_string(cell_range),
                 "error_message": "Please enter date in format mm/dd/yyyy",
             }
-        elif entry.pytype == time:
+        elif entry.pytype == datetime.time:
             return {
                 "validate": "time",
                 "criteria": "between",
-                "minimum": time(0, 0),
-                "maximum": time(23, 59),
+                "minimum": datetime.time(0, 0),
+                "maximum": datetime.time(23, 59),
                 "error_message": "Please enter time in format hh:mm",
             }
         elif entry.pytype == bool:

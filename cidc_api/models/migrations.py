@@ -15,7 +15,7 @@ from cidc_schemas.prism.merger import _get_uuid_path_map, get_source
 from .models import (
     TrialMetadata,
     DownloadableFiles,
-    CommonColumns,
+    BaseModel,
     UploadJobStatus,
     UploadJobs,
     String,
@@ -109,14 +109,14 @@ def _select_trials(session: Session) -> List[TrialMetadata]:
     return session.query(TrialMetadata).with_for_update().all()
 
 
-class AssayUploads(CommonColumns):
+class AssayUploads(BaseModel):
     """This model no longer exists in cidc_api.models, but a partial model is required for migrations."""
 
     __tablename__ = "assay_uploads"
     status = Column(String)
 
 
-class ManifestUploads(CommonColumns):
+class ManifestUploads(BaseModel):
     """This model no longer exists in cidc_api.models, but a partial model is required for migrations."""
 
     __tablename__ = "manifest_uploads"

@@ -13,7 +13,7 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from cidc_api.app import app
 from cidc_api.models import (
-    CommonColumns,
+    BaseModel,
     Users,
     TrialMetadata,
     UploadJobs,
@@ -946,7 +946,7 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
     trial.insert()
 
     _insert = MagicMock()
-    monkeypatch.setattr(CommonColumns, "insert", _insert)
+    monkeypatch.setattr(BaseModel, "insert", _insert)
 
     # if upload_type is invalid
     with pytest.raises(ValueError, match="invalid upload type"):

@@ -6,7 +6,7 @@ from marshmallow_sqlalchemy import SQLAlchemyAutoSchema, auto_field
 
 from ..config.db import db
 from .models import (
-    CommonColumns,
+    BaseModel,
     BaseModel,
     UploadJobs,
     Users,

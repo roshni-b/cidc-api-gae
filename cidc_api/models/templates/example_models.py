@@ -1,3 +1,5 @@
+from typing import Any, List
+
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -11,7 +13,16 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from ..config.db import BaseModel
+from cidc_api.config.db import BaseModel
+
+
+class MetadataModel(BaseModel):
+    __abstract__ = True
+
+    def unique_field_values(self) -> List[Any]:
+        return [
+            getattr(self, column) for column in self.__table__.columns if column.unique
+        ]
 
 
 AssaysEnum = Enum(
@@ -58,7 +69,7 @@ SampleTypes = Enum(
 VolumeUnits = Enum("Microliter", "Milliliter", "Not Reported", "Other")
 
 
-class ClinicalTrial(BaseModel):
+class ClinicalTrial(MetadataModel):
     __tablename__ = "clinical_trials"
 
     protocol_identifier = Column(
@@ -143,7 +154,7 @@ class ClinicalTrial(BaseModel):
         return [ce.event_name for ce in self.collection_events]
 
 
-class Cohort(BaseModel):
+class Cohort(MetadataModel):
     __tablename__ = "cohorts"
 
     trial_id = Column(
@@ -157,7 +168,7 @@ class Cohort(BaseModel):
     participants = relationship("Participant", back_populates="cohort")
 
 
-class CollectionEvent(BaseModel):
+class CollectionEvent(MetadataModel):
     __tablename__ = "collection_events"
 
     trial_id = Column(
@@ -171,7 +182,7 @@ class CollectionEvent(BaseModel):
     trial = relationship(ClinicalTrial, back_populates="collection_events")
 
 
-class Shipment(BaseModel):
+class Shipment(MetadataModel):
     __tablename__ = "shipments"
 
     trial_id = Column(
@@ -278,7 +289,7 @@ class Shipment(BaseModel):
     samples = relationship("Sample", back_populates="shipment")
 
 
-class Participant(BaseModel):
+class Participant(MetadataModel):
     __tablename__ = "participants"
 
     trial_id = Column(
@@ -290,7 +301,7 @@ class Participant(BaseModel):
         primary_key=True,  # allows for use as Foreign Key; guaranteed globally unique
         doc="Participant identifier assigned by the CIMAC-CIDC Network. Formated as: C?????? (first 7 characters of CIMAC ID)",
     )
-    participant_id = Column(
+    trial_participant_id = Column(
         String,
         nullable=False,
         doc="Trial Participant Identifier. Crypto-hashed after upload.",
@@ -331,26 +342,40 @@ class Participant(BaseModel):
     trial = relationship(ClinicalTrial, back_populates="participants")
 
     __table_args__ = (
-        ForeignKeyConstraint([trial_id, cohort_name], [Cohort.trial_id, Cohort.name]),
+        ForeignKeyConstraint(
+            [trial_id, cohort_name], [Cohort.trial_id, Cohort.cohort_name]
+        ),
     )
 
 
-class Sample(BaseModel):
+class Sample(MetadataModel):
     __tablename__ = "samples"
 
-    trial_id = Column(Integer, nullable=False)
-    participant_id = Column(Integer, nullable=False)
+    trial_id = Column(String, nullable=False)
+    cimac_participant_id = Column(String, nullable=False)
     collection_event_name = Column(String, nullable=False)
-    shipment_manifest_id = Column(
-        Integer, nullable=True
-    )  # doesn't have to be associated with a shipment
-
+    shipment_manifest_id = Column(Integer, nullable=False)
     cimac_id = Column(
         String,
         CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
         primary_key=True,  # allows for use as Foreign Key; guaranteed globally unique
         doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
     )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            [trial_id, cimac_participant_id],
+            [Participant.trial_id, Participant.cimac_participant_id],
+        ),
+        ForeignKeyConstraint(
+            [trial_id, collection_event_name],
+            [CollectionEvent.trial_id, CollectionEvent.event_name],
+        ),
+        ForeignKeyConstraint(
+            [trial_id, shipment_manifest_id], [Shipment.trial_id, Shipment.manifest_id]
+        ),
+    )
+
     shipping_entry_number = Column(
         Integer,
         doc="Provides a numbered identifier for patient (sample) entry in a shipment manifest.",
@@ -622,22 +647,8 @@ class Sample(BaseModel):
     participant = relationship(Participant, back_populates="samples")
     shipment = relationship(Shipment, back_populates="samples")
 
-    __table_args__ = (
-        ForeignKeyConstraint(
-            [trial_id, cimac_participant_id],
-            [Participant.trial_id, Participant.cimac_id],
-        ),
-        ForeignKeyConstraint(
-            [trial_id, collection_event_name],
-            [CollectionEvent.trial_id, CollectionEvent.name],
-        ),
-        ForeignKeyConstraint(
-            [trial_id, shipment_manifest_id], [Shipment.trial_id, Shipment.manifest_id],
-        ),
-    )
 
-
-class Aliquot(BaseModel):
+class Aliquot(MetadataModel):
     __tablename__ = "aliquots"
 
     sample_id = Column(String, ForeignKey(Sample.cimac_id), primary_key=True)
