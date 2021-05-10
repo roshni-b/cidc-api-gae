@@ -2,9 +2,9 @@ import datetime
 from collections import defaultdict
 from enum import Enum
 from dataclasses import dataclass
-from mimetypes import guess_type
+from functools import partial
 from warnings import filterwarnings
-from typing import Optional, Dict, Callable, Any, List
+from typing import Optional, Dict, Callable, Any, List, Tuple, Type
 
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
@@ -52,13 +52,13 @@ class Entry:
         self.enums = self.sqltype.enums if isinstance(self.sqltype, SqlEnum) else None
         self.pytype = self.sqltype.python_type
 
-    def get_column_mapping(self, value: str) -> Dict[Column, Any]:
+    def get_column_mapping(self, value) -> Dict[Column, Any]:
         try:
             # Handle date/time parsing funkiness
             if self.pytype == datetime.time:
-                processed_value = datetime.datetime.strptime(value, "%H:%M").time()
+                processed_value = value.time()
             elif self.pytype == datetime.date:
-                processed_value = datetime.datetime.strptime(value, "%m/%d/%Y").date()
+                processed_value = value.date()
             else:
                 processed_value = self.pytype(value)
 
@@ -237,9 +237,9 @@ class MetadataTemplate:
         Extract a list of SQLAlchemy models in insertion order from a populated
         instance of this template.
         """
-        workbook = openpyxl.load_workbook(filename, data_only=True)
+        workbook = openpyxl.load_workbook(filename)
 
-        models: List[MetadataModel] = []
+        model_instances: List[MetadataModel] = []
 
         # Extract partial model instances from the template
         for config in self.worksheet_configs:
@@ -283,14 +283,25 @@ class MetadataTemplate:
                 for column, value in model_dict.items():
                     model_groups[column.class_][column.name] = value
                 for model, kwargs in model_groups.items():
-                    models.append(model(**kwargs))
+                    model_instances.append(model(**kwargs))
 
         # De-duplicate and combine model instances
-        model_groups = {
-            (model.class_, *model.unique_field_values()): model for model in models
-        }
+        model_groups: Dict[Type[MetadataModel], Dict[Tuple, List[MetadataModel]]] = {}
+        for instance in model_instances:
+            model_group = model_groups.setdefault(instance.__class__, {})
+            unique_values = instance.unique_field_values()
+            model_group[unique_values] = model_group.setdefault(unique_values, []) + [
+                instance
+            ]
 
-        print(model_groups)
+        deduped_instances = []
+        for model, groups in model_groups.items():
+            broad_instances = groups.pop(None, [])
+            for specific_instances in groups.values():
+                instance = model()
+                for partial_instance in broad_instances + specific_instances:
+                    instance.merge(partial_instance)
+                deduped_instances.append(instance)
 
     def write(self, filename: str):
         """

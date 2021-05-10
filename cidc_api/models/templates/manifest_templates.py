@@ -1,7 +1,7 @@
 from .core import MetadataTemplate, WorksheetConfig, Entry
 
 ### Template example ###
-from .example_models import CollectionEvent, Cohort, Participant, Sample, Shipment
+from .example_models import Participant, Sample, Shipment
 
 identity = lambda v: v
 cimac_id_to_cimac_participant_id = lambda cimac_id: cimac_id[:7]
@@ -54,7 +54,7 @@ PBMCTemplate = MetadataTemplate(
                     ),
                     Entry(Sample.surgical_pathology_report_id),
                     Entry(Sample.clinical_report_id),
-                    Entry(CollectionEvent.event_name),
+                    Entry(Sample.collection_event_name),
                     Entry(Sample.diagnosis_verification),
                 ],
                 "ICD-0-3 Code/Description": [
@@ -77,8 +77,8 @@ PBMCTemplate = MetadataTemplate(
             {
                 "IDs": [
                     Entry(Sample.shipping_entry_number),
-                    Entry(CollectionEvent.event_name),
-                    Entry(Cohort.cohort_name),
+                    Entry(Sample.collection_event_name),
+                    Entry(Participant.cohort_name),
                     Entry(Participant.trial_participant_id),
                     Entry(Sample.parent_sample_id),
                     Entry(Sample.processed_sample_id),

@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, Tuple, Optional
 
 from sqlalchemy import (
     CheckConstraint,
@@ -19,10 +19,34 @@ from cidc_api.config.db import BaseModel
 class MetadataModel(BaseModel):
     __abstract__ = True
 
-    def unique_field_values(self) -> List[Any]:
-        return [
-            getattr(self, column) for column in self.__table__.columns if column.unique
-        ]
+    def unique_field_values(self) -> Optional[Tuple[Any]]:
+        unique_field_values = []
+        for column in self.__table__.columns:
+            if column.unique or column.primary_key:
+                value = getattr(self, column.name)
+                unique_field_values.append(value)
+
+        if all(v is None for v in unique_field_values):
+            return None
+
+        return tuple(unique_field_values)
+
+    def merge(self, other):
+        """Merge column values from other into self, raising an error on conflicts between non-null fields."""
+        if self.__class__ != other.__class__:
+            raise Exception(
+                f"cannot merge {self.__class__} instance with {other.__class__} instance"
+            )
+
+        for column in self.__table__.columns:
+            current = getattr(self, column.name)
+            incoming = getattr(other, column.name)
+            if current is None:
+                setattr(self, column.name, incoming)
+            elif incoming is not None and current != incoming:
+                raise Exception(
+                    f"found conflicting values for {self.__tablename__}.{column.name}: {current}!={other}"
+                )
 
 
 AssaysEnum = Enum(
@@ -307,6 +331,7 @@ class Participant(MetadataModel):
         doc="Trial Participant Identifier. Crypto-hashed after upload.",
     )
     cohort_name = Column(String)
+
     gender = Column(
         Enum("Male", "Female", "Not Specified", "Other"),
         doc="Identifies the gender of the participant.",
