@@ -9,7 +9,8 @@ from sqlalchemy import (
     String,
 )
 from sqlalchemy.orm import relationship
-from cidc_api.models import CommonColumns
+
+from ..config.db import BaseModel
 
 
 AssaysEnum = Enum(
@@ -56,13 +57,12 @@ SampleTypes = Enum(
 VolumeUnits = Enum("Microliter", "Milliliter", "Not Reported", "Other")
 
 
-class ClinicalTrial(CommonColumns):
+class ClinicalTrial(BaseModel):
     __tablename__ = "clinical_trials"
 
     protocol_identifier = Column(
         String,
-        nullable=False,
-        unique=True,
+        primary_key=True,  # allows for use as Foreign Key
         doc="Trial identifier used by lead organization, ie. Center for Experimental Therapeutics Program (CTEP) ID or Industry Sponsored ID.  This is usually a short identifier. Example: E4412.",
     )
     nct_id = Column(String, doc="ClinicalTrials.gov identifier. Example: NCT03731260.")
@@ -110,12 +110,12 @@ class ClinicalTrial(CommonColumns):
     # clinical_data : ClinicalData, doc="Clinical data for this trial"
     # schema : artifact_image, doc="An image of the schema of this trial."
 
-    cohort_list = relationship(
+    cohorts = relationship(
         "Cohort",
         back_populates="trial",
         doc="The collection of all cohorts related to this trial.",
     )
-    collection_event_list = relationship(
+    collection_events = relationship(
         "CollectionEvent",
         back_populates="trial",
         doc="The collection of all collection events related to this trial.",
@@ -134,43 +134,52 @@ class ClinicalTrial(CommonColumns):
     @property
     def allowed_cohort_names(self):
         """Allowed values for Participant.cohort_name for this trial."""
-        return [c.name for c in self.cohort_list]
+        return [c.cohort_name for c in self.cohorts]
 
     @property
     def allowed_collection_event_names(self):
         """Allowed values for Sample.collection_event_name for this trial."""
-        return [ce.name for ce in self.collection_event_list]
+        return [ce.event_name for ce in self.collection_events]
 
 
-class Cohort(CommonColumns):
+class Cohort(BaseModel):
     __tablename__ = "cohorts"
 
-    trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
-    cohort_name = Column(String, nullable=False)
+    trial_identifier = Column(
+        String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
+    )
+    cohort_name = Column(
+        String, primary_key=True
+    )  # both True allows for use as multi Foreign Key
 
-    trial = relationship(ClinicalTrial, back_populates="allowed_cohort_names")
-    participant_id = relationship("Participant", back_populates="cohort")
+    trial = relationship(ClinicalTrial, back_populates="cohorts")
+    participants = relationship("Participant", back_populates="cohort")
 
 
-class CollectionEvent(CommonColumns):
+class CollectionEvent(BaseModel):
     __tablename__ = "collection_events"
 
-    trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
-    event_name = Column(String, nullable=False)
+    trial_identifier = Column(
+        String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
+    )
+    event_name = Column(
+        String, primary_key=True
+    )  # both True allows for use as multi Foreign Key
 
     samples = relationship("Sample", back_populates="collection_event")
-    trial = relationship(ClinicalTrial, back_populates="collection_event_list")
+    trial = relationship(ClinicalTrial, back_populates="collection_events")
 
 
-class Shipment(CommonColumns):
+class Shipment(BaseModel):
     __tablename__ = "shipments"
 
-    trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
+    trial_identifier = Column(
+        String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
+    )
 
     manifest_id = Column(
         String,
-        nullable=False,
-        unique=False,  # not unique as cidc-schemas used mergeStrategy: append
+        primary_key=True,  # both True allows for use as multi Foreign Key
         doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
     )
     assay_priority = Column(
@@ -268,15 +277,16 @@ class Shipment(CommonColumns):
     samples = relationship("Sample", back_populates="shipment")
 
 
-class Participant(CommonColumns):
+class Participant(BaseModel):
     __tablename__ = "participants"
 
-    trial_id = Column(Integer, ForeignKey(ClinicalTrial.id), nullable=False)
+    trial_identifier = Column(
+        String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
+    )
     cimac_participant_id = Column(
         String,
         CheckConstraint("cimac_participant_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}$'"),
-        nullable=False,
-        unique=True,
+        primary_key=True,  # both True allows for use as multi Foreign Key
         doc="Participant identifier assigned by the CIMAC-CIDC Network. Formated as: C?????? (first 7 characters of CIMAC ID)",
     )
     participant_id = Column(
@@ -284,7 +294,7 @@ class Participant(CommonColumns):
         nullable=False,
         doc="Trial Participant Identifier. Crypto-hashed after upload.",
     )
-    cohort_id = Column(Integer)
+    cohort_name = Column(String)
     gender = Column(
         Enum("Male", "Female", "Not Specified", "Other"),
         doc="Identifies the gender of the participant.",
@@ -320,29 +330,26 @@ class Participant(CommonColumns):
     trial = relationship(ClinicalTrial, back_populates="participants")
 
     __table_args__ = (
-        ForeignKeyConstraint([trial_id, cohort_id], [Cohort.trial_id, Cohort.id]),
+        ForeignKeyConstraint(
+            [trial_identifier, cohort_name], [Cohort.trial_identifier, Cohort.name]
+        ),
     )
 
-    @property
-    def cohort_name(self):
-        return self.cohort.name
 
-
-class Sample(CommonColumns):
+class Sample(BaseModel):
     __tablename__ = "samples"
 
-    trial_id = Column(Integer, nullable=False)
+    trial_id = Column(Integer, primary_key=True)
     participant_id = Column(Integer, nullable=False)
-    collection_event_id = Column(Integer, nullable=False)
-    shipment_id = Column(
+    collection_event_name = Column(String, nullable=False)
+    shipment_manifest_id = Column(
         Integer, nullable=True
     )  # doesn't have to be associated with a shipment
 
     cimac_id = Column(
         String,
         CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
-        nullable=False,
-        unique=True,
+        primary_key=True,  # both True allows for use as multi Foreign Key
         doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
     )
     shipping_entry_number = Column(
@@ -391,7 +398,7 @@ class Sample(CommonColumns):
         nullable=False,
         doc="Sample location within the shipping container. Example: A1.",
     )
-    sample_type = Column(SampleTypes, nullable=False, doc="Type of sample sent.")
+    type_of_sample = Column(SampleTypes, nullable=False, doc="Type of sample sent.")
     type_of_tumor_sample = Column(
         Enum("Metastatic Tumor", "Primary Tumor", "Not Reported", "Other"),
         doc="The type of tumor sample obtained (primary or metastatic).",
@@ -612,41 +619,36 @@ class Sample(CommonColumns):
         back_populates="sample",
         doc="Pertaining to a portion (volume or weight) of the whole.",
     )
-    collection_event = relationship("CollectionEvent", back_populates="samples")
-    participant = relationship("Participant", back_populates="samples")
-    shipment = relationship("Shipment", back_populates="samples")
+    collection_event = relationship(CollectionEvent, back_populates="samples")
+    participant = relationship(Participant, back_populates="samples")
+    shipment = relationship(Shipment, back_populates="samples")
 
     __table_args__ = (
         ForeignKeyConstraint(
-            [trial_id, participant_id], [Participant.trial_id, Participant.id]
+            [trial_identifier, cimac_participant_id],
+            [Participant.trial_identifier, Participant.cimac_id],
         ),
         ForeignKeyConstraint(
-            [trial_id, collection_event_id],
-            [CollectionEvent.trial_id, CollectionEvent.id],
+            [trial_identifier, collection_event_name],
+            [CollectionEvent.trial_identifier, CollectionEvent.name],
         ),
-        ForeignKeyConstraint([trial_id, shipment_id], [Shipment.trial_id, Shipment.id]),
+        ForeignKeyConstraint(
+            [trial_identifier, shipment_manifest_id],
+            [Shipment.trial_identifier, Shipment.manifest_id],
+        ),
     )
 
-    @property
-    def collection_event_name(self):
-        return self.collection_event.name
 
-    @property
-    def type_of_sample(self):
-        return self.sample_type.name
-
-
-class Aliquot(CommonColumns):
+class Aliquot(BaseModel):
     __tablename__ = "aliquots"
 
-    sample_id = Column(Integer, ForeignKey(Sample.id), nullable=False)
+    sample_id = Column(String, ForeignKey(Sample.cimac_id), primary_key=True)
     slide_number = Column(
         String,  # should be Integer
         CheckConstraint(
             "slide_number ~ '^[0-9]{1,2}$'"
         ),  # should be "slide_number >= 0 and slide_number < 100"
-        nullable=False,
-        unique=True,
+        primary_key=True,  # both True allows for use as multi Foreign Key
         doc="Two digit number that indicates the sequential order of slide cuts, assigned by the CIMAC-CIDC Network.",
     )
     quantity = Column(Integer, doc="Quantity of each aliquot shipped.")
