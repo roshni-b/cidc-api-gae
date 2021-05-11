@@ -1,10 +1,8 @@
 import datetime
 from collections import defaultdict
 from enum import Enum
-from dataclasses import dataclass
-from functools import partial
 from warnings import filterwarnings
-from typing import Optional, Dict, Callable, Any, List, Tuple, Type
+from typing import Optional, Dict, Callable, Any, List, Set, Tuple, Type
 
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
@@ -211,7 +209,6 @@ class ExcelStyles:
         self.DIRECTIVE_STYLE = workbook.add_format(self.DIRECTIVE_STYLE_PROPS)
 
 
-@dataclass
 class MetadataTemplate:
     """
     A metadata template. Must have attributes `upload_type` and `worksheets` defined.
@@ -228,9 +225,30 @@ class MetadataTemplate:
         self.upload_type = upload_type
         self.worksheet_configs = worksheet_configs
 
-        self.distinct_models = list(
-            set(model for cfg in worksheet_configs for model in cfg.distinct_models)
+        self.ordered_models = self._get_model_ordering()
+
+    def _get_model_ordering(self) -> List[Type[MetadataModel]]:
+        distinct_models = set(
+            model for cfg in self.worksheet_configs for model in cfg.distinct_models
         )
+        table_to_model = {m.__tablename__: m for m in distinct_models}
+
+        # Build graph mapping models to their foreign-key dependencies
+        fk_graph: Dict[Type[MetadataModel], Set[Type[MetadataModel]]] = defaultdict(set)
+        for model in distinct_models:
+            for fk in model.__table__.foreign_keys:
+                # Models can depend on models not present in the template
+                fk_model = table_to_model.get(fk.column.table.name)
+                if fk_model:
+                    fk_graph[model].add(fk_model)
+
+        print()
+        print(fk_graph)
+
+        # Topologically sort the models to get a valid insertion order
+        ordered_models = []
+
+        return []
 
     def read(self, filename: str) -> List[MetadataModel]:
         """
@@ -285,23 +303,33 @@ class MetadataTemplate:
                 for model, kwargs in model_groups.items():
                     model_instances.append(model(**kwargs))
 
-        # De-duplicate and combine model instances
-        model_groups: Dict[Type[MetadataModel], Dict[Tuple, List[MetadataModel]]] = {}
+        # Group model instances with matching values in their primary key or
+        # unique-constrained columns.
+        model_groups: Dict[
+            Type[MetadataModel], Dict[Tuple, List[MetadataModel]]
+        ] = defaultdict(lambda: defaultdict(dict))
         for instance in model_instances:
-            model_group = model_groups.setdefault(instance.__class__, {})
+            model_group = model_groups[instance.__class__]
             unique_values = instance.unique_field_values()
-            model_group[unique_values] = model_group.setdefault(unique_values, []) + [
-                instance
-            ]
+            model_group[unique_values] = model_group[unique_values].append(instance)
 
-        deduped_instances = []
+        # Build a dictionary mapping model classes to deduplicated instances
+        # of that clsass.
+        deduped_instances: Dict[Type[MetadataModel], List[MetadataModel]] = defaultdict(
+            list
+        )
         for model, groups in model_groups.items():
             broad_instances = groups.pop(None, [])
             for specific_instances in groups.values():
                 instance = model()
                 for partial_instance in broad_instances + specific_instances:
                     instance.merge(partial_instance)
-                deduped_instances.append(instance)
+                deduped_instances[model] = deduped_instances[model].append(instance)
+
+        print()
+        print(deduped_instances)
+
+        ordered_instances = []
 
     def write(self, filename: str):
         """

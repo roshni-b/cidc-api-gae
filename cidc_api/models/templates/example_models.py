@@ -1,4 +1,4 @@
-from typing import Any, Tuple, Optional
+from typing import Any, List, Set, Tuple, Optional, Type
 
 from sqlalchemy import (
     CheckConstraint,
@@ -47,6 +47,9 @@ class MetadataModel(BaseModel):
                 raise Exception(
                     f"found conflicting values for {self.__tablename__}.{column.name}: {current}!={other}"
                 )
+
+    def fk_dependencies(self) -> Set:
+        """Get a set containing the MetadataModel classes which this model has foreign-key references to."""
 
 
 AssaysEnum = Enum(
