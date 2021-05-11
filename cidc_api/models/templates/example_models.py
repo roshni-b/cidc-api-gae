@@ -21,13 +21,14 @@ class MetadataModel(BaseModel):
 
     def unique_field_values(self) -> Optional[Tuple[Any]]:
         unique_field_values = []
-        for column in self.__table__.columns:
+        for column in self.c:
+            # column.primary_key == True for 1+ column guaranteed
             if column.unique or column.primary_key:
                 value = getattr(self, column.name)
                 unique_field_values.append(value)
 
         if all(v is None for v in unique_field_values):
-            return None
+            return None  # special value
 
         return tuple(unique_field_values)
 
@@ -38,7 +39,7 @@ class MetadataModel(BaseModel):
                 f"cannot merge {self.__class__} instance with {other.__class__} instance"
             )
 
-        for column in self.__table__.columns:
+        for column in self.c:
             current = getattr(self, column.name)
             incoming = getattr(other, column.name)
             if current is None:
@@ -47,9 +48,6 @@ class MetadataModel(BaseModel):
                 raise Exception(
                     f"found conflicting values for {self.__tablename__}.{column.name}: {current}!={other}"
                 )
-
-    def fk_dependencies(self) -> Set:
-        """Get a set containing the MetadataModel classes which this model has foreign-key references to."""
 
 
 AssaysEnum = Enum(

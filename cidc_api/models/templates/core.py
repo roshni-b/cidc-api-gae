@@ -51,6 +51,12 @@ class Entry:
         self.pytype = self.sqltype.python_type
 
     def get_column_mapping(self, value) -> Dict[Column, Any]:
+        if value is None:
+            if self.nullable:
+                return {self.column: None}
+            else:
+                raise Exception(f"Missing required value {self.name}")
+
         try:
             # Handle date/time parsing funkiness
             if self.pytype == datetime.time:
@@ -98,16 +104,6 @@ class WorksheetConfig:
         ]
 
         return list(set([entry.column.class_ for entry in entries]))
-
-
-class RowType(Enum):
-    """Annotations denoting what type of data a template row contains."""
-
-    TITLE = "#title"
-    SKIP = "#skip"
-    HEADER = "#header"
-    PREAMBLE = "#preamble"
-    DATA = "#data"
 
 
 class RowType(Enum):
@@ -307,11 +303,10 @@ class MetadataTemplate:
         # unique-constrained columns.
         model_groups: Dict[
             Type[MetadataModel], Dict[Tuple, List[MetadataModel]]
-        ] = defaultdict(lambda: defaultdict(dict))
+        ] = defaultdict(lambda: defaultdict(list))
         for instance in model_instances:
-            model_group = model_groups[instance.__class__]
             unique_values = instance.unique_field_values()
-            model_group[unique_values] = model_group[unique_values].append(instance)
+            model_groups[instance.__class__][unique_values].append(instance)
 
         # Build a dictionary mapping model classes to deduplicated instances
         # of that clsass.
@@ -319,15 +314,13 @@ class MetadataTemplate:
             list
         )
         for model, groups in model_groups.items():
+            # special value None for all(unique_values is None)
             broad_instances = groups.pop(None, [])
             for specific_instances in groups.values():
                 instance = model()
                 for partial_instance in broad_instances + specific_instances:
                     instance.merge(partial_instance)
-                deduped_instances[model] = deduped_instances[model].append(instance)
-
-        print()
-        print(deduped_instances)
+                deduped_instances[model].append(instance)
 
         ordered_instances = []
 
