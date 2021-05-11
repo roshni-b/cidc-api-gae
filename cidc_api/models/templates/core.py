@@ -9,7 +9,7 @@ from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
 import openpyxl
 from sqlalchemy import Column, Enum as SqlEnum
 
-from .example_models import MetadataModel
+from .example_models import MODEL_INSERTION_ORDER, MetadataModel
 
 
 filterwarnings(
@@ -52,7 +52,7 @@ class Entry:
 
     def get_column_mapping(self, value) -> Dict[Column, Any]:
         if value is None:
-            if self.nullable:
+            if self.column.nullable:
                 return {self.column: None}
             else:
                 raise Exception(f"Missing required value {self.name}")
@@ -221,31 +221,6 @@ class MetadataTemplate:
         self.upload_type = upload_type
         self.worksheet_configs = worksheet_configs
 
-        self.ordered_models = self._get_model_ordering()
-
-    def _get_model_ordering(self) -> List[Type[MetadataModel]]:
-        distinct_models = set(
-            model for cfg in self.worksheet_configs for model in cfg.distinct_models
-        )
-        table_to_model = {m.__tablename__: m for m in distinct_models}
-
-        # Build graph mapping models to their foreign-key dependencies
-        fk_graph: Dict[Type[MetadataModel], Set[Type[MetadataModel]]] = defaultdict(set)
-        for model in distinct_models:
-            for fk in model.__table__.foreign_keys:
-                # Models can depend on models not present in the template
-                fk_model = table_to_model.get(fk.column.table.name)
-                if fk_model:
-                    fk_graph[model].add(fk_model)
-
-        print()
-        print(fk_graph)
-
-        # Topologically sort the models to get a valid insertion order
-        ordered_models = []
-
-        return []
-
     def read(self, filename: str) -> List[MetadataModel]:
         """
         Extract a list of SQLAlchemy models in insertion order from a populated
@@ -323,6 +298,12 @@ class MetadataTemplate:
                 deduped_instances[model].append(instance)
 
         ordered_instances = []
+        for next_model in MODEL_INSERTION_ORDER:
+            next_instances = deduped_instances.get(next_model)
+            if next_instances:
+                ordered_instances.extend(next_instances)
+
+        return ordered_instances
 
     def write(self, filename: str):
         """

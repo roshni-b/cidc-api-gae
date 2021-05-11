@@ -1,4 +1,5 @@
-from typing import Any, List, Set, Tuple, Optional, Type
+from collections import defaultdict
+from typing import Any, Dict, List, Set, Tuple, Optional, Type
 
 from sqlalchemy import (
     CheckConstraint,
@@ -21,7 +22,7 @@ class MetadataModel(BaseModel):
 
     def unique_field_values(self) -> Optional[Tuple[Any]]:
         unique_field_values = []
-        for column in self.c:
+        for column in self.__table__.columns:
             # column.primary_key == True for 1+ column guaranteed
             if column.unique or column.primary_key:
                 value = getattr(self, column.name)
@@ -39,7 +40,7 @@ class MetadataModel(BaseModel):
                 f"cannot merge {self.__class__} instance with {other.__class__} instance"
             )
 
-        for column in self.c:
+        for column in self.__table__.columns:
             current = getattr(self, column.name)
             incoming = getattr(other, column.name)
             if current is None:
@@ -720,3 +721,49 @@ class Aliquot(MetadataModel):
     )
 
     sample = relationship(Sample, back_populates="aliquots")
+
+
+###### ALL MODEL DEFINITIONS SHOULD GO ABOVE THIS LINE ######
+def _get_global_insertion_order() -> List[MetadataModel]:
+    """
+    Produce an ordering of all metadata model types based on foreign key dependencies
+    between models. For a given model, all models it depends on are guaranteed to
+    appear before it in this list.
+    """
+    models = MetadataModel.__subclasses__()
+
+    # Build a dictionary mapping table names to model classes -
+    # we use this below to look up the model classes associated with
+    # a given foreign key.
+    table_to_model = {m.__tablename__: m for m in models}
+
+    # Build two graphs representing foreign-key relationships between models:
+    # - fks_to_parents, mapping models to the set of models they depend on
+    # - parents_to_fks, mapping models to the set of models that depend on them
+    fks_to_parents = defaultdict(set)
+    parent_to_fks = defaultdict(set)
+    for model in models:
+        for fk in model.__table__.foreign_keys:
+            fk_model = table_to_model.get(fk.column.table.name)
+            parent_to_fks[model].add(fk_model)
+            fks_to_parents[fk_model].add(model)
+
+    # Topologically sort the dependency graph to produce a valid insertion order
+    # using Kahn's algorithm: https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
+    ordered_models = []
+    depless_models = set(
+        model for model in models if len(model.__table__.foreign_keys) == 0
+    )
+    while len(depless_models) > 0:
+        model = depless_models.pop()
+        ordered_models.append(model)
+        for fk_model in fks_to_parents[model]:
+            fks = parent_to_fks[fk_model]
+            fks.remove(model)
+            if len(fks) == 0:
+                depless_models.add(fk_model)
+
+    return ordered_models
+
+
+MODEL_INSERTION_ORDER = _get_global_insertion_order()
