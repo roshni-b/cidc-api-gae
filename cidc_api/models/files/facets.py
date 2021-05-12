@@ -47,16 +47,16 @@ assay_facets: Facets = {
         "Cell Counts": FacetConfig(
             [
                 "/cytof_analysis/cell_counts_assignment.csv",
-                "/cytof_nalysis/cell_counts_compartment.csv",
+                "/cytof_analysis/cell_counts_compartment.csv",
                 "/cytof_analysis/profiling.csv",
             ],
             "Summary cell count expression of individual cell types in each sample",
         ),
         "Combined Cell Counts": FacetConfig(
             [
-                "/cytof_analysis/cell_counts_compartment.csv",
-                "/cytof_analysis/cell_counts_assignment.csv",
-                "/cytof_analysis/cell_counts_profiling.csv",
+                "/cytof_analysis/combined_cell_counts_compartment.csv",
+                "/cytof_analysis/combined_cell_counts_assignment.csv",
+                "/cytof_analysis/combined_cell_counts_profiling.csv",
             ],
             "Summary cell counts, combined across all samples in the trial",
         ),

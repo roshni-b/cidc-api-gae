@@ -461,7 +461,22 @@ details_dict = {
         "comma-separated two-column table with cell counts for each broad compartment assigned",
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the broad compartment of the called cell types, and 'N', the number of cells within that compartment seen in the sample.",
     ),
-    f"/cytof_analysis/cell_counts_profiling.csv": FileDetails(
+    f"/cytof_analysis/profiling.csv": FileDetails(  # see facets.py assay_facets["CyTOF"]["Cell Counts"]
+        "analysis",
+        "comma-separated two-column table with cell counts for each profiled subset of all assigned cell types",
+        "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the profiled subset of the assigned cell types, and 'N', the number of cells within that profiled subset seen in the sample.",
+    ),
+    f"/cytof_analysis/combined_cell_counts_assignment.csv": FileDetails(
+        "analysis",
+        "comma-separated two-column table with cell counts for each assigned cell type",
+        "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the called cell type, and 'N', the number of cells of that type seen in the sample.",
+    ),
+    f"/cytof_analysis/combined_cell_counts_compartment.csv": FileDetails(
+        "analysis",
+        "comma-separated two-column table with cell counts for each broad compartment assigned",
+        "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the broad compartment of the called cell types, and 'N', the number of cells within that compartment seen in the sample.",
+    ),
+    f"/cytof_analysis/combined_cell_counts_profiling.csv": FileDetails(
         "analysis",
         "comma-separated two-column table with cell counts for each profiled subset of all assigned cell types",
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the profiled subset of the assigned cell types, and 'N', the number of cells within that profiled subset seen in the sample.",
