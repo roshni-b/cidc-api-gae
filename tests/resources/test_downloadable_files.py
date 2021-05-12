@@ -66,7 +66,7 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
         trial_id_2,
         "cytof/.../analysis.zip",
         "cytof_10021",
-        "/cytof_10021_analysis/analysis.zip",
+        "/cytof_analysis/analysis.zip",
     )
 
     with cidc_api.app_context():
