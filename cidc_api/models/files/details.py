@@ -450,6 +450,42 @@ details_dict = {
         "xlsx file of measured values where rows are samples and columns are antigens",
         "An XML-based Excel file that contains the results of a single run in arbitrary units. Each row is a sample, though not all have CIMAC IDs, and each column is an antigen.",
     ),
+    # CyTOF analysis is invariant
+    f"/cytof_analysis/cell_counts_assignment.csv": FileDetails(
+        "analysis",
+        "comma-separated two-column table with cell counts for each assigned cell type",
+        "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the called cell type, and 'N', the number of cells of that type seen in the sample.",
+    ),
+    f"/cytof_analysis/cell_counts_compartment.csv": FileDetails(
+        "analysis",
+        "comma-separated two-column table with cell counts for each broad compartment assigned",
+        "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the broad compartment of the called cell types, and 'N', the number of cells within that compartment seen in the sample.",
+    ),
+    f"/cytof_analysis/cell_counts_profiling.csv": FileDetails(
+        "analysis",
+        "comma-separated two-column table with cell counts for each profiled subset of all assigned cell types",
+        "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the profiled subset of the assigned cell types, and 'N', the number of cells within that profiled subset seen in the sample.",
+    ),
+    f"/cytof_analysis/assignment.csv": FileDetails(
+        "analysis",
+        "comma-separated table of marker expression for each assigned cell type",
+        "A plain-text, comma-separated table with a column for each assigned cell type, where rows are the signal on each channel for every cell type assigned.",
+    ),
+    f"/cytof_analysis/compartment.csv": FileDetails(
+        "analysis",
+        "comma-separated table of marker expression for each broad compartment assigned",
+        "A plain-text, comma-separated table with a column for each broad compartment of the called cell types, where rows are the signal on each channel for every compartment.",
+    ),
+    f"/cytof_analysis/profiling.csv": FileDetails(
+        "analysis",
+        "comma-separated table of marker expression for each profiled subset of all assigned cell types",
+        "A plain-text, comma-separated table with a column for each profiled subset of all assigned cell types, where rows are the signal on each channel for every profiled subset.",
+    ),
+    f"/cytof_analysis/source.fcs": FileDetails(
+        "source",
+        "fcs data used as the input for this analysis",
+        "The analysis-ready FCS file used as the input for this analysis. After normalization, debarcoding, and removal of Veri-Cells and other non-specimen cells.",
+    ),  # schemas/assays/cytof_assay_core.json#defintions/output_files/properties/fcs_file
 }
 
 # handle CyTOF separately to use same FacetConfig definitions for all versions
@@ -476,40 +512,5 @@ for version in ["cytof_10021", "cytof_e4412"]:
                 "fully processed fcs data: normalized, debarcoded, no Veri-Cells, cleaned",
                 "The analysis-ready FCS file after normalization, debarcoding, and removal of Veri-Cells and other non-specimen cells.",
             ),
-            f"/{version}_analysis/cell_counts_assignment.csv": FileDetails(
-                "analysis",
-                "comma-separated two-column table with cell counts for each assigned cell type",
-                "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the called cell type, and 'N', the number of cells of that type seen in the sample.",
-            ),
-            f"/{version}_analysis/cell_counts_compartment.csv": FileDetails(
-                "analysis",
-                "comma-separated two-column table with cell counts for each broad compartment assigned",
-                "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the broad compartment of the called cell types, and 'N', the number of cells within that compartment seen in the sample.",
-            ),
-            f"/{version}_analysis/cell_counts_profiling.csv": FileDetails(
-                "analysis",
-                "comma-separated two-column table with cell counts for each profiled subset of all assigned cell types",
-                "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the profiled subset of the assigned cell types, and 'N', the number of cells within that profiled subset seen in the sample.",
-            ),
-            f"/{version}_analysis/assignment.csv": FileDetails(
-                "analysis",
-                "comma-separated table of marker expression for each assigned cell type",
-                "A plain-text, comma-separated table with a column for each assigned cell type, where rows are the signal on each channel for every cell type assigned.",
-            ),
-            f"/{version}_analysis/compartment.csv": FileDetails(
-                "analysis",
-                "comma-separated table of marker expression for each broad compartment assigned",
-                "A plain-text, comma-separated table with a column for each broad compartment of the called cell types, where rows are the signal on each channel for every compartment.",
-            ),
-            f"/{version}_analysis/profiling.csv": FileDetails(
-                "analysis",
-                "comma-separated table of marker expression for each profiled subset of all assigned cell types",
-                "A plain-text, comma-separated table with a column for each profiled subset of all assigned cell types, where rows are the signal on each channel for every profiled subset.",
-            ),
-            f"/{version}_analysis/source.fcs": FileDetails(
-                "source",
-                "fcs data used as the input for this analysis",
-                "The analysis-ready FCS file used as the input for this analysis. After normalization, debarcoding, and removal of Veri-Cells and other non-specimen cells.",
-            ),  # schemas/assays/components/cytof/cytof_analysis.json#properties/fcs_file
         }
     )
