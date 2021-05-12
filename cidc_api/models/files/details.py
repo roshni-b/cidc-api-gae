@@ -38,7 +38,7 @@ details_dict = {
         "bam file containing both pairs of sequencing libraries",
         "The paired raw reads in the standard BAM binary format, generated from the raw R1 and R2 FASTQ files.",
     ),
-    ## see: https://github.com/CIMAC-CIDC/cidc-ngs-pipeline-api/blob/master/wes/wes_output_API.json
+    ## see: https://github.com/CIMAC-CIDC/cidc-ngs-pipeline-api/blob/master/cidc_ngs_pipeline_api/wes/wes_output_API.json
     "/wes/analysis/vcfcompare.txt": FileDetails(
         "analysis",
         "plain-text file of overlaps of somatic and germline variants, from VCFtool's vcf-compare",
@@ -326,7 +326,7 @@ details_dict = {
         "A plain-text XML file with comma-separated table elements for the raw NanoString output from a control.",
     ),
     "/nanostring/raw_data.csv": FileDetails(
-        "analysis",
+        "miscellaneous",
         "comma-separated values aggregated from the raw RCC files for all samples/controls",
         "A comma-separated file where each column represents the values pulled from a sample/control's RCC file.",
     ),
@@ -352,17 +352,17 @@ details_dict = {
         "The multispectral image of the region-of-interest taken by Mantra, in the PerkinElmer IM3 file format. Used as input for inForm.",
     ),
     "/mif/roi_/binary_seg_maps.tif": FileDetails(
-        "analysis",
+        "miscellaneous",
         "multi-image tiff of region-of-interest holding all maps as binary in/out, from inForm",
         "A multi-image TIFF of the region-of-interest, all Tissue, Cell, and Object maps created in analysis are stored as binary in/out 'images', as well as any processing maps. Exported from inForm (PerkinElmer).",
     ),
     "/mif/roi_/phenotype_map.tif": FileDetails(
-        "analysis",
+        "miscellaneous",
         "tiff image where each dot is a phenotyped cell, from inForm",
         "A TIFF image using dots to represent the location of each cell in the region-of-interest with each called phenotype in a different color. Exported from inForm (PerkinElmer).",
     ),
     "/mif/roi_/score_data_.txt": FileDetails(
-        "analysis",
+        "miscellaneous",
         "plain-text statistics on the score step, from inForm",
         "A plain-text file containing at mimimum, 'Tissue Category' and 'Area (Percent)', 'Number of cells', 'Cell Compartment', 'Stain Component'. Exported from inForm (PerkinElmer).",
     ),
@@ -372,7 +372,7 @@ details_dict = {
         "A wide tab-separated file containing information and statistics on each cell in the range of interest. For each cell, measures of its position, size, shape, and marker expression in several compartments are recorded. Exported from inForm (PerkinElmer).",
     ),
     "/mif/roi_/cell_seg_data_summary.txt": FileDetails(
-        "analysis",
+        "miscellaneous",
         "tab-separated statistics of cells, summarized across each phenotype in the region-of-interest, from inForm",
         "A wide tab-separated file containing information and statistics across all cells of a given phenotype in the region-of-interest. Contains the same measures of position, size, shape and marker expression in several compartments as does the cell_seg_data file. Exported from inForm (PerkinElmer).",
     ),
@@ -435,8 +435,8 @@ details_dict = {
     "/tcr/replicate_/i2.fastq.gz": FileDetails("source", "", ""),
     "/tcr/SampleSheet.csv": FileDetails("miscellaneous", "", ""),
     "/tcr_analysis/summary_info.csv": FileDetails("miscellaneous", "", ""),
-    "/tcr_analysis/tra_clone.csv": FileDetails("analysis", "", ""),
-    "/tcr_analysis/trb_clone.csv": FileDetails("analysis", "", ""),
+    "/tcr_analysis/tra_clone.csv": FileDetails("miscellaneous", "", ""),
+    "/tcr_analysis/trb_clone.csv": FileDetails("miscellaneous", "", ""),
     "/tcr_analysis/report_trial.tar.gz": FileDetails("analysis", "", ""),
     # H&E
     "/hande/image_file.svs": FileDetails(
@@ -452,17 +452,17 @@ details_dict = {
     ),
     # CyTOF analysis is invariant
     f"/cytof_analysis/cell_counts_assignment.csv": FileDetails(
-        "analysis",
+        "miscellaneous",
         "comma-separated two-column table with cell counts for each assigned cell type",
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the called cell type, and 'N', the number of cells of that type seen in the sample.",
     ),
     f"/cytof_analysis/cell_counts_compartment.csv": FileDetails(
-        "analysis",
+        "miscellaneous",
         "comma-separated two-column table with cell counts for each broad compartment assigned",
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the broad compartment of the called cell types, and 'N', the number of cells within that compartment seen in the sample.",
     ),
     f"/cytof_analysis/profiling.csv": FileDetails(  # see facets.py assay_facets["CyTOF"]["Cell Counts"]
-        "analysis",
+        "miscellaneous",
         "comma-separated two-column table with cell counts for each profiled subset of all assigned cell types",
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the profiled subset of the assigned cell types, and 'N', the number of cells within that profiled subset seen in the sample.",
     ),
@@ -482,17 +482,17 @@ details_dict = {
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the profiled subset of the assigned cell types, and 'N', the number of cells within that profiled subset seen in the sample.",
     ),
     f"/cytof_analysis/assignment.csv": FileDetails(
-        "analysis",
+        "miscellaneous",
         "comma-separated table of marker expression for each assigned cell type",
         "A plain-text, comma-separated table with a column for each assigned cell type, where rows are the signal on each channel for every cell type assigned.",
     ),
     f"/cytof_analysis/compartment.csv": FileDetails(
-        "analysis",
+        "miscellaneous",
         "comma-separated table of marker expression for each broad compartment assigned",
         "A plain-text, comma-separated table with a column for each broad compartment of the called cell types, where rows are the signal on each channel for every compartment.",
     ),
     f"/cytof_analysis/profiling.csv": FileDetails(
-        "analysis",
+        "miscellaneous",
         "comma-separated table of marker expression for each profiled subset of all assigned cell types",
         "A plain-text, comma-separated table with a column for each profiled subset of all assigned cell types, where rows are the signal on each channel for every profiled subset.",
     ),
