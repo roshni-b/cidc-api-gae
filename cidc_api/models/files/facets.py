@@ -274,9 +274,9 @@ analysis_ready_facets = {
     "Olink": FacetConfig(["npx|analysis_ready|csv"]),
     "CyTOF": FacetConfig(
         [
-            "/cytof_analysis/cell_counts_compartment.csv",
-            "/cytof_analysis/cell_counts_assignment.csv",
-            "/cytof_analysis/cell_counts_profiling.csv",
+            "/cytof_analysis/combined_cell_counts_compartment.csv",
+            "/cytof_analysis/combined_cell_counts_assignment.csv",
+            "/cytof_analysis/combined_cell_counts_profiling.csv",
         ],
         "Summary cell counts, combined across all samples in the trial",
     ),
@@ -287,10 +287,8 @@ analysis_ready_facets = {
     ),
     "RNA": FacetConfig(["/rna/analysis/salmon/quant.sf"]),
     "WES": FacetConfig(["/wes/analysis/report.tar.gz"]),
-    "TCR": FacetConfig(
-        ["/tcr_analysis/tra_clone.csv", "/tcr_analysis/trb_clone.csv"],
-        "Data files from TCRseq analysis indicating TRA & TRB clones UMI counts",
-    ),
+    "TCR": FacetConfig(["/tcr_analysis/report_trial.tar.gz"]),
+    "mIF": FacetConfig(["/mif/roi_/cell_seg_data.txt"]),
 }
 
 facets_dict: Dict[str, Facets] = {
