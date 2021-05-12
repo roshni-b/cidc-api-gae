@@ -46,12 +46,9 @@ assay_facets: Facets = {
         ),
         "Cell Counts": FacetConfig(
             [
-                "/cytof_10021_analysis/cell_counts_assignment.csv",
-                "/cytof_10021_analysis/cell_counts_compartment.csv",
-                "/cytof_10021_analysis/cell_counts_profiling.csv",
-                "/cytof_e4412_analysis/cell_counts_assignment.csv",
-                "/cytof_e4412_analysis/cell_counts_compartment.csv",
-                "/cytof_e4412_analysis/cell_counts_profiling.csv",
+                "/cytof_analysis/cell_counts_assignment.csv",
+                "/cytof_analysis/cell_counts_compartment.csv",
+                "/cytof_analysis/profiling.csv",
             ],
             "Summary cell count expression of individual cell types in each sample",
         ),
@@ -64,26 +61,18 @@ assay_facets: Facets = {
             "Summary cell counts, combined across all samples in the trial",
         ),
         "Labeled Source": FacetConfig(
-            ["/cytof_10021_analysis/source.fcs", "/cytof_e4412_analysis/source.fcs"],
+            ["/cytof_analysis/source.fcs"],
             "FCS file with enumerations for compartment, assignment and profiling cell labels",
         ),
         "Analysis Results": FacetConfig(
-            [
-                "/cytof_10021_analysis/reports.zip",
-                "/cytof_10021_analysis/analysis.zip",
-                "/cytof_e4412_analysis/reports.zip",
-                "/cytof_e4412_analysis/analysis.zip",
-            ],
+            ["/cytof_analysis/reports.zip", "/cytof_analysis/analysis.zip",],
             "Results package from Astrolabe analysis",
         ),
         "Key": FacetConfig(
             [
-                "/cytof_10021_analysis/assignment.csv",
-                "/cytof_10021_analysis/compartment.csv",
-                "/cytof_10021_analysis/profiling.csv",
-                "/cytof_e4412_analysis/assignment.csv",
-                "/cytof_e4412_analysis/compartment.csv",
-                "/cytof_e4412_analysis/profiling.csv",
+                "/cytof_analysis/assignment.csv",
+                "/cytof_analysis/compartment.csv",
+                "/cytof_analysis/profiling.csv",
             ],
             "Keys for mapping from respective enumeration indices to the cell labels",
         ),
@@ -285,9 +274,9 @@ analysis_ready_facets = {
     "Olink": FacetConfig(["npx|analysis_ready|csv"]),
     "CyTOF": FacetConfig(
         [
-            "/cytof_analysis/combined_cell_counts_compartment.csv",
-            "/cytof_analysis/combined_cell_counts_assignment.csv",
-            "/cytof_analysis/combined_cell_counts_profiling.csv",
+            "/cytof_analysis/cell_counts_compartment.csv",
+            "/cytof_analysis/cell_counts_assignment.csv",
+            "/cytof_analysis/cell_counts_profiling.csv",
         ],
         "Summary cell counts, combined across all samples in the trial",
     ),
