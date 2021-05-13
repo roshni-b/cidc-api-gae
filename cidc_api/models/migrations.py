@@ -112,6 +112,7 @@ def _select_trials(session: Session) -> List[TrialMetadata]:
 class AssayUploads(CommonColumns):
     """This model no longer exists in cidc_api.models, but a partial model is required for migrations."""
 
+    __abstract__ = True
     __tablename__ = "assay_uploads"
     status = Column(String)
 
@@ -119,6 +120,7 @@ class AssayUploads(CommonColumns):
 class ManifestUploads(CommonColumns):
     """This model no longer exists in cidc_api.models, but a partial model is required for migrations."""
 
+    __abstract__ = True
     __tablename__ = "manifest_uploads"
 
 

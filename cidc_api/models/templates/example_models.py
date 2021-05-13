@@ -53,7 +53,17 @@ class MetadataModel(BaseModel):
 
 
 AssaysEnum = Enum(
-    "Olink", "WES", "RNAseq", "IHC", "CyTOF", "H&E", "ELISA", "mIF", "mIHC", "TCRseq"
+    "Olink",
+    "WES",
+    "RNAseq",
+    "IHC",
+    "CyTOF",
+    "H&E",
+    "ELISA",
+    "mIF",
+    "mIHC",
+    "TCRseq",
+    name="assay_enum",
 )
 ConcentrationUnits = Enum(
     "Nanogram per Microliter",
@@ -62,6 +72,7 @@ ConcentrationUnits = Enum(
     "Cells per Vial",
     "Not Reported",
     "Other",
+    name="concentration_units_enum",
 )
 MaterialUnits = Enum(
     "Microliters",
@@ -73,6 +84,7 @@ MaterialUnits = Enum(
     "Slides",
     "Not Reported",
     "Other",
+    name="material_units_enum",
 )
 Replacement = Enum(
     "Replacement Not Requested",
@@ -80,6 +92,7 @@ Replacement = Enum(
     "Replacement Tested",
     "Not Reported",
     "Other",
+    name="replace_enum",
 )
 SampleTypes = Enum(
     "Tumor Tissue",
@@ -92,8 +105,11 @@ SampleTypes = Enum(
     "Stool",
     "Not Reported",
     "Other",
+    name="sample_types_enum",
 )
-VolumeUnits = Enum("Microliter", "Milliliter", "Not Reported", "Other")
+VolumeUnits = Enum(
+    "Microliter", "Milliliter", "Not Reported", "Other", name="volume_units_enum"
+)
 
 
 class ClinicalTrial(MetadataModel):
@@ -240,13 +256,14 @@ class Shipment(MetadataModel):
             "15",
             "Not Reported",
             "Other",
+            name="assay_priority_enum",
         ),
         nullable=False,
         doc="Priority of the assay as it appears on the intake form.",
     )
     assay_type = Column(AssaysEnum, nullable=False, doc="Assay and sample type used.")
     courier = Column(
-        Enum("FEDEX", "USPS", "UPS", "Inter-Site Delivery"),
+        Enum("FEDEX", "USPS", "UPS", "Inter-Site Delivery", name="courier_enum"),
         nullable=False,
         doc="Courier utilized for shipment.",
     )
@@ -268,6 +285,7 @@ class Shipment(MetadataModel):
             "Ambient",
             "Not Reported",
             "Other",
+            name="shipping_condition_enum",
         ),
         nullable=False,
         doc="Type of shipment made.",
@@ -280,6 +298,7 @@ class Shipment(MetadataModel):
             "Specimen shipment received in poor condition",
             "Not Reported",
             "Other",
+            name="quality_of_shipment_enum",
         ),
         nullable=False,
         doc="Indication that specimens were received in good condition.",
@@ -307,6 +326,7 @@ class Shipment(MetadataModel):
             "NCH",
             "Adaptive",
             "FNLCR_MoCha",
+            name="receiving_party_enum",
         ),
         nullable=False,
         doc="Site where sample was shipped to be assayed.",
@@ -336,7 +356,7 @@ class Participant(MetadataModel):
     cohort_name = Column(String)
 
     gender = Column(
-        Enum("Male", "Female", "Not Specified", "Other"),
+        Enum("Male", "Female", "Not Specified", "Other", name="gender_enum"),
         doc="Identifies the gender of the participant.",
     )
     race = Column(
@@ -349,6 +369,7 @@ class Participant(MetadataModel):
             "Not Reported",
             "Unknown",
             "Other",
+            name="race_enum",
         ),
         doc="NIH Racial and Ethnic Categories and Definitions for NIH Diversity Programs and for Other Reporting Purposes (NOT-OD-15-089),  Release Date: April 8, 2015.",
     )
@@ -359,6 +380,7 @@ class Participant(MetadataModel):
             "Not reported",
             "Unknown",
             "Other",
+            name="ethnicity_enum",
         ),
         doc="NIH Racial and Ethnic Categories and Definitions for NIH Diversity Programs and for Other Reporting Purposes (NOT-OD-15-089),  Release Date: April 8, 2015.",
     )
@@ -452,7 +474,13 @@ class Sample(MetadataModel):
     )
     type_of_sample = Column(SampleTypes, nullable=False, doc="Type of sample sent.")
     type_of_tumor_sample = Column(
-        Enum("Metastatic Tumor", "Primary Tumor", "Not Reported", "Other"),
+        Enum(
+            "Metastatic Tumor",
+            "Primary Tumor",
+            "Not Reported",
+            "Other",
+            name="type_of_tumor_sample_enum",
+        ),
         doc="The type of tumor sample obtained (primary or metastatic).",
     )
     sample_collection_procedure = Column(
@@ -469,6 +497,7 @@ class Sample(MetadataModel):
             "Fine-Needle Aspiration",
             "Not Reported",
             "Other",
+            name="sample_collection_procedure_enum",
         ),
         doc="Indicates the specimen source of the sample shipped. Example: Na Heparin blood draw aliquots (2 of three), FFPE block #52",
     )
@@ -485,6 +514,7 @@ class Sample(MetadataModel):
             "Thaw-Lyse",
             "Not Reported",
             "Other",
+            name="fixation_stabilization_type_enum",
         ),
         doc="Type of specimen fixation or stabilization that was employed by the site directly after collection.",
     )
@@ -497,6 +527,7 @@ class Sample(MetadataModel):
             "Stool collection container with DNA stabilizer",
             "Not Reported",
             "Other",
+            name="type_of_primary_container_enum",
         ),
         CheckConstraint(
             "type_of_sample != 'blood' or type_of_primary_container is not null"
@@ -533,6 +564,7 @@ class Sample(MetadataModel):
             "Circulating Tumor-Derived DNA",
             "Not Reported",
             "Other",
+            name="processed_sample_derivative_enum",
         ),
         doc="The type of derivative or analyte extracted from the specimen to be shipped for testing.",
     )
@@ -609,7 +641,9 @@ class Sample(MetadataModel):
         doc="Receiving site determines number for PBMCs per vial recovered upon receipt.",
     )
     pbmc_resting_period_used = Column(
-        Enum("Yes", "No", "Not Reported", "Other"),  # should be Boolean, nullable=True
+        Enum(
+            "Yes", "No", "Not Reported", "Other", name="pbmc_resting_period_used_enum"
+        ),  # should be Boolean, nullable=True
         doc="Receiving site indicates if a resting period was used after PBMC recovery.",
     )
     material_used = Column(
@@ -628,12 +662,21 @@ class Sample(MetadataModel):
         MaterialUnits, doc="Units for the amount of material remaining."
     )
     material_storage_condition = Column(
-        Enum("RT", "4oC", "(-20)oC", "(-80)oC", "LN", "Not Reported", "Other"),
+        Enum(
+            "RT",
+            "4oC",
+            "(-20)oC",
+            "(-80)oC",
+            "LN",
+            "Not Reported",
+            "Other",
+            name="material_storage_condition_enum",
+        ),
         doc="Storage condition of the material once it was received.",
     )
     quality_of_sample = Column(
         Enum(
-            "Pass", "Fail", "Not Reported", "Other"
+            "Pass", "Fail", "Not Reported", "Other", name="quality_of_sample_enum"
         ),  # could be Boolean, nullable=True
         doc="Final status of sample after QC and pathology review.",
     )
@@ -647,17 +690,19 @@ class Sample(MetadataModel):
             "Sample received from CIMAC",
             "Not Reported",
             "Other",
+            name="residual_sample_use_enum",
         ),
         doc="Indication if sample was sent to another location or returned back to biorepository.",
     )
     comments = Column(String, doc="Comments on sample testing.")
     diagnosis_verification = Column(
         Enum(
-            "Local pathology review was not consistent",
-            "Local pathology review was consistent with site of tissue procurement diagnostic pathology report",
+            "Local pathology not consistent",
+            "Local pathology consistent with pathology report",
             "Not Available",
             "Not Reported",
             "Other",
+            name="diagnosis_verification_enum",
         ),
         doc="Indicates whether the local pathology review was consistent with the diagnostic pathology report.",
     )
@@ -701,12 +746,13 @@ class Aliquot(MetadataModel):
             "Remainder used for other Assay",
             "Aliquot Leftover",
             "Other",
+            name="aliquot_status_enum",
         ),
         nullable=False,
         doc="Status of aliquot used for other assay, exhausted, destroyed, or returned.",
     )
     material_extracted = Column(
-        Enum("DNA", "RNA", "cfDNA", "Other"),
+        Enum("DNA", "RNA", "cfDNA", "Other", name="material_extracted_enum"),
         doc="The type of biological material that was extracted from this aliquot.",
     )
     extracted_concentration = Column(
