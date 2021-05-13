@@ -124,4 +124,7 @@ if __name__ == "__main__":
 
     with app.app_context():
         records = PBMCTemplate.read("pbmc_test.xlsx")
-        print(insert_record_batch(records))
+        errors = insert_record_batch(records)
+        print("collected the following errors")
+        for e in errors:
+            print(e.orig)

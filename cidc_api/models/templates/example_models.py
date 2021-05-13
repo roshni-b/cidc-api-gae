@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
 )
 from sqlalchemy.orm import relationship, Session
+from sqlalchemy.sql.schema import UniqueConstraint
 
 from cidc_api.config.db import BaseModel
 
@@ -93,19 +94,6 @@ Replacement = Enum(
     "Not Reported",
     "Other",
     name="replace_enum",
-)
-SampleTypes = Enum(
-    "Tumor Tissue",
-    "Normal Tissue",
-    "Skin Tissue",
-    "Blood",
-    "Bone Marrow",
-    "Cerebrospinal Fluid",
-    "Lymph Node",
-    "Stool",
-    "Not Reported",
-    "Other",
-    name="sample_types_enum",
 )
 VolumeUnits = Enum(
     "Microliter", "Milliliter", "Not Reported", "Other", name="volume_units_enum"
@@ -231,12 +219,14 @@ class Shipment(MetadataModel):
     trial_id = Column(
         String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
     )
-
     manifest_id = Column(
         String,
         primary_key=True,  # both True allows for use as multi Foreign Key
         doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
     )
+
+    __table_args__ = (UniqueConstraint(trial_id, manifest_id),)
+
     assay_priority = Column(
         Enum(
             "1",
@@ -355,6 +345,13 @@ class Participant(MetadataModel):
     )
     cohort_name = Column(String)
 
+    __table_args__ = (
+        UniqueConstraint(trial_id, cimac_participant_id),
+        ForeignKeyConstraint(
+            [trial_id, cohort_name], [Cohort.trial_id, Cohort.cohort_name]
+        ),
+    )
+
     gender = Column(
         Enum("Male", "Female", "Not Specified", "Other", name="gender_enum"),
         doc="Identifies the gender of the participant.",
@@ -391,12 +388,6 @@ class Participant(MetadataModel):
     samples = relationship("Sample", back_populates="participant")
     trial = relationship(ClinicalTrial, back_populates="participants")
 
-    __table_args__ = (
-        ForeignKeyConstraint(
-            [trial_id, cohort_name], [Cohort.trial_id, Cohort.cohort_name]
-        ),
-    )
-
 
 class Sample(MetadataModel):
     __tablename__ = "samples"
@@ -404,7 +395,7 @@ class Sample(MetadataModel):
     trial_id = Column(String, nullable=False)
     cimac_participant_id = Column(String, nullable=False)
     collection_event_name = Column(String, nullable=False)
-    shipment_manifest_id = Column(Integer, nullable=False)
+    shipment_manifest_id = Column(String, nullable=False)
     cimac_id = Column(
         String,
         CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
@@ -472,7 +463,23 @@ class Sample(MetadataModel):
         nullable=False,
         doc="Sample location within the shipping container. Example: A1.",
     )
-    type_of_sample = Column(SampleTypes, nullable=False, doc="Type of sample sent.")
+    type_of_sample = Column(
+        Enum(
+            "Tumor Tissue",
+            "Normal Tissue",
+            "Skin Tissue",
+            "Blood",
+            "Bone Marrow",
+            "Cerebrospinal Fluid",
+            "Lymph Node",
+            "Stool",
+            "Not Reported",
+            "Other",
+            name="sample_types_enum",
+        ),
+        nullable=False,
+        doc="Type of sample sent.",
+    )
     type_of_tumor_sample = Column(
         Enum(
             "Metastatic Tumor",
@@ -539,7 +546,22 @@ class Sample(MetadataModel):
     )
     sample_volume_units = Column(VolumeUnits, doc="Unit for the parent sample volume.")
     processed_sample_type = Column(
-        SampleTypes,
+        Enum(
+            "Whole Blood",
+            "Plasma",
+            "PBMC",
+            "Buffy Coat",
+            "Bone Marrow Mononuclear Cell",
+            "Supernatant",
+            "Cell Pellet",
+            "H&E-Stained Fixed Tissue Slide Specimen",
+            "Fixed Slide",
+            "Tissue Scroll",
+            "FFPE Punch",
+            "Not Reported",
+            "Other",
+            name="processed_sample_type_enum",
+        ),
         doc="The type of processing that was performed on the collected specimen by the Biobank for storage.",
     )
     processed_sample_volume = Column(Numeric, doc="Volume of the processed sample.")
@@ -697,8 +719,8 @@ class Sample(MetadataModel):
     comments = Column(String, doc="Comments on sample testing.")
     diagnosis_verification = Column(
         Enum(
-            "Local pathology not consistent",
-            "Local pathology consistent with pathology report",
+            "Local review not consistent with diagnostic pathology report",
+            "Local review consistent with diagnostic pathology report",
             "Not Available",
             "Not Reported",
             "Other",
