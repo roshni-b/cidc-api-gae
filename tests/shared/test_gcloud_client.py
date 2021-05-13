@@ -2,6 +2,7 @@ import json
 from io import BytesIO
 from unittest.mock import MagicMock, call
 from datetime import datetime
+import pytest
 
 from werkzeug.datastructures import FileStorage
 from google.api_core.iam import Policy
@@ -225,7 +226,8 @@ def test_revoke_download_access(monkeypatch):
 
     # revocation when target binding doesn't exist
     _mock_gcloud_storage(bindings[1:], set_iam_policy, monkeypatch)
-    revoke_download_access(EMAIL, "10021", "wes")
+    with pytest.warns(UserWarning, match="revoke a non-existent"):
+        revoke_download_access(EMAIL, "10021", "wes")
 
     # revocation when target binding is duplicated
     bindings = [
@@ -241,7 +243,8 @@ def test_revoke_download_access(monkeypatch):
         {"role": "some-other-role", "members": {f"user:JohnDoe"}},
     ]
     _mock_gcloud_storage(bindings, set_iam_policy, monkeypatch)
-    revoke_download_access(EMAIL, "10021", "wes")
+    with pytest.warns(UserWarning, match="multiple conditional bindings"):
+        revoke_download_access(EMAIL, "10021", "wes")
 
 
 def test_revoke_all_download_access(monkeypatch):
@@ -259,9 +262,10 @@ def test_revoke_all_download_access(monkeypatch):
         assert len(policy.bindings) == 1
         assert policy.bindings[0]["role"] != GOOGLE_DOWNLOAD_ROLE
 
-    # Deletion with many items
+    # Deletion with many items, including duplicates
     _mock_gcloud_storage(bindings, set_iam_policy, monkeypatch)
-    revoke_all_download_access(EMAIL)
+    with pytest.warns(UserWarning, match="multiple conditional bindings"):
+        revoke_all_download_access(EMAIL)
 
     # Idempotent deletion
     _mock_gcloud_storage(bindings[:1], set_iam_policy, monkeypatch)

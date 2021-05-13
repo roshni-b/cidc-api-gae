@@ -54,7 +54,7 @@ from .files import (
     build_trial_facets,
     build_data_category_facets,
     get_facet_groups_for_paths,
-    facet_groups_to_names,
+    facet_groups_to_categories,
     details_dict,
     FilePurpose,
     FACET_NAME_DELIM,
@@ -447,6 +447,7 @@ class Permissions(CommonColumns):
         ),
         CheckConstraint("trial_id is not null or upload_type is not null"),
     )
+    __mapper_args__ = {"confirm_deleted_rows": False}
 
     # If user who granted this permission is deleted, this permission will be deleted.
     # TODO: is this what we want?
@@ -1616,7 +1617,7 @@ class DownloadableFiles(CommonColumns):
 
     @hybrid_property
     def data_category(self):
-        return facet_groups_to_names.get(self.facet_group)
+        return facet_groups_to_categories.get(self.facet_group)
 
     @data_category.expression
     def data_category(cls):
@@ -1972,17 +1973,20 @@ class DownloadableFiles(CommonColumns):
     def get_data_category_facets(
         cls, session: Session, filter_: Callable[[Query], Query] = lambda q: q
     ):
-        data_category_file_counts = cls.count_by(
-            cls.data_category, session=session, filter_=filter_
+        facet_group_file_counts = cls.count_by(
+            cls.facet_group, session=session, filter_=filter_
         )
-        data_category_facets = build_data_category_facets(data_category_file_counts)
+        data_category_facets = build_data_category_facets(facet_group_file_counts)
         return data_category_facets
 
 
 # Query clause for computing a downloadable file's data category.
 # Used above in the DownloadableFiles.data_category computed property.
 DATA_CATEGORY_CASE_CLAUSE = case(
-    [(DownloadableFiles.facet_group == k, v) for k, v in facet_groups_to_names.items()]
+    [
+        (DownloadableFiles.facet_group == k, v)
+        for k, v in facet_groups_to_categories.items()
+    ]
 )
 
 # Query clause for computing a downloadable file's file purpose.

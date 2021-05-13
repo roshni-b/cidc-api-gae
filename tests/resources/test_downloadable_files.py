@@ -66,7 +66,7 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
         trial_id_2,
         "cytof/.../analysis.zip",
         "cytof_10021",
-        "/cytof_10021_analysis/analysis.zip",
+        "/cytof_analysis/analysis.zip",
     )
 
     with cidc_api.app_context():
@@ -419,10 +419,10 @@ def test_get_filter_facets(cidc_api, clean_db, monkeypatch):
     make_admin(user_id, cidc_api)
     res = client.get("/downloadable_files/filter_facets")
     assert res.status_code == 200
-    assert res.json["trial_ids"] == [
-        {"label": trial_id_1, "count": 1},
-        {"label": trial_id_2, "count": 1},
-    ]
+    assert sorted(res.json["trial_ids"], key=lambda x: x["label"]) == sorted(
+        [{"label": trial_id_1, "count": 1}, {"label": trial_id_2, "count": 1},],
+        key=lambda x: x["label"],
+    )
     check_facet_counts(res.json["facets"], wes_count=1, cytof_count=1)
 
     # Trial facets are governed by data category facets

@@ -5,11 +5,11 @@ from sqlalchemy.sql import ClauseElement
 
 
 class FacetConfig:
-    match_clauses: List[str]
+    facet_groups: List[str]
     description: Optional[str]
 
-    def __init__(self, match_clauses: List[str], description: Optional[str] = None):
-        self.match_clauses = match_clauses
+    def __init__(self, facet_groups: List[str], description: Optional[str] = None):
+        self.facet_groups = facet_groups
         self.description = description
 
 
@@ -46,12 +46,9 @@ assay_facets: Facets = {
         ),
         "Cell Counts": FacetConfig(
             [
-                "/cytof_10021_analysis/cell_counts_assignment.csv",
-                "/cytof_10021_analysis/cell_counts_compartment.csv",
-                "/cytof_10021_analysis/cell_counts_profiling.csv",
-                "/cytof_e4412_analysis/cell_counts_assignment.csv",
-                "/cytof_e4412_analysis/cell_counts_compartment.csv",
-                "/cytof_e4412_analysis/cell_counts_profiling.csv",
+                "/cytof_analysis/cell_counts_assignment.csv",
+                "/cytof_analysis/cell_counts_compartment.csv",
+                "/cytof_analysis/profiling.csv",
             ],
             "Summary cell count expression of individual cell types in each sample",
         ),
@@ -64,26 +61,18 @@ assay_facets: Facets = {
             "Summary cell counts, combined across all samples in the trial",
         ),
         "Labeled Source": FacetConfig(
-            ["/cytof_10021_analysis/source.fcs", "/cytof_e4412_analysis/source.fcs"],
+            ["/cytof_analysis/source.fcs"],
             "FCS file with enumerations for compartment, assignment and profiling cell labels",
         ),
         "Analysis Results": FacetConfig(
-            [
-                "/cytof_10021_analysis/reports.zip",
-                "/cytof_10021_analysis/analysis.zip",
-                "/cytof_e4412_analysis/reports.zip",
-                "/cytof_e4412_analysis/analysis.zip",
-            ],
+            ["/cytof_analysis/reports.zip", "/cytof_analysis/analysis.zip"],
             "Results package from Astrolabe analysis",
         ),
         "Key": FacetConfig(
             [
-                "/cytof_10021_analysis/assignment.csv",
-                "/cytof_10021_analysis/compartment.csv",
-                "/cytof_10021_analysis/profiling.csv",
-                "/cytof_e4412_analysis/assignment.csv",
-                "/cytof_e4412_analysis/compartment.csv",
-                "/cytof_e4412_analysis/profiling.csv",
+                "/cytof_analysis/assignment.csv",
+                "/cytof_analysis/compartment.csv",
+                "/cytof_analysis/profiling.csv",
             ],
             "Keys for mapping from respective enumeration indices to the cell labels",
         ),
@@ -232,9 +221,12 @@ assay_facets: Facets = {
             [
                 "/olink/batch_/chip_/assay_npx.xlsx",
                 "/olink/batch_/chip_/assay_raw_ct.csv",
-                "/olink/batch_/combined_npx.xlsx",
             ],
             "Analysis files for a single run on the Olink platform.",
+        ),
+        "Batch-Level": FacetConfig(
+            ["/olink/batch_/combined_npx.xlsx"],
+            "Analysis files for a batch of runs on the Olink platform",
         ),
         "Study-Level": FacetConfig(
             ["/olink/study_npx.xlsx", "npx|analysis_ready|csv"],
@@ -298,10 +290,8 @@ analysis_ready_facets = {
     ),
     "RNA": FacetConfig(["/rna/analysis/salmon/quant.sf"]),
     "WES": FacetConfig(["/wes/analysis/report.tar.gz"]),
-    "TCR": FacetConfig(
-        ["/tcr_analysis/tra_clone.csv", "/tcr_analysis/trb_clone.csv"],
-        "Data files from TCRseq analysis indicating TRA & TRB clones UMI counts",
-    ),
+    "TCR": FacetConfig(["/tcr_analysis/report_trial.tar.gz"]),
+    "mIF": FacetConfig(["/mif/roi_/cell_seg_data.txt"]),
 }
 
 facets_dict: Dict[str, Facets] = {
@@ -315,30 +305,31 @@ FACET_NAME_DELIM = "|"
 
 
 def _build_facet_groups_to_names():
+    """Map facet_groups to human-readable data categories."""
     path_to_name = lambda path: FACET_NAME_DELIM.join(path)
 
     facet_names = {}
+    for facet_name, subfacet in facets_dict["Assay Type"].items():
+        for subfacet_name, subsubfacet in subfacet.items():
+            for facet_group in subsubfacet.facet_groups:
+                facet_names[facet_group] = path_to_name([facet_name, subfacet_name])
 
-    for facet_type, facet_dict in facets_dict.items():
-        for facet_name, subfacet in facet_dict.items():
-            if isinstance(subfacet, dict):
-                for subfacet_name, subsubfacet in subfacet.items():
-                    for facet_group in subsubfacet.match_clauses:
-                        facet_names[facet_group] = path_to_name(
-                            [facet_name, subfacet_name]
-                        )
+    for facet_name, subfacet in facets_dict["Clinical Type"].items():
+        for facet_group in subfacet.facet_groups:
+            facet_names[facet_group] = path_to_name([facet_name])
 
-            elif isinstance(subfacet, FacetConfig):
-                for facet_group in subfacet.match_clauses:
-                    facet_names[facet_group] = path_to_name([facet_name])
+    # Note on why we don't use "Analysis Ready": any facet group included in the
+    # "Analysis Ready" facet type will also have an entry in "Assay Type".
+    # The "Assay Type" config will yield a more specific data category for
+    # the given facet group, so we skip the "Analysis Ready" config here.
 
     return facet_names
 
 
-facet_groups_to_names = _build_facet_groups_to_names()
+facet_groups_to_categories = _build_facet_groups_to_names()
 
 
-def build_data_category_facets(data_category_file_counts: Dict[str, int]):
+def build_data_category_facets(facet_group_file_counts: Dict[str, int]):
     """
     Add file counts by data category into the facets defined in the `facets_dict`,
     and reformat `FacetConfig`s as facet specification dictionaries with the following structure:
@@ -354,8 +345,9 @@ def build_data_category_facets(data_category_file_counts: Dict[str, int]):
         {
             "label": label,
             "description": config.description,
-            "count": data_category_file_counts.get(
-                FACET_NAME_DELIM.join([prefix, label]) if prefix else label, 0
+            "count": sum(
+                facet_group_file_counts.get(facet_group, 0)
+                for facet_group in config.facet_groups
             ),
         }
         for label, config in facet_config_entries.items()
@@ -392,6 +384,6 @@ def get_facet_groups_for_paths(paths: List[List[str]]) -> List[str]:
             assert isinstance(facet_config, FacetConfig)
         except Exception as e:
             raise BadRequest(f"no facet for path {path}")
-        facet_groups.extend(facet_config.match_clauses)
+        facet_groups.extend(facet_config.facet_groups)
 
     return facet_groups
