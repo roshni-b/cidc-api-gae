@@ -156,21 +156,29 @@ class ClinicalTrial(MetadataModel):
     cohorts = relationship(
         "Cohort",
         back_populates="trial",
+        sync_backref=False,
+        viewonly=True,
         doc="The collection of all cohorts related to this trial.",
     )
     collection_events = relationship(
         "CollectionEvent",
         back_populates="trial",
+        sync_backref=False,
+        viewonly=True,
         doc="The collection of all collection events related to this trial.",
     )
     shipments = relationship(
         "Shipment",
         back_populates="trial",
+        sync_backref=False,
+        viewonly=True,
         doc="The collection of all shipments related to this trial.",
     )
     participants = relationship(
         "Participant",
         back_populates="trial",
+        sync_backref=False,
+        viewonly=True,
         doc="The collection of participants in this trial.",
     )
 
@@ -195,8 +203,12 @@ class Cohort(MetadataModel):
         String, primary_key=True
     )  # both True allows for use as multi Foreign Key
 
-    trial = relationship(ClinicalTrial, back_populates="cohorts")
-    participants = relationship("Participant", back_populates="cohort")
+    trial = relationship(
+        ClinicalTrial, back_populates="cohorts", sync_backref=False, viewonly=True
+    )
+    participants = relationship(
+        "Participant", back_populates="cohort", sync_backref=False, viewonly=True
+    )
 
 
 class CollectionEvent(MetadataModel):
@@ -209,8 +221,15 @@ class CollectionEvent(MetadataModel):
         String, primary_key=True
     )  # both True allows for use as multi Foreign Key
 
-    samples = relationship("Sample", back_populates="collection_event")
-    trial = relationship(ClinicalTrial, back_populates="collection_events")
+    samples = relationship(
+        "Sample", back_populates="collection_event", sync_backref=False, viewonly=True
+    )
+    trial = relationship(
+        ClinicalTrial,
+        back_populates="collection_events",
+        sync_backref=False,
+        viewonly=True,
+    )
 
 
 class Shipment(MetadataModel):
@@ -322,8 +341,12 @@ class Shipment(MetadataModel):
         doc="Site where sample was shipped to be assayed.",
     )
 
-    trial = relationship(ClinicalTrial, back_populates="shipments")
-    samples = relationship("Sample", back_populates="shipment")
+    trial = relationship(
+        ClinicalTrial, back_populates="shipments", sync_backref=False, viewonly=True
+    )
+    samples = relationship(
+        "Sample", back_populates="shipment", sync_backref=False, viewonly=True
+    )
 
 
 class Participant(MetadataModel):
@@ -382,11 +405,15 @@ class Participant(MetadataModel):
         doc="NIH Racial and Ethnic Categories and Definitions for NIH Diversity Programs and for Other Reporting Purposes (NOT-OD-15-089),  Release Date: April 8, 2015.",
     )
 
-    # clinical: dict
-
-    cohort = relationship(Cohort, back_populates="participants")
-    samples = relationship("Sample", back_populates="participant")
-    trial = relationship(ClinicalTrial, back_populates="participants")
+    cohort = relationship(
+        Cohort, back_populates="participants", sync_backref=False, viewonly=True
+    )
+    samples = relationship(
+        "Sample", back_populates="participant", sync_backref=False, viewonly=True
+    )
+    trial = relationship(
+        ClinicalTrial, back_populates="participants", sync_backref=False, viewonly=True
+    )
 
 
 class Sample(MetadataModel):
@@ -736,11 +763,19 @@ class Sample(MetadataModel):
     aliquots = relationship(
         "Aliquot",
         back_populates="sample",
+        sync_backref=False,
+        viewonly=True,
         doc="Pertaining to a portion (volume or weight) of the whole.",
     )
-    collection_event = relationship(CollectionEvent, back_populates="samples")
-    participant = relationship(Participant, back_populates="samples")
-    shipment = relationship(Shipment, back_populates="samples")
+    collection_event = relationship(
+        CollectionEvent, back_populates="samples", sync_backref=False, viewonly=True
+    )
+    participant = relationship(
+        Participant, back_populates="samples", sync_backref=False, viewonly=True
+    )
+    shipment = relationship(
+        Shipment, back_populates="samples", sync_backref=False, viewonly=True
+    )
 
 
 class Aliquot(MetadataModel):
@@ -789,7 +824,9 @@ class Aliquot(MetadataModel):
         doc="Extent of lymphocytic infiltration into the tumor stroma or surrounding environment. Example: 2",
     )
 
-    sample = relationship(Sample, back_populates="aliquots")
+    sample = relationship(
+        Sample, back_populates="aliquots", sync_backref=False, viewonly=True
+    )
 
 
 ###### ALL MODEL DEFINITIONS SHOULD GO ABOVE THIS LINE ######
