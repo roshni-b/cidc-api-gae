@@ -13,17 +13,23 @@ from cidc_api.models.files.facets import (
 def test_build_data_category_facets():
     """Ensure build_data_category_facets works as expected."""
 
-    wes_count = 5
+    wes_count_1 = 2
+    wes_count_2 = 3
     sample_count = 12
-    data_category_file_counts = {"WES|Source": wes_count, "Samples Info": sample_count}
+    facet_group_file_counts = {
+        "/wes/r1_L.fastq.gz": wes_count_1,
+        "/wes/analysis/report.tar.gz": wes_count_2,
+        "csv|samples info": sample_count,
+    }
 
     def assert_expected_facet_structure(config: dict, count: int = 0):
         assert "label" in config
         assert "description" in config
         assert config["count"] == count
 
-    facet_specs = build_data_category_facets(data_category_file_counts)
+    facet_specs = build_data_category_facets(facet_group_file_counts)
     print(facet_specs)
+
     for value in facet_specs.values():
         if isinstance(value, dict):
             for value_key, subvalue in value.items():
@@ -31,7 +37,9 @@ def test_build_data_category_facets():
                 if isinstance(subvalue, list):
                     for config in subvalue:
                         if value_key == "WES" and config["label"] == "Source":
-                            assert_expected_facet_structure(config, wes_count)
+                            assert_expected_facet_structure(config, wes_count_1)
+                        elif value_key == "WES" and config["label"] == "Report":
+                            assert_expected_facet_structure(config, wes_count_2)
                         else:
                             assert_expected_facet_structure(config)
                 elif isinstance(subvalue, dict):
@@ -42,6 +50,8 @@ def test_build_data_category_facets():
             for config in value:
                 if config["label"] == "Samples Info":
                     assert_expected_facet_structure(config, sample_count)
+                elif config["label"] == "WES":  # Analysis-ready facet
+                    assert_expected_facet_structure(config, wes_count_2)
                 else:
                     assert_expected_facet_structure(config)
 
@@ -70,9 +80,9 @@ def test_get_facet_groups_for_paths():
     ]
     facets_for_paths = get_facet_groups_for_paths(good_paths)
     assert facets_for_paths == [
-        *facets_dict["Assay Type"]["WES"]["Somatic"].match_clauses,
-        *facets_dict["Assay Type"]["RNA"]["Quality"].match_clauses,
-        *facets_dict["Clinical Type"]["Participants Info"].match_clauses,
+        *facets_dict["Assay Type"]["WES"]["Somatic"].facet_groups,
+        *facets_dict["Assay Type"]["RNA"]["Quality"].facet_groups,
+        *facets_dict["Clinical Type"]["Participants Info"].facet_groups,
     ]
 
     # Non-existent paths
