@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Any, Dict, List, Set, Tuple, Optional, Type
 
+from flask import current_app
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -12,7 +13,7 @@ from sqlalchemy import (
     Integer,
     String,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Session
 
 from cidc_api.config.db import BaseModel
 
@@ -767,3 +768,32 @@ def _get_global_insertion_order() -> List[MetadataModel]:
 
 
 MODEL_INSERTION_ORDER = _get_global_insertion_order()
+
+
+def insert_record_batch(
+    records: List[MetadataModel],
+    session: Optional[Session] = None,
+    dry_run: bool = False,
+) -> List[Exception]:
+    """
+    Try to insert the given list of models into the database in a single transaction,
+    rolling back and returning a list of errors if any are encountered. If `dry_run` is `True`,
+    rollback the transaction regardless of whether any errors are encountered.
+    """
+    if session is None:
+        session = current_app.extensions["sqlalchemy"].db.session
+
+    errors = []
+    for record in records:
+        try:
+            with session.begin_nested():
+                session.add(record)
+        except Exception as e:
+            errors.append(e)
+
+    if dry_run or len(errors):
+        session.rollback()
+    else:
+        session.commit()
+
+    return errors

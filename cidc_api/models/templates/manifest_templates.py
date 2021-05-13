@@ -1,7 +1,7 @@
 from .core import MetadataTemplate, WorksheetConfig, Entry
 
 ### Template example ###
-from .example_models import Participant, Sample, Shipment
+from .example_models import Participant, Sample, Shipment, insert_record_batch
 
 identity = lambda v: v
 cimac_id_to_cimac_participant_id = lambda cimac_id: cimac_id[:7]
@@ -120,4 +120,8 @@ PBMCTemplate = MetadataTemplate(
 
 
 if __name__ == "__main__":
-    PBMCTemplate.read("pbmc_test.xlsx")
+    from cidc_api.app import app
+
+    with app.app_context():
+        records = PBMCTemplate.read("pbmc_test.xlsx")
+        print(insert_record_batch(records))
