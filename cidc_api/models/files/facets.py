@@ -65,7 +65,7 @@ assay_facets: Facets = {
             "FCS file with enumerations for compartment, assignment and profiling cell labels",
         ),
         "Analysis Results": FacetConfig(
-            ["/cytof_analysis/reports.zip", "/cytof_analysis/analysis.zip",],
+            ["/cytof_analysis/reports.zip", "/cytof_analysis/analysis.zip"],
             "Results package from Astrolabe analysis",
         ),
         "Key": FacetConfig(
@@ -221,9 +221,12 @@ assay_facets: Facets = {
             [
                 "/olink/batch_/chip_/assay_npx.xlsx",
                 "/olink/batch_/chip_/assay_raw_ct.csv",
-                "/olink/batch_/combined_npx.xlsx",
             ],
             "Analysis files for a single run on the Olink platform.",
+        ),
+        "Batch-Level": FacetConfig(
+            ["/olink/batch_/combined_npx.xlsx"],
+            "Analysis files for a batch of runs on the Olink platform",
         ),
         "Study-Level": FacetConfig(
             ["/olink/study_npx.xlsx", "npx|analysis_ready|csv"],
