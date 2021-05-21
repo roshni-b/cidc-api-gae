@@ -62,6 +62,8 @@ VolumeUnits = Enum(
 
 
 class ClinicalTrial(MetadataModel):
+    """A clinical trial in the CIMAC-CIDC network."""
+
     __tablename__ = "clinical_trials"
 
     protocol_identifier = Column(
