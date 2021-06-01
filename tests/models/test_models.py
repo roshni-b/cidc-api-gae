@@ -420,6 +420,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
     """Check that trial data summaries are computed as expected"""
     # Add some trials
     records = [{"fake": "record"}]
+    cytof_record_with_output = [{"output_files": {"foo": "bar"}}]
     tm1 = {
         **METADATA,
         # deliberately override METADATA['protocol_identifier']
@@ -441,6 +442,36 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
             ],
             "hande": [{"records": records * 5}],
         },
+        "analysis": {
+            "wes_analysis": {
+                "pair_runs": [
+                    {
+                        "tumor": {"cimac_id": "t0"},
+                        "normal": {"cimac_id": "n0"},
+                    },  # no analysis data
+                    {
+                        "tumor": {"cimac_id": "t1"},
+                        "normal": {"cimac_id": "n1"},
+                        "report": {"report": "foo"},
+                    },
+                    {
+                        "tumor": {"cimac_id": "t1"},
+                        "normal": {"cimac_id": "n2"},
+                        "report": {"report": "foo"},
+                    },
+                    {
+                        "tumor": {"cimac_id": "t2"},
+                        "normal": {"cimac_id": "n3"},
+                        "report": {"report": "foo"},
+                    },
+                ],
+                "excluded_samples": records * 2,
+            },
+            "wes_tumor_only_analysis": {
+                "runs": records * 4,
+                "excluded_samples": records * 3,
+            },
+        },
         "clinical_data": {
             "records": [
                 {"clinical_file": {"participants": ["a", "b", "c"]}},
@@ -456,7 +487,10 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "participants": [{"samples": []}],
         "assays": {
             "cytof_10021": [
-                {"records": records * 2},
+                {
+                    "records": cytof_record_with_output * 2,
+                    "excluded_samples": records * 2,
+                },
                 {"records": records * 2},
                 {"records": records},
             ],
@@ -464,9 +498,10 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 {
                     "participants": [
                         {"samples": records},
-                        {"samples": records},
+                        {"samples": cytof_record_with_output * 5},
                         {"samples": records * 2},
-                    ]
+                    ],
+                    "excluded_samples": records,
                 }
             ],
             "olink": {
@@ -478,6 +513,15 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                         ]
                     },
                     {"records": [{"files": {"assay_npx": {"number_of_samples": 3}}}]},
+                ]
+            },
+        },
+        "analysis": {
+            "rna_analysis": {"level_1": records * 10, "excluded_samples": records * 2},
+            "tcr_analysis": {
+                "batches": [
+                    {"records": records * 4, "excluded_samples": records * 3},
+                    {"records": records * 2, "excluded_samples": records * 1},
                 ]
             },
         },
@@ -502,7 +546,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         [
             {
                 "expected_assays": [],
-                "cytof": 9.0,
+                "cytof": 13.0,
                 "olink": 8.0,
                 "trial_id": "tm2",
                 "file_size_bytes": 10,
@@ -515,6 +559,16 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "elisa": 0.0,
                 "h&e": 0.0,
                 "mif": 0.0,
+                "cytof_analysis": 7.0,
+                "rna_level1_analysis": 10.0,
+                "tcr_analysis": 6.0,
+                "wes_analysis": 0.0,
+                "wes_tumor_only_analysis": 0.0,
+                "excluded_samples": {
+                    "tcr_analysis": records * 4,
+                    "rna_level1_analysis": records * 2,
+                    "cytof_analysis": records * 3,
+                },
             },
             {
                 "expected_assays": ["ihc", "olink"],
@@ -531,6 +585,15 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "nanostring": 3.0,
                 "h&e": 5.0,
                 "mif": 5.0,
+                "cytof_analysis": 0.0,
+                "rna_level1_analysis": 0.0,
+                "tcr_analysis": 0.0,
+                "wes_analysis": 5.0,
+                "wes_tumor_only_analysis": 4.0,
+                "excluded_samples": {
+                    "wes_analysis": records * 2,
+                    "wes_tumor_only_analysis": records * 3,
+                },
             },
         ],
         key=sorter,
