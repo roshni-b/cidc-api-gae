@@ -1346,7 +1346,6 @@ class TrialMetadata(CommonColumns):
         excluded_samples_subquery = """
             select
                 trial_id,
-                'excluded_samples' as key,
                 jsonb_object_agg(key, value) as value
             from (
                 select 
@@ -1421,7 +1420,7 @@ class TrialMetadata(CommonColumns):
         combined_query = f"""
             select
                 jsonb_object_agg(sample_summaries.key, sample_summaries.value)
-                || jsonb_object_agg(excluded_sample_lists.key, excluded_sample_lists.value)
+                || jsonb_object_agg('excluded_samples', excluded_sample_lists.value)
                 || jsonb_object_agg('trial_id', sample_summaries.trial_id)
                 || jsonb_object_agg('expected_assays', expected_assays)
             from (
@@ -1462,7 +1461,7 @@ class TrialMetadata(CommonColumns):
             ) sample_summaries
             join ({expected_assays_subquery}) expected_assays
             on sample_summaries.trial_id = expected_assays.trial_id
-            join ({excluded_samples_subquery}) excluded_sample_lists
+            full join ({excluded_samples_subquery}) excluded_sample_lists
             on sample_summaries.trial_id = excluded_sample_lists.trial_id
             group by sample_summaries.trial_id;
         """
