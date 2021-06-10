@@ -118,7 +118,7 @@ def test_authenticate_and_get_user(cidc_api, monkeypatch):
         assert user == test_user
 
     # Auth failure
-    monkeypatch.setattr("cidc_api.shared.auth.check_auth", make_raiser(Exception))
+    monkeypatch.setattr("cidc_api.shared.auth.check_auth", make_raiser(Unauthorized))
     user = auth.authenticate_and_get_user()
     assert user is None
 

@@ -33,7 +33,6 @@ from ..models import (
     UploadJobListSchema,
     UploadJobStatus,
     TrialMetadata,
-    UploadJobs,
     Permissions,
     CIDCRole,
     Users,
@@ -465,8 +464,6 @@ def upload_manifest(
     Response:
         201 if the upload succeeds. Otherwise, some error status code and message.
     """
-    upload_moment = datetime.datetime.now().isoformat()
-
     try:
         trial = TrialMetadata.patch_manifest(trial.trial_id, md_patch, commit=False)
     except ValidationError as e:

@@ -1,6 +1,6 @@
 from functools import wraps
 from packaging import version
-from typing import List
+from typing import List, Type
 
 import requests
 from jose import jwt
@@ -8,7 +8,7 @@ from flask import g, request, current_app as app, Flask
 from werkzeug.exceptions import Unauthorized, BadRequest, PreconditionFailed
 
 from ..models import Users, UserSchema
-from ..config.settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID, TESTING
+from ..config.settings import AUTH0_DOMAIN, ALGORITHMS, AUTH0_CLIENT_ID
 from ..config.logging import get_logger
 
 logger = get_logger(__name__)
@@ -37,6 +37,9 @@ def requires_auth(resource: str, allowed_roles: list = []):
 
     NOTE: leaving the `allowed_roles` argument empty allows any authenticated user to access
     the decorated endpoint.
+
+    Raises:
+        Unauthorized if unauthorized
     """
 
     def decorator(endpoint):
@@ -65,7 +68,7 @@ def authenticate_and_get_user():
     try:
         check_auth(None, None, None)
         return get_current_user()
-    except:
+    except (AssertionError, BadRequest, PreconditionFailed, Unauthorized):
         return None
 
 
@@ -85,6 +88,10 @@ def check_auth(allowed_roles: List[str], resource: str, method: str) -> bool:
         allowed_roles: a list of CIDC user roles allowed to access this endpoint
         resource: the resource targeted by this request
         method: the HTTP method of this request
+    Raises:
+        Unauthorized if not authorized
+        BadRequest if cannot parse User-Agent string
+        PreconditionFailed if too low CLI version
     Returns:
         bool, `True` if authentication and authorization passed.
     """
@@ -108,13 +115,15 @@ CURRENT_USER_KEY = "current_user"
 
 
 def _set_current_user(user: Users):
-    """Store a user in the current request's context."""
+    """Store a user in the current request's context.
+    Raises AssertionError if not given a `Users`"""
     assert isinstance(user, Users), "`user` must be an instance of the `Users` model"
     setattr(g, CURRENT_USER_KEY, user)
 
 
 def get_current_user() -> Users:
-    """Returns the authenticated user who made the current request."""
+    """Returns the authenticated user who made the current request.
+    Raises AssertionError if no current user"""
     current_user = g.get(CURRENT_USER_KEY)
 
     assert current_user, (
@@ -139,7 +148,8 @@ def authenticate() -> Users:
 
 
 def _extract_token() -> str:
-    """Extract an identity token from the current request's authorization header or from the request body."""
+    """Extract an identity token from the current request's authorization header or from the request body.
+    Raises Unauthorized if cannot find the token"""
     auth_header = request.headers.get("Authorization")
 
     try:
@@ -148,7 +158,7 @@ def _extract_token() -> str:
             assert bearer.lower() == "bearer"
         else:
             id_token = request.json["id_token"]
-    except:
+    except (AssertionError, AttributeError, KeyError, TypeError, ValueError):
         raise Unauthorized(
             "Either the 'Authorization' header must be set with structure 'Authorization: Bearer <id token>' "
             'or "id_token" must be present in the JSON body of the request.'
@@ -205,6 +215,7 @@ def _decode_id_token(token: str, public_key: dict) -> dict:
             - if token is expired
             - if token has invalid claims
             - if token signature is invalid in any way
+            - if no `.email` field on token
 
     Returns:
         dict: the decoded token as a dictionary.
@@ -241,7 +252,13 @@ def _decode_id_token(token: str, public_key: dict) -> dict:
 def authorize(
     user: Users, allowed_roles: List[str], resource: str, method: str
 ) -> bool:
-    """Check if the current user is authorized to act on the current request's resource."""
+    """Check if the current user is authorized to act on the current request's resource.
+    Raises Unauthorized
+        - if user is not registered
+        - if user is disabled
+        - if user's registration is pending approval
+        - if user.role is not in allowed_roles
+    """
     db_user = Users.find_by_email(user.email)
 
     # User hasn't registered yet.
@@ -309,6 +326,10 @@ def _enforce_cli_version():
     """
     If the current request appears to come from the CLI and not the Portal, enforce the configured
     minimum CLI version.
+
+    Raises:
+        BadRequest if could not parse the User-Agent string
+        PreconditionFailed if too low CLI version
     """
     user_agent = request.headers.get("User-Agent")
 

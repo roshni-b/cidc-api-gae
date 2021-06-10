@@ -5,10 +5,6 @@ Revises: aa2a1eff90cf
 Create Date: 2021-03-05 09:37:19.102404
 
 """
-from alembic import op
-import sqlalchemy as sa
-
-
 from cidc_api.models.migrations import run_metadata_migration
 from cidc_schemas.migrations import v0_23_18_to_v0_24_0
 

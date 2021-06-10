@@ -1,13 +1,31 @@
+__all__ = [
+    "BaseModel",
+    "CIDCRole",
+    "Column",
+    "CommonColumns",
+    "DownloadableFiles",
+    "EXTRA_DATA_TYPES",
+    "IntegrityError",
+    "IAMException",
+    "NoResultFound",
+    "Permissions",
+    "ROLES",
+    "Session",
+    "String",
+    "TrialMetadata",
+    "UploadJobs",
+    "UploadJobStatus",
+    "Users",
+    "ValidationMultiError",
+    "with_default_session",
+]
+
 import re
-import csv
 import hashlib
 from datetime import datetime, timedelta
 from enum import Enum as EnumBaseClass
 from functools import wraps
-from io import BytesIO
 from typing import BinaryIO, Dict, Optional, List, Union, Callable, Tuple
-from jsonschema.exceptions import ValidationError
-from jsonschema.validators import validate
 
 import pandas as pd
 from flask import current_app as app
@@ -34,7 +52,6 @@ from sqlalchemy import (
     literal_column,
     not_,
     literal,
-    and_,
     or_,
 )
 from sqlalchemy.exc import IntegrityError
@@ -335,7 +352,9 @@ class Users(CommonColumns):
         user = Users.find_by_email(email)
         if not user:
             logger.info(f"Creating new user with email {email}")
-            user = Users(email=email)
+            user = Users(
+                email=email, contact_email=email, first_n=first_n, last_n=last_n
+            )
             user.insert(session=session)
         return user
 

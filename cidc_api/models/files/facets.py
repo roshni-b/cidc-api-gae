@@ -1,7 +1,6 @@
-from typing import Dict, List, Optional, Set, Union, NamedTuple, Any
+from typing import Dict, List, Optional, Union, Any
 
 from werkzeug.exceptions import BadRequest
-from sqlalchemy.sql import ClauseElement
 
 
 class FacetConfig:

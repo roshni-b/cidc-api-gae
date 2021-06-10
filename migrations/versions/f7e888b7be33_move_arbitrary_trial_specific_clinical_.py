@@ -5,10 +5,6 @@ Revises: c121b5fc5973
 Create Date: 2020-12-01 12:42:33.126968
 
 """
-from alembic import op
-import sqlalchemy as sa
-
-
 # revision identifiers, used by Alembic.
 revision = 'f7e888b7be33'
 down_revision = 'c121b5fc5973'
