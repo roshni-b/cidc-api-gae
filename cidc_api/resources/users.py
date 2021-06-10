@@ -99,6 +99,7 @@ def list_users(args, pagination_args):
 @marshal_response(user_schema)
 def get_user(user: Users):
     """Get a single user by their id."""
+    # this is not user-input due to @with_lookup, so safe to return
     return user
 
 
@@ -122,6 +123,7 @@ def update_user(user: Users, user_updates: Users):
 
     user.update(changes=user_updates)
 
+    # this is not user-input due to @with_lookup, so safe to return
     return user
 
 
