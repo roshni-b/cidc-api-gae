@@ -68,6 +68,7 @@ def get_downloadable_file(downloadable_file: DownloadableFiles) -> DownloadableF
 
     # Admins can view any file
     if user.is_admin():
+        # this is not user-input due to @with_lookup, so safe to return
         return downloadable_file
 
     # Check that a non-admin has permission to view this file
@@ -78,6 +79,7 @@ def get_downloadable_file(downloadable_file: DownloadableFiles) -> DownloadableF
     if not perm:
         raise Unauthorized()
 
+    # this is not user-input due to @with_lookup, so safe to return
     return downloadable_file
 
 

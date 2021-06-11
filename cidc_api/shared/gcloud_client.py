@@ -1,12 +1,11 @@
 """Utilities for interacting with the Google Cloud Platform APIs."""
 import json
 import datetime
-import re
 import warnings
 import hashlib
 from collections import namedtuple
 from concurrent.futures import Future
-from typing import List, Tuple, Optional, BinaryIO
+from typing import List, Optional, BinaryIO
 
 import requests
 from google.cloud import storage, pubsub

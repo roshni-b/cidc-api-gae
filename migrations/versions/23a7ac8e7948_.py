@@ -5,9 +5,6 @@ Revises: 5f70e6f7c0d9
 Create Date: 2019-12-02 12:40:16.956281
 
 """
-from alembic import op
-import sqlalchemy as sa
-
 from cidc_api.models.migrations import republish_artifact_uploads
 
 # revision identifiers, used by Alembic.

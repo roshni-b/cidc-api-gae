@@ -73,6 +73,7 @@ def get_permission(permission: Permissions) -> Permissions:
     if not current_user.is_admin() and permission.granted_to_user != current_user.id:
         raise NotFound()
 
+    # this is not user-input due to @with_lookup, so safe to return
     return permission
 
 
