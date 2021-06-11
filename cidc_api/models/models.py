@@ -9,10 +9,12 @@ __all__ = [
     "IAMException",
     "NoResultFound",
     "Permissions",
+    "prism",  # for CFns
     "ROLES",
     "Session",
     "String",
     "TrialMetadata",
+    "unprism",  # for CFns
     "UploadJobs",
     "UploadJobStatus",
     "Users",
