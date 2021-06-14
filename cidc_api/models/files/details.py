@@ -491,11 +491,6 @@ details_dict = {
         "comma-separated table of marker expression for each broad compartment assigned",
         "A plain-text, comma-separated table with a column for each broad compartment of the called cell types, where rows are the signal on each channel for every compartment.",
     ),
-    f"/cytof_analysis/profiling.csv": FileDetails(
-        "miscellaneous",
-        "comma-separated table of marker expression for each profiled subset of all assigned cell types",
-        "A plain-text, comma-separated table with a column for each profiled subset of all assigned cell types, where rows are the signal on each channel for every profiled subset.",
-    ),
     f"/cytof_analysis/source.fcs": FileDetails(
         "source",
         "fcs data used as the input for this analysis",

@@ -1,13 +1,33 @@
+__all__ = [
+    "BaseModel",
+    "CIDCRole",
+    "Column",
+    "CommonColumns",
+    "DownloadableFiles",
+    "EXTRA_DATA_TYPES",
+    "IntegrityError",
+    "IAMException",
+    "NoResultFound",
+    "Permissions",
+    "prism",  # for CFns
+    "ROLES",
+    "Session",
+    "String",
+    "TrialMetadata",
+    "unprism",  # for CFns
+    "UploadJobs",
+    "UploadJobStatus",
+    "Users",
+    "ValidationMultiError",
+    "with_default_session",
+]
+
 import re
-import csv
 import hashlib
 from datetime import datetime, timedelta
 from enum import Enum as EnumBaseClass
 from functools import wraps
-from io import BytesIO
 from typing import BinaryIO, Dict, Optional, List, Union, Callable, Tuple
-from jsonschema.exceptions import ValidationError
-from jsonschema.validators import validate
 
 import pandas as pd
 from flask import current_app as app
@@ -34,7 +54,6 @@ from sqlalchemy import (
     literal_column,
     not_,
     literal,
-    and_,
     or_,
 )
 from sqlalchemy.exc import IntegrityError
@@ -335,7 +354,9 @@ class Users(CommonColumns):
         user = Users.find_by_email(email)
         if not user:
             logger.info(f"Creating new user with email {email}")
-            user = Users(email=email)
+            user = Users(
+                email=email, contact_email=email, first_n=first_n, last_n=last_n
+            )
             user.insert(session=session)
         return user
 
@@ -1265,6 +1286,142 @@ class TrialMetadata(CommonColumns):
                 trial_metadata,
                 jsonb_array_elements(metadata_json#>'{assays,cytof_e4412}') batches,
                 jsonb_array_elements(batches->'participants') participant
+            union all
+            select
+                trial_id,
+                'cytof_analysis' as key,
+                case
+                    when sample->'output_files' is not null then 1 else 0
+                end as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{assays,cytof_e4412}') batches,
+                jsonb_array_elements(batches->'participants') participant,
+                jsonb_array_elements(participant->'samples') sample               
+        """
+
+        cytof_10021_analysis_subquery = """
+            select
+                trial_id,
+                'cytof_analysis' as key,
+                case
+                    when record->'output_files' is not null then 1 else 0
+                end as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{assays,cytof_10021}') batch,
+                jsonb_array_elements(batch->'records') record
+        """
+
+        # Count the distinct tumor and normal samples that have associated analysis data.
+        # Multiple normal samples might be paired with the same tumor sample, so we need
+        # to de-duplicate them before counting.
+        wes_analysis_subquery = """
+            select
+                trial_id,
+                'wes_analysis' as key,
+                count(distinct pair#>'{tumor,cimac_id}') + count(distinct pair#>'{normal,cimac_id}') as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{analysis,wes_analysis,pair_runs}') pair
+            where
+                pair#>'{report,report}' is not null
+            group by trial_id, key
+        """
+
+        wes_tumor_only_analysis_subquery = """
+            select
+                trial_id,
+                'wes_tumor_only_analysis' as key,
+                jsonb_array_length(metadata_json#>'{analysis,wes_tumor_only_analysis,runs}') as value
+            from
+                trial_metadata
+        """
+
+        rna_level1_analysis_subquery = """
+            select
+                trial_id,
+                'rna_level1_analysis' as key,
+                jsonb_array_length(metadata_json#>'{analysis,rna_analysis,level_1}') as value
+            from
+                trial_metadata
+        """
+
+        tcr_analysis_subquery = """
+            select
+                trial_id,
+                'tcr_analysis' as key,
+                jsonb_array_length(batches->'records') as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{analysis,tcr_analysis,batches}') batches
+        """
+
+        # Build up a JSON object mapping analysis types to arrays of excluded samples.
+        # The resulting object will have structure like:
+        # {
+        #   "cytof_analysis": [missing samples],
+        #   "wes_analysis": [missing samples],
+        #   ...
+        # }
+        excluded_samples_subquery = """
+            select
+                trial_id,
+                jsonb_object_agg(key, value) as value
+            from (
+                select 
+                    trial_id,
+                    key,
+                    jsonb_agg(sample) as value
+                from (
+                    select
+                        trial_id,
+                        'cytof_analysis' as key,
+                        jsonb_array_elements(batches->'excluded_samples') as sample
+                    from
+                        trial_metadata,
+                        jsonb_array_elements(metadata_json#>'{assays,cytof_e4412}') batches
+                    union all
+                    select
+                        trial_id,
+                        'cytof_analysis' as key,
+                        jsonb_array_elements(batch->'excluded_samples') as sample
+                    from
+                        trial_metadata,
+                        jsonb_array_elements(metadata_json#>'{assays,cytof_10021}') batch
+                    union all
+                    select
+                        trial_id,
+                        'wes_analysis' as key,
+                        jsonb_array_elements(metadata_json#>'{analysis,wes_analysis,excluded_samples}') as sample
+                    from
+                        trial_metadata
+                    union all
+                    select
+                        trial_id,
+                        'wes_tumor_only_analysis' as key,
+                        jsonb_array_elements(metadata_json#>'{analysis,wes_tumor_only_analysis,excluded_samples}') as sample
+                    from
+                        trial_metadata
+                    union all
+                    select
+                        trial_id,
+                        'rna_level1_analysis' as key,
+                        jsonb_array_elements(metadata_json#>'{analysis,rna_analysis,excluded_samples}') as sample
+                    from
+                        trial_metadata
+                    union all
+                    select
+                        trial_id,
+                        'tcr_analysis' as key,
+                        jsonb_array_elements(batches->'excluded_samples') as sample
+                    from
+                        trial_metadata,
+                        jsonb_array_elements(metadata_json#>'{analysis,tcr_analysis,batches}') batches
+                ) excluded_q1
+                group by trial_id, key
+            ) excluded_q2
+            group by trial_id
         """
 
         # Extract an array of expected assays or an empty array if expected assays is null.
@@ -1283,8 +1440,9 @@ class TrialMetadata(CommonColumns):
         # de-duplication within subquery results.
         combined_query = f"""
             select
-                jsonb_object_agg(key, value)
-                || jsonb_object_agg('trial_id', q2.trial_id)
+                jsonb_object_agg(sample_summaries.key, sample_summaries.value)
+                || jsonb_object_agg('excluded_samples', excluded_sample_lists.value)
+                || jsonb_object_agg('trial_id', sample_summaries.trial_id)
                 || jsonb_object_agg('expected_assays', expected_assays)
             from (
                 select
@@ -1309,12 +1467,24 @@ class TrialMetadata(CommonColumns):
                     {elisa_subquery}
                     union all
                     {cytof_e4412_subquery}
-                ) q1
+                    union all
+                    {cytof_10021_analysis_subquery}
+                    union all
+                    {wes_analysis_subquery}
+                    union all
+                    {wes_tumor_only_analysis_subquery}
+                    union all
+                    {rna_level1_analysis_subquery}
+                    union all
+                    {tcr_analysis_subquery}
+                ) q
                 group by trial_id, key
-            ) q2
-            join ({expected_assays_subquery}) q3
-            on q2.trial_id = q3.trial_id
-            group by q2.trial_id;
+            ) sample_summaries
+            join ({expected_assays_subquery}) expected_assays
+            on sample_summaries.trial_id = expected_assays.trial_id
+            full join ({excluded_samples_subquery}) excluded_sample_lists
+            on sample_summaries.trial_id = excluded_sample_lists.trial_id
+            group by sample_summaries.trial_id;
         """
 
         # Run the query and extract the trial-level summary dictionaries
