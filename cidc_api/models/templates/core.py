@@ -2,15 +2,14 @@ import datetime
 from collections import defaultdict
 from enum import Enum
 from warnings import filterwarnings
-from typing import Optional, Dict, Callable, Any, List, Set, Tuple, Type
+from typing import Optional, Dict, Callable, Any, List, Tuple, Type
 
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
 import openpyxl
 from sqlalchemy import Column, Enum as SqlEnum
 
-from .example_models import MODEL_INSERTION_ORDER, MetadataModel
-
+from .model_core import MODEL_INSERTION_ORDER, MetadataModel
 
 filterwarnings(
     action="ignore",

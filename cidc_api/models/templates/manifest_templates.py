@@ -1,10 +1,9 @@
 from .core import MetadataTemplate, WorksheetConfig, Entry
+from .model_core import cimac_id_to_cimac_participant_id, identity, insert_record_batch
 
 ### Template example ###
-from .example_models import Participant, Sample, Shipment, insert_record_batch
+from .trial_metadata import Participant, Sample, Shipment
 
-identity = lambda v: v
-cimac_id_to_cimac_participant_id = lambda cimac_id: cimac_id[:7]
 
 PBMCTemplate = MetadataTemplate(
     upload_type="pbmc",
