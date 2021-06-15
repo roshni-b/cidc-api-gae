@@ -5,10 +5,6 @@ Revises: 14a807e0e6e8
 Create Date: 2020-10-28 10:52:58.987549
 
 """
-from alembic import op
-import sqlalchemy as sa
-
-
 # revision identifiers, used by Alembic.
 revision = 'c121b5fc5973'
 down_revision = '14a807e0e6e8'

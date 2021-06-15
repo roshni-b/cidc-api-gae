@@ -95,7 +95,7 @@ MIGRATIONS_PATH = path.join(this_directory, "..", "..", "migrations")
 # set.
 if not environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not TESTING:
     secret_manager = get_secrets_manager()
-    creds_file_name = tempfile.mktemp(".json")
+    _, creds_file_name = tempfile.mkstemp(".json")
     with open(creds_file_name, "w") as creds_file:
         creds_file.write(secret_manager.get("APP_ENGINE_CREDENTIALS"))
     environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_file_name

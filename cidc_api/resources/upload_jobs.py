@@ -33,7 +33,6 @@ from ..models import (
     UploadJobListSchema,
     UploadJobStatus,
     TrialMetadata,
-    UploadJobs,
     Permissions,
     CIDCRole,
     Users,
@@ -90,6 +89,7 @@ def get_upload_job(upload_job: UploadJobs):
     if not user.is_admin() and upload_job.uploader_email != user.email:
         raise NotFound()
 
+    # this is not user-input due to @with_lookup, so safe to return
     return upload_job
 
 
@@ -174,6 +174,7 @@ def update_upload_job(upload_job: UploadJobs, upload_job_updates: dict):
     # this endpoint indicates a completed / failed upload attempt.
     gcloud_client.revoke_upload_access(upload_job.uploader_email)
 
+    # this is not user-input due to @with_lookup, so safe to return
     return upload_job
 
 
@@ -463,8 +464,6 @@ def upload_manifest(
     Response:
         201 if the upload succeeds. Otherwise, some error status code and message.
     """
-    upload_moment = datetime.datetime.now().isoformat()
-
     try:
         trial = TrialMetadata.patch_manifest(trial.trial_id, md_patch, commit=False)
     except ValidationError as e:

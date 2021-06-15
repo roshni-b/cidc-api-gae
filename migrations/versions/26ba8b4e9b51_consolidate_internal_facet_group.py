@@ -134,7 +134,7 @@ renaming_map = {
         "normal": "/wes/analysis/normal/optitype_result.tsv",
     },
     "Clinical Type|Participants Info|participants.csv": "csv|participants info",
-    "Clinical Type|Participants Info|participants.csv": "csv|samples info",
+    "Clinical Type|Samples Info|samples.csv": "csv|samples info",
 }
 
 

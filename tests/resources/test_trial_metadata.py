@@ -134,7 +134,7 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
             [
                 ("cytof_10021", "/cytof_10021/spike_in.fcs"),
                 ("cytof_10021", "/cytof_10021/source_.fcs"),
-                ("cytof_10021", "/cytof_analysis/profiling.csv"),
+                ("cytof_10021", "/cytof_analysis/combined_cell_counts_profiling.csv"),
                 ("wes", "/wes/r1_L.fastq.gz"),
             ]
         ):
@@ -151,7 +151,7 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
         for id_minus_4, (type, facet_group) in enumerate(
             [
                 ("participants info", "csv|participants info"),
-                ("mif", "/mif/roi_/phenotype_map.tif"),
+                ("mif", "/mif/roi_/cell_seg_data.txt"),
             ]
         ):
             DownloadableFiles(

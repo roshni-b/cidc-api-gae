@@ -81,6 +81,7 @@ def get_trial_metadata_summaries():
 @marshal_response(trial_metadata_schema)
 def get_trial_metadata_by_trial_id(trial):
     """Get one trial metadata record by trial identifier."""
+    # this is not user-input due to @with_lookup, so safe to return
     return trial
 
 

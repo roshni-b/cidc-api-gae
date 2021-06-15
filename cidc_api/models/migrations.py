@@ -1,10 +1,9 @@
 import os, traceback
 from contextlib import contextmanager
 from functools import partial
-from typing import Callable, List, NamedTuple, Any, Tuple
+from typing import Callable, List, NamedTuple
 
 from alembic import op
-import sqlalchemy as sa
 from sqlalchemy.orm.session import Session
 from sqlalchemy.orm.attributes import flag_modified
 from google.cloud import storage
@@ -231,7 +230,6 @@ def _run_metadata_migration(
             flag_modified(upload, "assay_patch")
 
         # Update the GCS URIs of files that were part of this upload
-        old_file_map = upload.gcs_file_map
         new_file_map = {}
         for (
             old_upload_uri,

@@ -3,7 +3,6 @@ import html
 import base64
 from functools import wraps
 
-from werkzeug.datastructures import FileStorage
 from cidc_schemas.prism import generate_analysis_configs_from_upload_patch
 
 from . import gcloud_client
@@ -77,20 +76,19 @@ def new_user_registration(email: str) -> dict:
 @sendable
 def new_upload_alert(upload, full_metadata) -> dict:
     """Alert the CIDC administrators that an upload succeeded."""
-    patch = upload.metadata_patch
-    upload_type = upload.upload_type
-
     pipeline_configs = generate_analysis_configs_from_upload_patch(
         full_metadata, upload.metadata_patch, upload.upload_type, GOOGLE_DATA_BUCKET
     )
 
-    subject = f"[UPLOAD SUCCESS]({ENV}) {upload_type} uploaded to {upload.trial_id}"
+    subject = (
+        f"[UPLOAD SUCCESS]({ENV}) {upload.upload_type} uploaded to {upload.trial_id}"
+    )
 
     html_content = f"""
     <ul>
         <li><strong>upload job id:</strong> {upload.id}</li>
         <li><strong>trial id:</strong> {upload.trial_id}</li>
-        <li><strong>type:</strong> {upload_type}</li>
+        <li><strong>type:</strong> {upload.upload_type}</li>
         <li><strong>uploader:</strong> {upload.uploader_email}</li>
     </ul>
     """

@@ -1,8 +1,8 @@
 """Shared utility functions for building CIDC API resource endpoints."""
 from functools import wraps
-from typing import Optional, List, Callable, Union
+from typing import Optional, Callable, Union
 
-from flask import Flask, current_app as app, request, Response, jsonify
+from flask import request, jsonify
 from webargs import fields
 from webargs.flaskparser import use_args
 from marshmallow import validate
@@ -11,7 +11,6 @@ from werkzeug.exceptions import (
     PreconditionFailed,
     NotFound,
     BadRequest,
-    InternalServerError,
     UnprocessableEntity,
 )
 from marshmallow.exceptions import ValidationError
