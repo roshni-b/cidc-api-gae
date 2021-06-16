@@ -75,9 +75,10 @@ details_dict = {
         "maf file of VEP-annotated somatic variants, from vcf2maf on output of Sention's tnscope",
         "",
     ),
-    "/wes/analysis/vcf_tnscope_filter_neoantigen.vcf": FileDetails("miscellaneous", "", ""),
+    "/wes/analysis/vcf_tnscope_filter_neoantigen.vcf": FileDetails(
+        "miscellaneous", "", ""
+    ),
     "/wes/analysis/combined_filtered.tsv": FileDetails("analysis", "", ""),
-
     "/wes/analysis/vcf_tnscope_filter.vcf": FileDetails("miscellaneous", "", ""),
     "/wes/analysis/maf_tnscope_filter.maf": FileDetails("miscellaneous", "", ""),
     "/wes/analysis/tnscope_exons.vcf.gz": FileDetails("miscellaneous", "", ""),
@@ -202,11 +203,15 @@ details_dict = {
         "tab-separated segmented copynumber variations, from Sentieon CNV",
         "",
     ),
-    "/wes_tumor_only/analysis/MHC_Class_I_all_epitopes.tsv": FileDetails("miscellaneous", "", ""),
+    "/wes_tumor_only/analysis/MHC_Class_I_all_epitopes.tsv": FileDetails(
+        "miscellaneous", "", ""
+    ),
     "/wes_tumor_only/analysis/MHC_Class_I_filtered_condensed_ranked.tsv": FileDetails(
         "miscellaneous", "", ""
     ),
-    "/wes_tumor_only/analysis/MHC_Class_II_all_epitopes.tsv": FileDetails("miscellaneous", "", ""),
+    "/wes_tumor_only/analysis/MHC_Class_II_all_epitopes.tsv": FileDetails(
+        "miscellaneous", "", ""
+    ),
     "/wes_tumor_only/analysis/MHC_Class_II_filtered_condensed_ranked.tsv": FileDetails(
         "miscellaneous", "", ""
     ),
@@ -218,17 +223,30 @@ details_dict = {
         "maf file of VEP-annotated somatic variants, from vcf2maf on output of Sention's tnscope",
         "",
     ),
-    "/wes_tumor_only/analysis/vcf_tnscope_filter_neoantigen.vcf": FileDetails("miscellaneous", "", ""),
+    "/wes_tumor_only/analysis/vcf_tnscope_filter_neoantigen.vcf": FileDetails(
+        "miscellaneous", "", ""
+    ),
     "/wes_tumor_only/analysis/combined_filtered.tsv": FileDetails("analysis", "", ""),
-
-    "/wes_tumor_only/analysis/vcf_tnscope_filter.vcf": FileDetails("miscellaneous", "", ""),
-    "/wes_tumor_only/analysis/maf_tnscope_filter.maf": FileDetails("miscellaneous", "", ""),
-    "/wes_tumor_only/analysis/tnscope_exons.vcf.gz": FileDetails("miscellaneous", "", ""),
+    "/wes_tumor_only/analysis/vcf_tnscope_filter.vcf": FileDetails(
+        "miscellaneous", "", ""
+    ),
+    "/wes_tumor_only/analysis/maf_tnscope_filter.maf": FileDetails(
+        "miscellaneous", "", ""
+    ),
+    "/wes_tumor_only/analysis/tnscope_exons.vcf.gz": FileDetails(
+        "miscellaneous", "", ""
+    ),
     "/wes_tumor_only/analysis/tn_corealigned.bam": FileDetails("miscellaneous", "", ""),
-    "/wes_tumor_only/analysis/tn_corealigned.bam.bai": FileDetails("miscellaneous", "", ""),
+    "/wes_tumor_only/analysis/tn_corealigned.bam.bai": FileDetails(
+        "miscellaneous", "", ""
+    ),
     "/wes_tumor_only/analysis/HLA_results.tsv": FileDetails("analysis", "", ""),
-    "/wes_tumor_only/analysis/tumor/recalibrated.bam": FileDetails("miscellaneous", "", ""),
-    "/wes_tumor_only/analysis/tumor/recalibrated.bam.bai": FileDetails("miscellaneous", "", ""),
+    "/wes_tumor_only/analysis/tumor/recalibrated.bam": FileDetails(
+        "miscellaneous", "", ""
+    ),
+    "/wes_tumor_only/analysis/tumor/recalibrated.bam.bai": FileDetails(
+        "miscellaneous", "", ""
+    ),
     "/wes_tumor_only/analysis/tumor/sorted.dedup.bam": FileDetails(
         "analysis",
         "bam file with deduplicated reads from tumor sample, from Sention's Dedup",
@@ -239,10 +257,18 @@ details_dict = {
         "bam index file with deduplicated reads from tumor sample, from Sention's Dedup",
         "",
     ),
-    "/wes_tumor_only/analysis/tumor/haplotyper_targets.vcf.gz": FileDetails("analysis", "", ""),
-    "/wes_tumor_only/analysis/normal/haplotyper_targets.vcf.gz": FileDetails("analysis", "", ""),
-    "/wes_tumor_only/analysis/normal/recalibrated.bam": FileDetails("miscellaneous", "", ""),
-    "/wes_tumor_only/analysis/normal/recalibrated.bam.bai": FileDetails("miscellaneous", "", ""),
+    "/wes_tumor_only/analysis/tumor/haplotyper_targets.vcf.gz": FileDetails(
+        "analysis", "", ""
+    ),
+    "/wes_tumor_only/analysis/normal/haplotyper_targets.vcf.gz": FileDetails(
+        "analysis", "", ""
+    ),
+    "/wes_tumor_only/analysis/normal/recalibrated.bam": FileDetails(
+        "miscellaneous", "", ""
+    ),
+    "/wes_tumor_only/analysis/normal/recalibrated.bam.bai": FileDetails(
+        "miscellaneous", "", ""
+    ),
     "/wes_tumor_only/analysis/normal/sorted.dedup.bam": FileDetails(
         "analysis",
         "bam file with deduplicated reads from normal sample, from Sention's Dedup",
@@ -334,14 +360,22 @@ details_dict = {
     "/wes/analysis/tumor/xhla_report_hla.json": FileDetails("analysis", "", ""),
     "/wes/analysis/normal/xhla_report_hla.json": FileDetails("analysis", "", ""),
     # WES Report Tumor Only
-    "/wes_tumor_only/analysis/tumor_mutational_burden.tsv": FileDetails("analysis", "", ""),
+    "/wes_tumor_only/analysis/tumor_mutational_burden.tsv": FileDetails(
+        "analysis", "", ""
+    ),
     "/wes_tumor_only/analysis/report.tar.gz": FileDetails("analysis", "", ""),
-    "/wes_tumor_only/analysis/wes_run_version.tsv": FileDetails("miscellaneous", "", ""),
+    "/wes_tumor_only/analysis/wes_run_version.tsv": FileDetails(
+        "miscellaneous", "", ""
+    ),
     "/wes_tumor_only/analysis/config.yaml": FileDetails("miscellaneous", "", ""),
     "/wes_tumor_only/analysis/metasheet.csv": FileDetails("miscellaneous", "", ""),
     "/wes_tumor_only/analysis/wes_sample.json": FileDetails("analysis", "", ""),
-    "/wes_tumor_only/analysis/tumor/xhla_report_hla.json": FileDetails("analysis", "", ""),
-    "/wes_tumor_only/analysis/normal/xhla_report_hla.json": FileDetails("analysis", "", ""),
+    "/wes_tumor_only/analysis/tumor/xhla_report_hla.json": FileDetails(
+        "analysis", "", ""
+    ),
+    "/wes_tumor_only/analysis/normal/xhla_report_hla.json": FileDetails(
+        "analysis", "", ""
+    ),
     # RNA
     "/rna/r1_.fastq.gz": FileDetails(
         "source",
@@ -419,10 +453,7 @@ details_dict = {
         "compressed binary file with information about the expected (5') sequence-specific biases from Salmon",
         "A gzipped, binary file that encodes the expected parameters of the VLMM that were learned for the 5' end.\nIt starts with 3x 32-bit signed int that represent length of context window, length left of the read, and length right of the read.\nThen there are 3 arrays of 32-bit signed ints of the length as the context window which represent the order of the VLMM for that position, and the shift and width to extract each subcontext window.\nThen 2x 64-bit signed ints specify the dimension of the table that immediately follow, where each row represents the nonzero probabilities of the VLMM for one subcontext window.\nFinally, the file contains the distribution of nucleotides in each position in the context as a 4-column table preceded by its dimensions as 2x 64-bit signed int.\n[Adapted from Salmon documentation].",
     ),
-    "/rna/analysis/salmon/aux_info_fld.gz": FileDetails(
-        "miscellaneous",
-        "", ""
-    ),
+    "/rna/analysis/salmon/aux_info_fld.gz": FileDetails("miscellaneous", "", ""),
     "/rna/analysis/salmon/aux_info_meta_info.json": FileDetails(
         "miscellaneous",
         "json file of statistics and meta information about the Salmon run",
@@ -655,11 +686,7 @@ details_dict = {
         "fcs data used as the input for this analysis",
         "The analysis-ready FCS file used as the input for this analysis. After normalization, debarcoding, and removal of Veri-Cells and other non-specimen cells.",
     ),  # schemas/assays/cytof_assay_core.json#defintions/output_files/properties/fcs_file
-    "/cytof_analysis/cell_counts_profiling.csv": FileDetails(
-        "miscellaneous",
-        "",
-        ""
-    )
+    "/cytof_analysis/cell_counts_profiling.csv": FileDetails("miscellaneous", "", ""),
 }
 
 # handle CyTOF separately to use same FacetConfig definitions for all versions
@@ -686,9 +713,6 @@ for version in ["cytof_10021", "cytof_e4412"]:
                 "fully processed fcs data: normalized, debarcoded, no Veri-Cells, cleaned",
                 "The analysis-ready FCS file after normalization, debarcoding, and removal of Veri-Cells and other non-specimen cells.",
             ),
-            f"/{version}/intermediate.fcs": FileDetails(
-                "miscellaneous",
-                "", ""
-            )
+            f"/{version}/intermediate.fcs": FileDetails("miscellaneous", "", ""),
         }
     )

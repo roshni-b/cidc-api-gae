@@ -105,11 +105,7 @@ assay_facets: Facets = {
                 "/wes/analysis/copynumber_cnvcalls.txt.tn.tsv",
             ]
         ),
-        "Neoantigen": FacetConfig(
-            [
-                "/wes/analysis/combined_filtered.tsv",
-            ]
-        ),
+        "Neoantigen": FacetConfig(["/wes/analysis/combined_filtered.tsv",]),
         "Somatic": FacetConfig(
             [
                 "/wes/analysis/vcf_gz_tnscope_output.vcf.gz",
