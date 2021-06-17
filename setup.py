@@ -19,4 +19,5 @@ setup(
     ],
     url="https://github.com/CIMAC-CIDC/cidc_api-gae",
     version="0.24.38",
+    zip_safe=False,
 )
