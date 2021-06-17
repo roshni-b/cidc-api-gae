@@ -48,6 +48,7 @@ assay_facets: Facets = {
                 "/cytof_analysis/cell_counts_assignment.csv",
                 "/cytof_analysis/cell_counts_compartment.csv",
                 "/cytof_analysis/profiling.csv",
+                "/cytof_analysis/cell_counts_profiling.csv",
             ],
             "Summary cell count expression of individual cell types in each sample",
         ),
@@ -75,6 +76,7 @@ assay_facets: Facets = {
             ],
             "Keys for mapping from respective enumeration indices to the cell labels",
         ),
+        "Intermediates": FacetConfig(["/cytof_10021/intermediate.fcs"]),
     },
     "WES": {
         "Source": FacetConfig(
@@ -103,18 +105,14 @@ assay_facets: Facets = {
                 "/wes/analysis/copynumber_cnvcalls.txt.tn.tsv",
             ]
         ),
-        "Neoantigen": FacetConfig(
-            ["/wes/analysis/HLA_results.tsv", "/wes/analysis/combined_filtered.tsv"]
-        ),
+        "Neoantigen": FacetConfig(["/wes/analysis/combined_filtered.tsv",]),
         "Somatic": FacetConfig(
             [
                 "/wes/analysis/vcf_gz_tnscope_output.vcf.gz",
                 "/wes/analysis/maf_tnscope_output.maf",
                 "/wes/analysis/vcf_gz_tnscope_filter.vcf.gz",
                 "/wes/analysis/maf_tnscope_filter.maf",
-                "/wes/analysis/tnscope_exons_broad.vcf.gz",
-                "/wes/analysis/tnscope_exons_mda.vcf.gz",
-                "/wes/analysis/tnscope_exons_mocha.vcf.gz",
+                "/wes/analysis/tnscope_exons.vcf.gz" "/wes/analysis/vcf_compare.txt",
             ]
         ),
         "Alignment": FacetConfig(
@@ -139,6 +137,9 @@ assay_facets: Facets = {
             [
                 "/wes/analysis/tumor/optitype_result.tsv",
                 "/wes/analysis/normal/optitype_result.tsv",
+                "/wes/analysis/tumor/xhla_report_hla.json",
+                "/wes/analysis/normal/xhla_report_hla.json",
+                "/wes/analysis/HLA_results.tsv",
             ]
         ),
         "Report": FacetConfig(
@@ -153,6 +154,81 @@ assay_facets: Facets = {
                 "/wes/analysis/xhla_report_hla.json",
             ]
         ),
+        "RNA": FacetConfig(
+            [
+                "/wes/analysis/vcf_tnscope_filter_neoantigen.vcf",
+                "/wes/analysis/haplotyper.vcf.gz",
+            ]
+        ),
+    },
+    "WES Tumor-Only": {
+        "Germline": FacetConfig(
+            [
+                "/wes_tumor_only/analysis/vcfcompare.txt",
+                "/wes_tumor_only/analysis/tumor/haplotyper_targets.vcf.gz",
+            ]
+        ),
+        "Purity": FacetConfig(["/wes_tumor_only/analysis/optimal_purity_value.txt"]),
+        "Clonality": FacetConfig(
+            [
+                "/wes_tumor_only/analysis/clonality_pyclone.tsv",
+                "/wes_tumor_only/analysis/clonality_table.tsv",
+            ]
+        ),
+        "Copy Number": FacetConfig(
+            [
+                "/wes_tumor_only/analysis/copynumber_cnvcalls.txt",
+                "/wes_tumor_only/analysis/copynumber_cnvcalls.txt.tn.tsv",
+            ]
+        ),
+        "Neoantigen": FacetConfig(
+            [
+                "/wes_tumor_only/analysis/vcf_tnscope_filter_neoantigen.vcf",
+                "/wes_tumor_only/analysis/combined_filtered.tsv",
+            ]
+        ),
+        "Somatic": FacetConfig(
+            [
+                "/wes_tumor_only/analysis/vcf_gz_tnscope_output.vcf.gz",
+                "/wes_tumor_only/analysis/maf_tnscope_output.maf",
+                "/wes_tumor_only/analysis/vcf_gz_tnscope_filter.vcf.gz",
+                "/wes_tumor_only/analysis/maf_tnscope_filter.maf",
+                "/wes_tumor_only/analysis/tnscope_exons.vcf.gz"
+                "/wes_tumor_only/analysis/vcf_compare.txt",
+            ]
+        ),
+        "Alignment": FacetConfig(
+            [
+                "/wes_tumor_only/analysis/tumor/sorted.dedup.bam",
+                "/wes_tumor_only/analysis/tumor/sorted.dedup.bam.bai",
+            ]
+        ),
+        "Metrics": FacetConfig(
+            [
+                "/wes_tumor_only/analysis/tumor/coverage_metrics.txt",
+                "/wes_tumor_only/analysis/tumor/target_metrics.txt",
+                "/wes_tumor_only/analysis/tumor/coverage_metrics_summary.txt",
+            ]
+        ),
+        "HLA Type": FacetConfig(
+            [
+                "/wes_tumor_only/analysis/tumor/optitype_result.tsv",
+                "/wes_tumor_only/analysis/tumor/xhla_report_hla.json",
+                "/wes_tumor_only/analysis/HLA_results.tsv",
+            ]
+        ),
+        "Report": FacetConfig(
+            [
+                "/wes_tumor_only/analysis/wes_version.txt",
+                "/wes_tumor_only/analysis/tumor_mutational_burden.tsv",
+                "/wes_tumor_only/analysis/report.tar.gz",
+                "/wes_tumor_only/analysis/wes_run_version.tsv",
+                "/wes_tumor_only/analysis/config.yaml",
+                "/wes_tumor_only/analysis/metasheet.csv",
+                "/wes_tumor_only/analysis/wes_sample.json",
+                "/wes_tumor_only/analysis/xhla_report_hla.json",
+            ]
+        ),
     },
     "RNA": {
         "Source": FacetConfig(
@@ -163,7 +239,7 @@ assay_facets: Facets = {
                 "/rna/analysis/star/sorted.bam",
                 "/rna/analysis/star/sorted.bam.bai",
                 "/rna/analysis/star/sorted.bam.stat.txt",
-                "/rna/analysis/star/transcriptome_bam.bam",
+                "/rna/analysis/star/transcriptome.bam",
                 "/rna/analysis/star/chimeric_out_junction.junction",
             ]
         ),
@@ -181,16 +257,17 @@ assay_facets: Facets = {
                 "/rna/analysis/salmon/aux_info_ambig_info.tsv",
                 "/rna/analysis/salmon/aux_info_expected_bias.gz",
                 "/rna/analysis/salmon/aux_info_meta_info.json",
+                "/rna/analysis/salmon/aux_info_fld.gz",
                 "/rna/analysis/salmon/aux_info_observed_bias.gz",
                 "/rna/analysis/salmon/aux_info_observed_bias_3p.gz",
                 "/rna/analysis/salmon/cmd_info.json",
                 "/rna/analysis/salmon/salmon_quant.log",
             ]
         ),
-        "Microbiome": FacetConfig(["/rna/analysis/microbiome/sample_report.txt"]),
+        "Microbiome": FacetConfig(["/rna/analysis/microbiome/addSample_report.txt"]),
         "Immune-Repertoire": FacetConfig(["/rna/analysis/trust4/trust4_report.tsv"]),
         "Fusion": FacetConfig(["/rna/analysis/fusion/fusion_predictions.tsv"]),
-        "MSI": FacetConfig(["/rna/analysis/msisensor/msisensor_report.txt"]),
+        "MSI": FacetConfig(["/rna/analysis/msisensor/msisensor.txt"]),
         "HLA": FacetConfig(["/rna/analysis/neoantigen/genotype.json"]),
     },
     "mIF": {
