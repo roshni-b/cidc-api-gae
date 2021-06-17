@@ -32,10 +32,10 @@ assay_facets: Facets = {
     "CyTOF": {
         "Source": FacetConfig(
             [
-                "/cytof_10021/spike_in.fcs",
-                "/cytof_10021/source_.fcs",
-                "/cytof_10021/normalized_and_debarcoded.fcs",
-                "/cytof_10021/processed.fcs",
+                "/cytof_10021_9204/spike_in.fcs",
+                "/cytof_10021_9204/source_.fcs",
+                "/cytof_10021_9024/normalized_and_debarcoded.fcs",
+                "/cytof_10021_9204/processed.fcs",
                 "/cytof_e4412/spike_in.fcs",
                 "/cytof_e4412/source_.fcs",
                 "/cytof_e4412/normalized_and_debarcoded.fcs",
@@ -76,7 +76,7 @@ assay_facets: Facets = {
             ],
             "Keys for mapping from respective enumeration indices to the cell labels",
         ),
-        "Intermediates": FacetConfig(["/cytof_10021/intermediate.fcs"]),
+        "Intermediates": FacetConfig(["/cytof_10021_9204/intermediate.fcs"]),
     },
     "WES": {
         "Source": FacetConfig(
@@ -105,7 +105,7 @@ assay_facets: Facets = {
                 "/wes/analysis/copynumber_cnvcalls.txt.tn.tsv",
             ]
         ),
-        "Neoantigen": FacetConfig(["/wes/analysis/combined_filtered.tsv",]),
+        "Neoantigen": FacetConfig(["/wes/analysis/combined_filtered.tsv"]),
         "Somatic": FacetConfig(
             [
                 "/wes/analysis/vcf_gz_tnscope_output.vcf.gz",

@@ -35,7 +35,7 @@ def setup_user(cidc_api, monkeypatch) -> int:
 
 trial_id_1 = "test-trial-1"
 trial_id_2 = "test-trial-2"
-upload_types = ["wes_bam", "cytof_10021"]
+upload_types = ["wes_bam", "cytof_10021_9204"]
 
 
 def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
@@ -65,7 +65,7 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
     cytof_file = make_file(
         trial_id_2,
         "cytof/.../analysis.zip",
-        "cytof_10021",
+        "cytof_10021_9204",
         "/cytof_analysis/analysis.zip",
     )
 
@@ -420,7 +420,7 @@ def test_get_filter_facets(cidc_api, clean_db, monkeypatch):
     res = client.get("/downloadable_files/filter_facets")
     assert res.status_code == 200
     assert sorted(res.json["trial_ids"], key=lambda x: x["label"]) == sorted(
-        [{"label": trial_id_1, "count": 1}, {"label": trial_id_2, "count": 1},],
+        [{"label": trial_id_1, "count": 1}, {"label": trial_id_2, "count": 1}],
         key=lambda x: x["label"],
     )
     check_facet_counts(res.json["facets"], wes_count=1, cytof_count=1)

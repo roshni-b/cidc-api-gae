@@ -710,10 +710,12 @@ def test_upload_endpoint_blocking(cidc_api, clean_db, monkeypatch):
     client = cidc_api.test_client()
 
     assay_form = lambda: form_data(
-        "cytof_10021.xlsx", io.BytesIO(b"1234"), "cytof_10021"
+        "cytof_10021.xlsx", io.BytesIO(b"1234"), "cytof_10021_9204"
     )
     analysis_form = lambda: form_data(
-        "cytof_10021_analysis.xlsx", io.BytesIO(b"1234"), "cytof_10021_analysis"
+        "cytof_10021_9204_analysis.xlsx",
+        io.BytesIO(b"1234"),
+        "cytof_10021_9204_analysis",
     )
 
     res = client.post(ASSAY_UPLOAD, data=assay_form())
