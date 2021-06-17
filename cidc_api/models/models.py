@@ -1214,7 +1214,7 @@ class TrialMetadata(CommonColumns):
             select
                 trial_id,
                 case
-                    when key = 'cytof_10021' then 'cytof'
+                    when key = 'cytof_10021_9204' then 'cytof'
                     when key = 'hande' then 'h&e'
                     else key
                 end as key,
@@ -1300,7 +1300,7 @@ class TrialMetadata(CommonColumns):
                 jsonb_array_elements(participant->'samples') sample               
         """
 
-        cytof_10021_analysis_subquery = """
+        cytof_10021_9204_analysis_subquery = """
             select
                 trial_id,
                 'cytof_analysis' as key,
@@ -1309,7 +1309,7 @@ class TrialMetadata(CommonColumns):
                 end as value
             from
                 trial_metadata,
-                jsonb_array_elements(metadata_json#>'{assays,cytof_10021}') batch,
+                jsonb_array_elements(metadata_json#>'{assays,cytof_10021_9204}') batch,
                 jsonb_array_elements(batch->'records') record
         """
 
@@ -1388,7 +1388,7 @@ class TrialMetadata(CommonColumns):
                         jsonb_array_elements(batch->'excluded_samples') as sample
                     from
                         trial_metadata,
-                        jsonb_array_elements(metadata_json#>'{assays,cytof_10021}') batch
+                        jsonb_array_elements(metadata_json#>'{assays,cytof_10021_9204}') batch
                     union all
                     select
                         trial_id,
@@ -1468,7 +1468,7 @@ class TrialMetadata(CommonColumns):
                     union all
                     {cytof_e4412_subquery}
                     union all
-                    {cytof_10021_analysis_subquery}
+                    {cytof_10021_9204_analysis_subquery}
                     union all
                     {wes_analysis_subquery}
                     union all

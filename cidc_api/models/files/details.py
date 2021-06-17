@@ -690,7 +690,7 @@ details_dict = {
 }
 
 # handle CyTOF separately to use same FacetConfig definitions for all versions
-for version in ["cytof_10021", "cytof_e4412"]:
+for version in ["cytof_10021_9204", "cytof_e4412"]:
     details_dict.update(
         {
             f"/{version}/spike_in.fcs": FileDetails(
