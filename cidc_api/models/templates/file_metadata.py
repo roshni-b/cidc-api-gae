@@ -92,8 +92,8 @@ class File(MetadataModel):
     data_format = Column(String)
     facet_group = Column(String)
 
-    __table_args__ = ForeignKeyConstraint(
-        [trial_id, upload_id], [Upload.trial_id, Upload.id],
+    __table_args__ = (
+        ForeignKeyConstraint([trial_id, upload_id], [Upload.trial_id, Upload.id],),
     )
     __mapper_args__ = {"polymorphic_on": data_format, "polymorphic_identity": "base"}
 
@@ -188,24 +188,3 @@ class JsonFile(File):
 
 class YamlFile(File):
     __mapper_args__ = {"polymorphic_identity": "yaml"}
-
-
-class HandeImage(ImageFile):
-    __tablename__ = "hande_images"
-    __mapper_args__ = {"polymorphic_identity": "hande_image.svs"}
-
-    object_url = Column(String, primary_key=True)
-    upload_id = Column(Integer, ForeignKey("HandeUpload.id"), nullable=False)
-
-    record = relationship(
-        "HandeRecord", back_populates="image", sync_backref=False, viewonly=True
-    )
-    upload = relationship(
-        "HandeUpload", back_populates="images", sync_backref=False, viewonly=True
-    )
-
-    __table_args__ = (
-        ForeignKeyConstraint(
-            [upload_id, object_url], [ImageFile.upload_id, ImageFile.object_url]
-        ),
-    )

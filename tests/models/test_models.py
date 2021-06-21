@@ -1,3 +1,4 @@
+from cidc_api.models.models import CommonColumns
 from jsonschema.validators import validate
 from cidc_api.models.schemas import TrialMetadataListSchema
 import io
@@ -753,6 +754,7 @@ def test_create_downloadable_file_from_metadata(clean_db, monkeypatch):
         "object_url": "10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
         "file_size_bytes": 1,
         "md5_hash": "hash1234",
+        "facet_group": "foobar",
         "uploaded_timestamp": datetime.now(),
         "foo": "bar",  # unsupported column - should be filtered
     }
@@ -812,6 +814,7 @@ def test_downloadable_files_additional_metadata_default(clean_db):
         upload_type="wes_bam",
         object_url="10021/Patient 1/sample 1/aliquot 1/wes_forward.fastq",
         file_size_bytes=1,
+        facet_group="foobar",
         md5_hash="hash1234",
         uploaded_timestamp=datetime.now(),
     )
@@ -1009,7 +1012,7 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
     trial.insert()
 
     _insert = MagicMock()
-    monkeypatch.setattr(BaseModel, "insert", _insert)
+    monkeypatch.setattr(CommonColumns, "insert", _insert)
 
     # if upload_type is invalid
     with pytest.raises(ValueError, match="invalid upload type"):

@@ -10,25 +10,43 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from .trial_metadata import Sample
-from .file_metadata import Upload, HandeImage
+from .file_metadata import Upload, ImageFile
 
 
 class HandeUpload(Upload):
-    __mapper_args__ = {"polymorphic_identity": "hande"}
-
     records = relationship(
         "HandeRecord", back_populates="upload", sync_backref=False, viewonly=True
     )
     images = relationship(
-        HandeImage, back_populates="upload", sync_backref=False, viewonly=True
+        "HandeImage", back_populates="upload", sync_backref=False, viewonly=True
+    )
+
+    __mapper_args__ = {"polymorphic_identity": "hande"}
+
+
+class HandeImage(ImageFile):
+    __tablename__ = "hande_images"
+    __mapper_args__ = {"polymorphic_identity": "hande_image.svs"}
+
+    object_url = Column(String, primary_key=True)
+    upload_id = Column(Integer, nullable=False)
+
+    upload = relationship(
+        HandeUpload, back_populates="images", sync_backref=False, viewonly=True
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            [upload_id, object_url], [ImageFile.upload_id, ImageFile.object_url]
+        ),
     )
 
 
 class HandeRecord(HandeUpload):
     __tablename__ = "hande_records"
-    assay_id = Column(Integer, nullable=False)
+    assay_id = Column(Integer, nullable=False, primary_key=True)
+    cimac_id = Column(String, nullable=False, primary_key=True)
     trial_id = Column(String, nullable=False)
-    cimac_id = Column(String, nullable=False)
     image_url = Column(String, ForeignKey(HandeImage.object_url), nullable=False)
 
     tumor_tissue_percentage = Column(
@@ -59,9 +77,6 @@ class HandeRecord(HandeUpload):
     )
     comment = Column(String)
 
-    image = relationship(
-        HandeImage, back_populates="record", sync_backref=False, viewonly=True
-    )
     upload = relationship(
         HandeUpload, back_populates="records", sync_backref=False, viewonly=True
     )

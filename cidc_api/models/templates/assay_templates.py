@@ -1,9 +1,8 @@
-from enum import Enum
 from .core import MetadataTemplate, WorksheetConfig, Entry
-from .model_core import cimac_id_to_cimac_participant_id, identity, insert_record_batch
 
 ### Template example ###
-from .file_metadata import HandeImage, HandeRecord, HandeUpload
+from .assay_metadata import HandeImage, HandeRecord, HandeUpload
+
 
 HandeAssay = MetadataTemplate(
     upload_type="hande",
