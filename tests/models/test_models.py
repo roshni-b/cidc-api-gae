@@ -487,7 +487,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "protocol_identifier": "tm1",
         "participants": [{"samples": []}],
         "assays": {
-            "cytof_10021": [
+            "cytof_10021_9204": [
                 {
                     "records": cytof_record_with_output * 2,
                     "excluded_samples": records * 2,
