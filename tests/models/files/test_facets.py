@@ -50,7 +50,7 @@ def test_build_data_category_facets():
             for config in value:
                 if config["label"] == "Samples Info":
                     assert_expected_facet_structure(config, sample_count)
-                elif config["label"] == "WES":  # Analysis-ready facet
+                elif config["label"] == "WES Analysis":  # Analysis-ready facet
                     assert_expected_facet_structure(config, wes_count_2)
                 else:
                     assert_expected_facet_structure(config)
