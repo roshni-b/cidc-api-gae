@@ -444,9 +444,13 @@ def _build_facet_groups_to_names():
 
     facet_names = {}
     for facet_name, subfacet in facets_dict["Assay Type"].items():
-        for subfacet_name, subsubfacet in subfacet.items():
-            for facet_group in subsubfacet.facet_groups:
-                facet_names[facet_group] = path_to_name([facet_name, subfacet_name])
+        if isinstance(subfacet, dict):
+            for subfacet_name, subsubfacet in subfacet.items():
+                for facet_group in subsubfacet.facet_groups:
+                    facet_names[facet_group] = path_to_name([facet_name, subfacet_name])
+        else:
+            for facet_group in subfacet.facet_groups:
+                facet_names[facet_group] = path_to_name([facet_name])
 
     for facet_name, subfacet in facets_dict["Clinical Type"].items():
         for facet_group in subfacet.facet_groups:
