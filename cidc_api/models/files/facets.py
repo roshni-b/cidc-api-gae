@@ -19,6 +19,43 @@ Facets = Dict[str, Union[FacetConfig, Dict[str, FacetConfig]]]
 # dictionary maps subfacet names to a list of SQLAlchemy filter clause elements
 # for looking up files associated with the given subfacet.
 assay_facets: Facets = {
+    "Templates": {
+        "Assays": FacetConfig(
+            [
+                "Assay Type|IHC|All IHC Files|/ihc",
+                "Assay Type|Olink|All Olink Files|/olink",
+                "clinical_data|Assay Metadata",
+                "cytof_10021_9204|Assay Metadata",
+                "cytof_10021|Assay Metadata",
+                "cytof_e4412|Assay Metadata",
+                "cytof_s1609_gd2car|Assay Metadata",
+                "elisa|Assay Metadata",
+                "hande|Assay Metadata",
+                "ihc|Assay Metadata",
+                "mif|Assay Metadata",
+                "nanostring|Assay Metadata",
+                "[no facet group]",
+                "olink|Assay Metadata",
+                "rna_bam|Assay Metadata",
+                "tcr_fastq|Assay Metadata",
+                "wes_bam|Assay Metadata",
+                "wes_fastq|Assay Metadata",
+            ],
+            "Excel templates used to upload assay data.",
+        ),
+        "Analyses": FacetConfig(
+            [
+                "cytof_10021_analysis|Assay Metadata",
+                "cytof_analysis|Assay Metadata",
+                "cytof_e4412_analysis|Assay Metadata",
+                "rna_level1_analysis|Assay Metadata",
+                "tcr_analysis|Assay Metadata",
+                "wes_analysis|Assay Metadata",
+                "wes_tumor_only_analysis|Assay Metadata",
+            ],
+            "Excel templates used to upload analysis data.",
+        ),
+    },
     "Nanostring": {
         "Source": FacetConfig(
             ["/nanostring/.rcc", "/nanostring/control.rcc"],
@@ -40,6 +77,12 @@ assay_facets: Facets = {
                 "/cytof_e4412/source_.fcs",
                 "/cytof_e4412/normalized_and_debarcoded.fcs",
                 "/cytof_e4412/processed.fcs",
+                "/cytof_s1609_gd2car/spike_in.fcs",
+                "/cytof_s1609_gd2car/source_.fcs",
+                "/cytof_s1609_gd2car/normalized_and_debarcoded.fcs",
+                "/cytof_s1609_gd2car/processed.fcs",
+                "/cytof_s1609_gd2car/control_.fcs",
+                "/cytof_s1609_gd2car/control__spike_in.fcs",
             ],
             "De-barcoded, concatenated and de-multipled fcs files",
         ),
@@ -112,7 +155,8 @@ assay_facets: Facets = {
                 "/wes/analysis/maf_tnscope_output.maf",
                 "/wes/analysis/vcf_gz_tnscope_filter.vcf.gz",
                 "/wes/analysis/maf_tnscope_filter.maf",
-                "/wes/analysis/tnscope_exons.vcf.gz" "/wes/analysis/vcf_compare.txt",
+                "/wes/analysis/tnscope_exons.vcf.gz",
+                "/wes/analysis/vcf_compare.txt",
             ]
         ),
         "Alignment": FacetConfig(
@@ -160,6 +204,8 @@ assay_facets: Facets = {
                 "/wes/analysis/haplotyper.vcf.gz",
             ]
         ),
+        "MSI": FacetConfig(["/wes/analysis/msisensor.txt"]),
+        "Error Documentation": FacetConfig(["/wes/analysis/error.yaml"]),
     },
     "WES Tumor-Only": {
         "Germline": FacetConfig(
@@ -181,6 +227,7 @@ assay_facets: Facets = {
                 "/wes_tumor_only/analysis/copynumber_cnvcalls.txt.tn.tsv",
             ]
         ),
+        "Error Documentation": FacetConfig(["/wes_tumor_only/analysis/error.yaml"]),
         "Neoantigen": FacetConfig(
             [
                 "/wes_tumor_only/analysis/vcf_tnscope_filter_neoantigen.vcf",
@@ -229,6 +276,7 @@ assay_facets: Facets = {
                 "/wes_tumor_only/analysis/xhla_report_hla.json",
             ]
         ),
+        "MSI": FacetConfig(["/wes_tumor_only/analysis/msisensor.txt"]),
     },
     "RNA": {
         "Source": FacetConfig(
@@ -279,6 +327,15 @@ assay_facets: Facets = {
             ],
             "Image files containing the source multi-dimensional images for both ROIs and whole slide if appropriate.",
         ),
+        "Images with Features": FacetConfig(
+            [
+                "/mif/roi_/image_with_all_seg.tif",
+                "/mif/roi_/image_with_cell_seg_map.tif",
+                "/mif/roi_/image_with_phenotype_map.tif",
+                "/mif/roi_/image_with_tissue_seg.tif",
+            ],
+            "Image files containing the source image and another feature.",
+        ),
         "Analysis Images": FacetConfig(
             ["/mif/roi_/binary_seg_maps.tif", "/mif/roi_/phenotype_map.tif"],
             "Image-like files created or used in the analysis workflow. These include cell and region segmentation maps.",
@@ -288,6 +345,8 @@ assay_facets: Facets = {
                 "/mif/roi_/score_data_.txt",
                 "/mif/roi_/cell_seg_data.txt",
                 "/mif/roi_/cell_seg_data_summary.txt",
+                "/mif/roi_/tissue_seg_data.txt",
+                "/mif/roi_/tissue_seg_data_summary.txt",
             ],
             "Data files from image analysis software indicating the cell type assignments, phenotypes and other scoring metrics and thresholds.",
         ),
@@ -344,8 +403,8 @@ clinical_facets: Facets = {
         ["Clinical Type|Samples Info|samples.csv", "csv|samples info"]
     ),
     "Clinical Data": FacetConfig(
-        ["/clinical/.xlsx"],
-        "XLSX files containing clinical data supplied by the trial team.",
+        ["/clinical/.xlsx", "/clinical/."],
+        "Files containing clinical data supplied by the trial team.",
     ),
 }
 
@@ -353,9 +412,9 @@ analysis_ready_facets = {
     "Olink": FacetConfig(["npx|analysis_ready|csv"]),
     "CyTOF": FacetConfig(
         [
-            "/cytof_analysis/combined_cell_counts_compartment.csv",
-            "/cytof_analysis/combined_cell_counts_assignment.csv",
-            "/cytof_analysis/combined_cell_counts_profiling.csv",
+            "csv|cell counts assignment",
+            "csv|cell counts compartment",
+            "csv|cell counts profiling",
         ],
         "Summary cell counts, combined across all samples in the trial",
     ),
@@ -365,7 +424,8 @@ analysis_ready_facets = {
         "Tabulated data across all samples in a batch",
     ),
     "RNA": FacetConfig(["/rna/analysis/salmon/quant.sf"]),
-    "WES": FacetConfig(["/wes/analysis/report.tar.gz"]),
+    "WES Analysis": FacetConfig(["/wes/analysis/report.tar.gz"]),
+    "WES Assay": FacetConfig(["maf|combined maf"]),
     "TCR": FacetConfig(["/tcr_analysis/report_trial.tar.gz"]),
     "mIF": FacetConfig(["/mif/roi_/cell_seg_data.txt"]),
 }
