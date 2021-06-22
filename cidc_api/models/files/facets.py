@@ -19,41 +19,43 @@ Facets = Dict[str, Union[FacetConfig, Dict[str, FacetConfig]]]
 # dictionary maps subfacet names to a list of SQLAlchemy filter clause elements
 # for looking up files associated with the given subfacet.
 assay_facets: Facets = {
-    "Assay Templates": FacetConfig(
-        [
-            "Assay Type|IHC|All IHC Files|/ihc",
-            "Assay Type|Olink|All Olink Files|/olink",
-            "clinical_data|Assay Metadata",
-            "cytof_10021_9204|Assay Metadata",
-            "cytof_10021|Assay Metadata",
-            "cytof_e4412|Assay Metadata",
-            "cytof_s1609_gd2car|Assay Metadata",
-            "elisa|Assay Metadata",
-            "hande|Assay Metadata",
-            "ihc|Assay Metadata",
-            "mif|Assay Metadata",
-            "nanostring|Assay Metadata",
-            "[no facet group]",
-            "olink|Assay Metadata",
-            "rna_bam|Assay Metadata",
-            "tcr_fastq|Assay Metadata",
-            "wes_bam|Assay Metadata",
-            "wes_fastq|Assay Metadata",
-        ],
-        "Excel templates used to upload assay data.",
-    ),
-    "Analysis Templates": FacetConfig(
-        [
-            "cytof_10021_analysis|Assay Metadata",
-            "cytof_analysis|Assay Metadata",
-            "cytof_e4412_analysis|Assay Metadata",
-            "rna_level1_analysis|Assay Metadata",
-            "tcr_analysis|Assay Metadata",
-            "wes_analysis|Assay Metadata",
-            "wes_tumor_only_analysis|Assay Metadata",
-        ],
-        "Excel templates used to upload analysis data.",
-    ),
+    "Templates": {
+        "Assays": FacetConfig(
+            [
+                "Assay Type|IHC|All IHC Files|/ihc",
+                "Assay Type|Olink|All Olink Files|/olink",
+                "clinical_data|Assay Metadata",
+                "cytof_10021_9204|Assay Metadata",
+                "cytof_10021|Assay Metadata",
+                "cytof_e4412|Assay Metadata",
+                "cytof_s1609_gd2car|Assay Metadata",
+                "elisa|Assay Metadata",
+                "hande|Assay Metadata",
+                "ihc|Assay Metadata",
+                "mif|Assay Metadata",
+                "nanostring|Assay Metadata",
+                "[no facet group]",
+                "olink|Assay Metadata",
+                "rna_bam|Assay Metadata",
+                "tcr_fastq|Assay Metadata",
+                "wes_bam|Assay Metadata",
+                "wes_fastq|Assay Metadata",
+            ],
+            "Excel templates used to upload assay data.",
+        ),
+        "Analyses": FacetConfig(
+            [
+                "cytof_10021_analysis|Assay Metadata",
+                "cytof_analysis|Assay Metadata",
+                "cytof_e4412_analysis|Assay Metadata",
+                "rna_level1_analysis|Assay Metadata",
+                "tcr_analysis|Assay Metadata",
+                "wes_analysis|Assay Metadata",
+                "wes_tumor_only_analysis|Assay Metadata",
+            ],
+            "Excel templates used to upload analysis data.",
+        ),
+    },
     "Nanostring": {
         "Source": FacetConfig(
             ["/nanostring/.rcc", "/nanostring/control.rcc"],
@@ -444,13 +446,9 @@ def _build_facet_groups_to_names():
 
     facet_names = {}
     for facet_name, subfacet in facets_dict["Assay Type"].items():
-        if isinstance(subfacet, dict):
-            for subfacet_name, subsubfacet in subfacet.items():
-                for facet_group in subsubfacet.facet_groups:
-                    facet_names[facet_group] = path_to_name([facet_name, subfacet_name])
-        else:
-            for facet_group in subfacet.facet_groups:
-                facet_names[facet_group] = path_to_name([facet_name])
+        for subfacet_name, subsubfacet in subfacet.items():
+            for facet_group in subsubfacet.facet_groups:
+                facet_names[facet_group] = path_to_name([facet_name, subfacet_name])
 
     for facet_name, subfacet in facets_dict["Clinical Type"].items():
         for facet_group in subfacet.facet_groups:
@@ -494,8 +492,6 @@ def build_data_category_facets(facet_group_file_counts: Dict[str, int]):
     return {
         "Assay Type": {
             assay_name: extract_facet_info(subfacets, assay_name)
-            if isinstance(subfacets, dict)
-            else extract_facet_info({assay_name: subfacets}, None)
             for assay_name, subfacets in assay_facets.items()
         },
         "Clinical Type": extract_facet_info(clinical_facets, None),
