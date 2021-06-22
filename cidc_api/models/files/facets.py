@@ -54,7 +54,6 @@ assay_facets: Facets = {
         ],
         "Excel templates used to upload analysis data.",
     ),
-
     "Nanostring": {
         "Source": FacetConfig(
             ["/nanostring/.rcc", "/nanostring/control.rcc"],
@@ -203,12 +202,8 @@ assay_facets: Facets = {
                 "/wes/analysis/haplotyper.vcf.gz",
             ]
         ),
-        "MSI": FacetConfig(
-            ["/wes/analysis/msisensor.txt"]
-        ),
-        "Error Documentation": FacetConfig(
-            ["/wes/analysis/error.yaml"]
-        ),
+        "MSI": FacetConfig(["/wes/analysis/msisensor.txt"]),
+        "Error Documentation": FacetConfig(["/wes/analysis/error.yaml"]),
     },
     "WES Tumor-Only": {
         "Germline": FacetConfig(
@@ -230,9 +225,7 @@ assay_facets: Facets = {
                 "/wes_tumor_only/analysis/copynumber_cnvcalls.txt.tn.tsv",
             ]
         ),
-        "Error Documentation": FacetConfig(
-            ["/wes_tumor_only/analysis/error.yaml"]
-        ),
+        "Error Documentation": FacetConfig(["/wes_tumor_only/analysis/error.yaml"]),
         "Neoantigen": FacetConfig(
             [
                 "/wes_tumor_only/analysis/vcf_tnscope_filter_neoantigen.vcf",
@@ -281,9 +274,7 @@ assay_facets: Facets = {
                 "/wes_tumor_only/analysis/xhla_report_hla.json",
             ]
         ),
-        "MSI": FacetConfig(
-            ["/wes_tumor_only/analysis/msisensor.txt"]
-        )
+        "MSI": FacetConfig(["/wes_tumor_only/analysis/msisensor.txt"]),
     },
     "RNA": {
         "Source": FacetConfig(
