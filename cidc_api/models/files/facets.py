@@ -494,6 +494,8 @@ def build_data_category_facets(facet_group_file_counts: Dict[str, int]):
     return {
         "Assay Type": {
             assay_name: extract_facet_info(subfacets, assay_name)
+            if isinstance(subfacets, dict)
+            else extract_facet_info({assay_name: subfacets}, None)
             for assay_name, subfacets in assay_facets.items()
         },
         "Clinical Type": extract_facet_info(clinical_facets, None),
