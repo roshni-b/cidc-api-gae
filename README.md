@@ -125,7 +125,7 @@ This project uses [`Flask Migrate`](https://flask-migrate.readthedocs.io/en/late
 ```bash
 export FLASK_APP=cidc_api/app.py
 # Generate the migration script
-flask db migrate
+flask db migrate -m "<a message describing the changes in this migration>"
 # Apply changes to the database
 flask db upgrade
 ```
