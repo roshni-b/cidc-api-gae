@@ -231,6 +231,8 @@ class MetadataTemplate:
 
         model_instances: List[MetadataModel] = []
 
+        model_dicts: List[Dict[Column, Any]] = []
+        preamble_dict = {}
         # Extract partial model instances from the template
         for config in self.worksheet_configs:
             preamble_rows = []
@@ -247,8 +249,6 @@ class MetadataTemplate:
                     f"Expected {len(config.preamble)} preamble rows but saw {len(preamble_rows)}"
                 )
 
-            model_dicts: List[Dict[Column, Any]] = []
-            preamble_dict = {}
             # {<column instance>: <processed value, ...}
             for i, row in enumerate(preamble_rows):
                 cell = row[2].value
@@ -296,12 +296,22 @@ class MetadataTemplate:
                 instance = model()
                 for partial_instance in broad_instances + specific_instances:
                     instance.merge(partial_instance)
-                deduped_instances[model].append(instance)
+
+                for pre_col, pre_val in preamble_dict.items():
+                    if (
+                        hasattr(instance, pre_col.name)
+                        and getattr(instance, pre_col.name) is None
+                    ):
+                        setattr(instance, pre_col.name, pre_val)
+
+                if not any(pk is None for pk in instance.primary_key_values()):
+                    deduped_instances[model].append(instance)
 
         ordered_instances = []
         for next_model in MODEL_INSERTION_ORDER:
             next_instances = deduped_instances.get(next_model)
             if next_instances:
+                print(next_model.__name__, ":", len(next_instances))
                 ordered_instances.extend(next_instances)
 
         return ordered_instances

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from functools import wraps
 from typing import Any, List, Tuple, Optional
 
 from flask import current_app
@@ -10,8 +11,38 @@ identity = lambda v: v
 cimac_id_to_cimac_participant_id = lambda cimac_id: cimac_id[:7]
 
 
+def with_default_session(f):
+    """
+    For some `f` expecting a database session instance as a keyword argument,
+    set the default value of the session keyword argument to the current app's
+    database driver's session. We need to do this in a decorator rather than
+    inline in the function definition because the current app is only available
+    once the app is running and an application context has been pushed.
+    """
+
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if "session" not in kwargs:
+            kwargs["session"] = current_app.extensions["sqlalchemy"].db.session
+        return f(*args, **kwargs)
+
+    return wrapped
+
+
 class MetadataModel(BaseModel):
     __abstract__ = True
+
+    def primary_key_values(self) -> Optional[Tuple[Any]]:
+        primary_key_values = []
+        for column in self.__table__.columns:
+            if column.primary_key:
+                value = getattr(self, column.name)
+                primary_key_values.append(value)
+
+        if all(v is None for v in primary_key_values):
+            return None  # special value
+
+        return tuple(primary_key_values)
 
     def unique_field_values(self) -> Optional[Tuple[Any]]:
         unique_field_values = []
@@ -42,6 +73,13 @@ class MetadataModel(BaseModel):
                 raise Exception(
                     f"found conflicting values for {self.__tablename__}.{column.name}: {current}!={other}"
                 )
+
+    @classmethod
+    @with_default_session
+    def get_by_id(cls, *id, session: Session):
+        with current_app.app_context():
+            ret = session.query(cls).get(id)
+        return ret
 
 
 ###### ALL MODEL DEFINITIONS SHOULD GO ABOVE THIS LINE ######
@@ -87,10 +125,9 @@ def _get_global_insertion_order() -> List[MetadataModel]:
     return ordered_models
 
 
+@with_default_session
 def insert_record_batch(
-    records: List[MetadataModel],
-    session: Optional[Session] = None,
-    dry_run: bool = False,
+    records: List[MetadataModel], session: Session, dry_run: bool = False,
 ) -> List[Exception]:
     """
     Try to insert the given list of models into the database in a single transaction,
@@ -100,11 +137,22 @@ def insert_record_batch(
     if session is None:
         session = current_app.extensions["sqlalchemy"].db.session
 
+    from .trial_metadata import Participant
+
     errors = []
     for record in records:
         try:
+            existing = type(record).get_by_id(*record.primary_key_values())
             with session.begin_nested():
-                session.add(record)
+                if not existing:
+                    session.add(record)
+                    existing = record
+                else:
+                    session.merge(existing.merge(record))
+                session.flush()
+            if isinstance(existing, Participant):
+                print(existing.primary_key_values())
+
         except Exception as e:
             errors.append(e)
 
