@@ -9,7 +9,9 @@ from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
 import openpyxl
 from sqlalchemy import Column, Enum as SqlEnum
 
-from .model_core import MODEL_INSERTION_ORDER, MetadataModel
+from .model_core import _get_global_insertion_order, MetadataModel
+
+MODEL_INSERTION_ORDER = _get_global_insertion_order()
 
 filterwarnings(
     action="ignore",

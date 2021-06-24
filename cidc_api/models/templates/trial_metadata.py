@@ -314,12 +314,12 @@ class Participant(MetadataModel):
     __tablename__ = "participants"
 
     trial_id = Column(
-        String, ForeignKey(ClinicalTrial.protocol_identifier), nullable=False
+        String, ForeignKey(ClinicalTrial.protocol_identifier), primary_key=True
     )
     cimac_participant_id = Column(
         String,
         CheckConstraint("cimac_participant_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}$'"),
-        primary_key=True,  # allows for use as Foreign Key; guaranteed globally unique
+        primary_key=True,  # both True allows for use as multi Foreign Key
         doc="Participant identifier assigned by the CIMAC-CIDC Network. Formated as: C?????? (first 7 characters of CIMAC ID)",
     )
     trial_participant_id = Column(
@@ -380,16 +380,16 @@ class Participant(MetadataModel):
 class Sample(MetadataModel):
     __tablename__ = "samples"
 
-    trial_id = Column(String, nullable=False)
+    trial_id = Column(String, primary_key=True)
+    cimac_id = Column(
+        String,
+        primary_key=True,  # both True allows for use as multi Foreign Key
+        unique=True,
+        doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
+    )
     cimac_participant_id = Column(String, nullable=False)
     collection_event_name = Column(String, nullable=False)
     shipment_manifest_id = Column(String, nullable=False)
-    cimac_id = Column(
-        String,
-        CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
-        primary_key=True,  # allows for use as Foreign Key; guaranteed globally unique
-        doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
-    )
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -403,6 +403,7 @@ class Sample(MetadataModel):
         ForeignKeyConstraint(
             [trial_id, shipment_manifest_id], [Shipment.trial_id, Shipment.manifest_id]
         ),
+        CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
     )
 
     shipping_entry_number = Column(

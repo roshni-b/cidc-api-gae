@@ -87,9 +87,6 @@ def _get_global_insertion_order() -> List[MetadataModel]:
     return ordered_models
 
 
-MODEL_INSERTION_ORDER = _get_global_insertion_order()
-
-
 def insert_record_batch(
     records: List[MetadataModel],
     session: Optional[Session] = None,

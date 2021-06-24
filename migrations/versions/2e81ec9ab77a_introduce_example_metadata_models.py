@@ -5,6 +5,7 @@ Revises: a0f25824b2ae
 Create Date: 2021-05-13 14:47:41.897194
 
 """
+from sqlalchemy.sql.schema import UniqueConstraint
 from alembic import op
 import sqlalchemy as sa
 
@@ -218,7 +219,7 @@ def upgrade():
             ["trial_id", "cohort_name"], ["cohorts.trial_id", "cohorts.cohort_name"]
         ),
         sa.ForeignKeyConstraint(["trial_id"], ["clinical_trials.protocol_identifier"]),
-        sa.PrimaryKeyConstraint("cimac_participant_id"),
+        sa.PrimaryKeyConstraint("trial_id", "cimac_participant_id"),
         sa.UniqueConstraint("trial_id", "cimac_participant_id"),
     )
     op.create_table(
@@ -557,7 +558,9 @@ def upgrade():
             ["trial_id", "shipment_manifest_id"],
             ["shipments.trial_id", "shipments.manifest_id"],
         ),
-        sa.PrimaryKeyConstraint("cimac_id"),
+        sa.PrimaryKeyConstraint("trial_id", "cimac_id"),
+        sa.UniqueConstraint("trial_id", "cimac_id"),
+        sa.UniqueConstraint("cimac_id"),
     )
     op.create_table(
         "aliquots",

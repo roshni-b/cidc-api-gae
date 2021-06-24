@@ -28,42 +28,74 @@ ArtifactCategory = Enum(
     name="artifact_category_enum",
 )
 UploadStatus = Enum(
-    "started", "upload-completed", "upload-failed", "merge-completed", "merge-failed"
+    "started",
+    "upload-completed",
+    "upload-failed",
+    "merge-completed",
+    "merge-failed",
+    name="upload_status_enum",
 )
 
 
 class Upload(MetadataModel):
     __tablename__ = "uploads"
-    id = Column(Integer, autoincrement=True, primary_key=True)
+    id = Column(
+        Integer,
+        autoincrement=True,
+        primary_key=True,
+        doc="A unique ID to identify this upload.",
+    )
     trial_id = Column(
         String,
         ForeignKey(ClinicalTrial.protocol_identifier),
         primary_key=True,  # both True allows for use as multi Foreign Key
     )
 
-    # The current status of the upload job
-    status = Column(UploadStatus, nullable=False)
-    # A long, random identifier for this upload job
-    token = Column(UUID, server_default=text("gen_random_uuid()"), nullable=False)
-    # Text containing feedback on why the upload status is what it is
-    status_details = Column(String, nullable=True)
-    # Whether the upload contains multiple files
-    multifile = Column(Boolean, nullable=False)
-    # For multifile UploadJobs, object names for the files to be uploaded mapped to upload_placeholder uuids.
-    # For single file UploadJobs, this field is null.
-    gcs_file_map = Column(JSONB, nullable=True)
-    # track the GCS URI of the .xlsx file used for this upload
-    gcs_xlsx_uri = Column(String, nullable=True)
-    # The type of upload (pbmc, wes, olink, wes_analysis, ...)
-    upload_type = Column(String, nullable=False)
-    # Which CIMAC site created the data
-    assay_creator = Column(ArtifactCreator, nullable=False)
-    # Link to the user who created this upload.
-    uploader_email = Column(String, ForeignKey(Users.email), nullable=False)
+    status = Column(
+        UploadStatus, nullable=False, doc="The current status of the upload."
+    )
+    token = Column(
+        UUID,
+        server_default=text("gen_random_uuid()"),
+        nullable=False,
+        doc="A long, random identifier for this upload.",
+    )
+    status_details = Column(
+        String,
+        nullable=True,
+        doc="Text containing feedback on why the upload status is what it is.",
+    )
+    multifile = Column(
+        Boolean, nullable=False, doc="Whether the upload contains multiple files."
+    )
+    gcs_file_map = Column(
+        JSONB,
+        nullable=True,
+        doc="If multifile, object names for the files to be uploaded mapped to upload_placeholder uuids; else null.",
+    )
+    gcs_xlsx_uri = Column(
+        String,
+        nullable=True,
+        doc="Track the GCS URI of the .xlsx file used for this upload.",
+    )
+    upload_type = Column(
+        String,
+        nullable=False,
+        doc="The type of upload (pbmc, wes, olink, wes_analysis, ...)",
+    )
+    assay_creator = Column(
+        ArtifactCreator, nullable=False, doc="Which CIMAC site created the data"
+    )
+    uploader_email = Column(
+        String,
+        ForeignKey(Users.email),
+        nullable=False,
+        doc="Link to the user who created this upload.",
+    )
 
     # Create a GIN index on the GCS object names
     _gcs_objects_idx = Index(
-        "upload_jobs_gcs_gcs_file_map_idx", gcs_file_map, postgresql_using="gin"
+        "upload_gcs_file_map_idx", gcs_file_map, postgresql_using="gin"
     )
     CheckConstraint("multifile or (gcs_file_map is not null)")
 
@@ -73,24 +105,38 @@ class Upload(MetadataModel):
 class File(MetadataModel):
     __tablename__ = "files"
     object_url = Column(String, primary_key=True)
-    upload_id = Column(
-        Integer, primary_key=True
-    )  # both True allows for use as multi Foreign Key)
-    trial_id = Column(String, nullable=False)
-    local_path = Column(String)
+    upload_id = Column(Integer, primary_key=True,)
+    trial_id = Column(
+        String, primary_key=False
+    )  # all True allows for use as multi Foreign Key
+    local_path = Column(String, doc="Path to a file on a user's computer.")
 
-    upload_placeholder = Column(String)
-    artifact_creator = Column(ArtifactCreator)
-    uploader = Column(String)
-    file_name = Column(String)
-    uploaded_timestamp = Column(String)
-    file_size_bytes: Column(Integer)
-    md5_hash = Column(String)
-    crc32_hash = Column(String)
-    visible: Column(Boolean)
-    artifact_category = Column(ArtifactCategory)
-    data_format = Column(String)
-    facet_group = Column(String)
+    upload_placeholder = Column(
+        String, doc="A placeholder for when artifact file is being uploaded."
+    )
+    artifact_creator = Column(
+        ArtifactCreator, doc="The name of the center that created this artifact."
+    )
+    uploader = Column(String, doc="The name of the person uploading the artifact.")
+    file_name = Column(
+        String,
+        doc="The name of the file with extension. Generated from 'gcs_uri_format' fields in templates.",
+    )
+    uploaded_timestamp = Column(
+        String, doc="Timestamp of when artifact was loaded into the system."
+    )
+    file_size_bytes: Column(Integer, doc="File size in bytes.")
+    md5_hash = Column(
+        String, doc="MD5 Hash of artifact. Not available for composite GCS objects."
+    )
+    crc32_hash = Column(String, doc="CRC32c Hash of artifact.")
+    visible: Column(
+        Boolean,
+        doc="Indicates if the artifact is visible. If set to false, the artifact is effectively deleted.",
+    )
+    artifact_category = Column(ArtifactCategory, doc="Artifact category.")
+    data_format = Column(String, doc="Data Format.")
+    facet_group = Column(String, doc="The internal data category for this artifact")
 
     __table_args__ = (
         ForeignKeyConstraint([trial_id, upload_id], [Upload.trial_id, Upload.id],),

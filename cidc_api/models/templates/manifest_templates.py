@@ -116,13 +116,3 @@ PBMCTemplate = MetadataTemplate(
         ),
     ],
 )
-
-
-if __name__ == "__main__":
-    from cidc_api.app import app
-
-    with app.app_context():
-        records = PBMCTemplate.read("pbmc_test.xlsx")
-        errors = insert_record_batch(records)
-        for e in errors:
-            print(e.orig)
