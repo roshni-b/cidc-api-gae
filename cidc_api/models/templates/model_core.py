@@ -134,9 +134,6 @@ def insert_record_batch(
     rolling back and returning a list of errors if any are encountered. If `dry_run` is `True`,
     rollback the transaction regardless of whether any errors are encountered.
     """
-    if session is None:
-        session = current_app.extensions["sqlalchemy"].db.session
-
     from .trial_metadata import Participant
 
     errors = []
