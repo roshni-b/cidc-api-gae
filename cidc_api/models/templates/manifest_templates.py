@@ -1,8 +1,53 @@
 from .core import MetadataTemplate, WorksheetConfig, Entry
-from .model_core import cimac_id_to_cimac_participant_id, identity, insert_record_batch
+from .model_core import cimac_id_to_cimac_participant_id, identity
 
 ### Template example ###
-from .trial_metadata import Participant, Sample, Shipment
+from .trial_metadata import ClinicalTrial, Participant, Sample, Shipment
+from .extra_metadata import ClinicalData
+
+
+ClinicalDataTemplate = MetadataTemplate(
+    upload_type="clinical_data",
+    worksheet_configs=[
+        WorksheetConfig(
+            "Tier 1",
+            [Entry(ClinicalData.trial_id, name="protocol identifier",),],
+            {
+                "Demographics": [
+                    Entry(
+                        Participant.cimac_participant_id,
+                        process_as={ClinicalData.cimac_participant_id: identity},
+                    ),
+                    Entry(ClinicalData.race),
+                    Entry(ClinicalData.gender, name="sex",),
+                    Entry(ClinicalData.ethnicity),
+                    Entry(ClinicalData.age),
+                ],
+                "History": [
+                    Entry(ClinicalData.prior_surgery),
+                    Entry(ClinicalData.prior_radiation_therapy),
+                    Entry(ClinicalData.prior_immunotherapy),
+                    Entry(ClinicalData.number_prior_systemic_treatments),
+                    Entry(ClinicalData.prior_therapy_type),
+                ],
+                "Disease & Baseline": [
+                    Entry(
+                        ClinicalData.mod_ann_arbor_stage,
+                        name="Modified Ann Arbor Stage",
+                    ),
+                    Entry(ClinicalData.ecog_ps),
+                    Entry(ClinicalData.years_from_initial_diagnosis),
+                    Entry(ClinicalData.type_of_most_recent_treatment),
+                    Entry(ClinicalData.response_to_most_recent_treatment),
+                    Entry(ClinicalData.duration_of_remission),
+                    Entry(ClinicalData.years_from_recent_treatment),
+                    Entry(ClinicalData.disease_stage),
+                    Entry(ClinicalData.disease_grade),
+                ],
+            },
+        )
+    ],
+)
 
 
 PBMCTemplate = MetadataTemplate(
