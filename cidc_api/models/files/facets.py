@@ -45,8 +45,9 @@ assay_facets: Facets = {
         ),
         "Analyses": FacetConfig(
             [
+                "cytof_10021_9204_analysis|Assay Metadata",
                 "cytof_10021_analysis|Assay Metadata",
-                "cytof_analysis|Assay Metadata",
+                "cytof_s1609_gd2car_analysis|Assay Metadata",
                 "cytof_e4412_analysis|Assay Metadata",
                 "rna_level1_analysis|Assay Metadata",
                 "tcr_analysis|Assay Metadata",
