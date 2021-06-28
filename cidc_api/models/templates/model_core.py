@@ -127,29 +127,18 @@ def _get_global_insertion_order() -> List[MetadataModel]:
 
 @with_default_session
 def insert_record_batch(
-    records: List[MetadataModel], session: Session, dry_run: bool = False,
+    records: List[MetadataModel], session: Session, dry_run: bool = False
 ) -> List[Exception]:
     """
     Try to insert the given list of models into the database in a single transaction,
     rolling back and returning a list of errors if any are encountered. If `dry_run` is `True`,
     rollback the transaction regardless of whether any errors are encountered.
     """
-    from .trial_metadata import Participant
-
     errors = []
     for record in records:
         try:
-            existing = type(record).get_by_id(*record.primary_key_values())
             with session.begin_nested():
-                if not existing:
-                    session.add(record)
-                    existing = record
-                else:
-                    session.merge(existing.merge(record))
-                session.flush()
-            if isinstance(existing, Participant):
-                print(existing.primary_key_values())
-
+                session.merge(record)
         except Exception as e:
             errors.append(e)
 
