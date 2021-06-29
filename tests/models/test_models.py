@@ -428,7 +428,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "participants": [{"samples": [1, 2]}, {"samples": [3]}],
         "expected_assays": ["ihc", "olink"],
         "assays": {
-            "wes": [{"records": records * 3}],
+            "wes": [{"records": records * 11}],  # 7 for wes, 4 for wes_tumor_only
             "rna": [{"records": records * 2}],
             "mif": [
                 {"records": records * 3},
@@ -445,6 +445,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "analysis": {
             "wes_analysis": {
                 "pair_runs": [
+                    # 7 here for wes_assay: t0/1/2, n0/1/2/3
                     {
                         "tumor": {"cimac_id": "t0"},
                         "normal": {"cimac_id": "n0"},
@@ -465,10 +466,12 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                         "report": {"report": "foo"},
                     },
                 ],
+                # these are excluded, so not adding fake assay data
                 "excluded_samples": records * 2,
             },
             "wes_tumor_only_analysis": {
-                "runs": records * 4,
+                "runs": records * 4,  # need 4
+                # these are excluded, so not adding fake assay data
                 "excluded_samples": records * 3,
             },
         },
@@ -554,7 +557,6 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "total_samples": 0,
                 "clinical_participants": 0.0,
                 "rna": 0.0,
-                "wes": 0.0,
                 "nanostring": 0.0,
                 "elisa": 0.0,
                 "h&e": 0.0,
@@ -564,6 +566,8 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "tcr_analysis": 6.0,
                 "wes_analysis": 0.0,
                 "wes_tumor_only_analysis": 0.0,
+                "wes": 0.0,
+                "wes_tumor_only": 0.0,
                 "excluded_samples": {
                     "tcr_analysis": records * 4,
                     "rna_level1_analysis": records * 2,
@@ -581,7 +585,6 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "total_samples": 3,
                 "clinical_participants": 7.0,
                 "rna": 2.0,
-                "wes": 3.0,
                 "nanostring": 3.0,
                 "h&e": 5.0,
                 "mif": 5.0,
@@ -590,6 +593,8 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "tcr_analysis": 0.0,
                 "wes_analysis": 5.0,
                 "wes_tumor_only_analysis": 4.0,
+                "wes": 7.0,
+                "wes_tumor_only": 4.0,
                 "excluded_samples": {
                     "wes_analysis": records * 2,
                     "wes_tumor_only_analysis": records * 3,
