@@ -1223,7 +1223,7 @@ class TrialMetadata(CommonColumns):
                 trial_metadata,
                 jsonb_each(metadata_json->'assays') assays,
                 jsonb_array_elements(value) batches
-            where key not in ('olink', 'nanostring', 'elisa', 'cytof_e4412')
+            where key not in ('olink', 'nanostring', 'elisa', 'cytof_e4412', 'wes')
         """
 
         # Compute the number of samples associated with nanostring uploads.
@@ -1336,6 +1336,41 @@ class TrialMetadata(CommonColumns):
                 jsonb_array_length(metadata_json#>'{analysis,wes_tumor_only_analysis,runs}') as value
             from
                 trial_metadata
+        """
+
+        wes_assay_subquery = """
+            select
+                trial_id,
+                'wes' as key,
+                count(distinct pair#>'{tumor,cimac_id}') + count(distinct pair#>'{normal,cimac_id}') as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{analysis,wes_analysis,pair_runs}') pair
+            group by trial_id, key
+        """
+
+        wes_tumor_only_assay_subquery = f"""
+            select
+                unpaired.trial_id,
+                'wes_tumor_only' as key,
+                unpaired.value - paired.value
+            from
+                (
+                    select
+                        trial_id,
+                        key,
+                        jsonb_array_length(batches->'records') as value
+                    from
+                        trial_metadata,
+                        jsonb_each(metadata_json->'assays') assays,
+                        jsonb_array_elements(value) batches
+                    where key = 'wes'
+                ) unpaired
+            join
+                (
+                    {wes_assay_subquery}
+                ) paired
+                on unpaired.trial_id = paired.trial_id
         """
 
         rna_level1_analysis_subquery = """
@@ -1473,6 +1508,10 @@ class TrialMetadata(CommonColumns):
                     {wes_analysis_subquery}
                     union all
                     {wes_tumor_only_analysis_subquery}
+                    union all
+                    {wes_assay_subquery}
+                    union all
+                    {wes_tumor_only_assay_subquery}
                     union all
                     {rna_level1_analysis_subquery}
                     union all
