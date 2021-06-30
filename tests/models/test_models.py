@@ -428,7 +428,10 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "participants": [{"samples": [1, 2]}, {"samples": [3]}],
         "expected_assays": ["ihc", "olink"],
         "assays": {
-            "wes": [{"records": records * 11}],  # 7 for wes, 4 for wes_tumor_only
+            "wes": [
+                {"records": records * 6},
+                {"records": records * 5},
+            ],  # 6 + 5 11 = 7 for wes + 4 for wes_tumor_only
             "rna": [{"records": records * 2}],
             "mif": [
                 {"records": records * 3},
