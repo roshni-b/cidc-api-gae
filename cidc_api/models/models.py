@@ -1349,6 +1349,28 @@ class TrialMetadata(CommonColumns):
             group by trial_id
         """
 
+        ## Calculate # of WES TO assay samples as (all - # paired WES samples)
+        # As jsonb_array_length is called for each entry in /assays/wes : array,
+        # it returns several rows which if `join`ed against wes_assay_subquery
+        # duplicates the value to be subtracted so `sum` doesn't work.
+        # Instead, `union` these two queries (`all` because repeated values)
+        # with opposing signs to subtract via `sum`
+        # Since # paired WES samples = `wes_assay_subquery` is a positive number,
+        # subtract total number of samples from it and negate
+
+        ## Eg
+        # /assays/wes : [{records: 3}, {records: 3}]
+        # wes_assay_subquery: 4
+        # so want 3+3 - 4 = 2
+
+        ## With double negative
+        # key           value
+        # --------------------
+        # wes             4
+        # wes_tumor_only -3
+        # wes_tumor_only -3
+        # --------------------
+        # -sum            2
         wes_tumor_only_assay_subquery = f"""
             select
                 trial_id,
