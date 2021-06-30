@@ -1346,31 +1346,28 @@ class TrialMetadata(CommonColumns):
             from
                 trial_metadata,
                 jsonb_array_elements(metadata_json#>'{analysis,wes_analysis,pair_runs}') pair
-            group by trial_id, key
+            group by trial_id
         """
 
         wes_tumor_only_assay_subquery = f"""
             select
-                unpaired.trial_id,
+                trial_id,
                 'wes_tumor_only' as key,
-                unpaired.value - paired.value
-            from
-                (
-                    select
-                        trial_id,
-                        key,
-                        jsonb_array_length(batches->'records') as value
-                    from
-                        trial_metadata,
-                        jsonb_each(metadata_json->'assays') assays,
-                        jsonb_array_elements(value) batches
-                    where key = 'wes'
-                ) unpaired
-            join
-                (
-                    {wes_assay_subquery}
-                ) paired
-                on unpaired.trial_id = paired.trial_id
+                -sum(value)
+            from (
+                select
+                    trial_id,
+                    key,
+                    - jsonb_array_length(batches->'records') as value
+                from
+                    trial_metadata,
+                    jsonb_each(metadata_json->'assays') assays,
+                    jsonb_array_elements(value) batches
+                where key = 'wes'
+            union all 
+                {wes_assay_subquery}
+            ) tbl
+            group by trial_id, key
         """
 
         rna_level1_analysis_subquery = """
