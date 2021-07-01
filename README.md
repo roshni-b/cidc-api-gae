@@ -102,7 +102,7 @@ mkdir ~/.cloudsql
 Proxy to the staging Cloud SQL instance:
 
 ```bash
-cloud_sql_proxy -instances cidc-dfci-staging:us-central1:cidc-postgresql -dir ~/.cloudsql
+cloud_sql_proxy -instances cidc-dfci-staging:us-central1:cidc-postgresql-staging -dir ~/.cloudsql
 ```
 
 In your `.env` file, comment out `POSTGRES_URI` and uncomment all environment variables prefixed with `CLOUD_SQL_`. Restart your local API instance, and it will connect to the staging Cloud SQL instance via the local proxy.
