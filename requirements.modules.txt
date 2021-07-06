@@ -12,4 +12,4 @@ typing_extensions~=3.7.4
 # pin jinja version to resolve cidc-schemas dependency issue
 jinja2==2.10.3
 
-cidc-schemas~=0.24.50
+cidc-schemas~=0.24.51
