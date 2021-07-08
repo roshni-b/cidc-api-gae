@@ -438,6 +438,7 @@ def test_endpoint_urls(cidc_api):
         "/ingestion/intake_bucket",
         "/ingestion/intake_metadata",
         "/permissions/",
+        "/permissions/test_csms",
         "/permissions/<int:permission>",
         "/trial_metadata/",
         "/trial_metadata/summaries",

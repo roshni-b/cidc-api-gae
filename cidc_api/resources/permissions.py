@@ -21,11 +21,18 @@ from ..shared.rest_utils import (
     unmarshal_request,
     delete_response,
 )
+from ..csms import get_with_authorization as csms_get
 
 permissions_bp = Blueprint("permissions", __name__)
 
 permission_schema = PermissionSchema()
 permission_list_schema = PermissionListSchema()
+
+
+@permissions_bp.route("/test_csms", methods=["GET"])
+@requires_auth("permissions", [CIDCRole.ADMIN.value])
+def test_csms():
+    return csms_get("/docs")
 
 
 @permissions_bp.route("/", methods=["GET"])

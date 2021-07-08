@@ -100,5 +100,17 @@ if not environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not TESTING:
         creds_file.write(secret_manager.get("APP_ENGINE_CREDENTIALS"))
     environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_file_name
 
+# CSMS Integration Values
+CSMS_BASE_URL = environ.get("CSMS_BASE_URL")
+CSMS_TOKEN_URL = environ.get("CSMS_BASE_URL")
+if not TESTING:
+    secret_manager = get_secrets_manager()
+    CSMS_CLIENT_SECRET = secret_manager.get("CSMS_CLIENT_SECRET")
+    CSMS_CLIENT_ID = secret_manager.get("CSMS_CLIENT_ID")
+else:
+    CSMS_CLIENT_SECRET = environ.get("CSMS_CLIENT_SECRET")
+    CSMS_CLIENT_ID = environ.get("CSMS_CLIENT_ID")
+
+
 # Accumulate all constants defined in this file in a single dictionary
 SETTINGS = {k: v for k, v in globals().items() if k.isupper()}
