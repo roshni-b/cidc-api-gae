@@ -13,7 +13,7 @@ _TOKEN, _TOKEN_EXPIRY = None, datetime.now()
 
 def get_token():
     global _TOKEN, _TOKEN_EXPIRY
-    if not _TOKEN or datetime.now() > _TOKEN_EXPIRY:
+    if not _TOKEN or datetime.now() >= _TOKEN_EXPIRY:
         res, time = (
             requests.post(
                 CSMS_TOKEN_URL,
@@ -39,6 +39,7 @@ def get_token():
 
 
 def get_with_authorization(url: str, *args, **kwargs):
+    """url should be fully valid or begin with `/` to be prefixed with CSMS_BASE_URL"""
     token = get_token()
     headers = {
         **kwargs.get("headers", {}),
