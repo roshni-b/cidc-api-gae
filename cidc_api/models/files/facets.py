@@ -57,6 +57,7 @@ assay_facets: Facets = {
             "Excel templates used to upload analysis data.",
         ),
     },
+    "Miscellaneous": {"All": FacetConfig(["/misc_data/"])},
     "Nanostring": {
         "Source": FacetConfig(
             ["/nanostring/.rcc", "/nanostring/control.rcc"],
