@@ -10,10 +10,9 @@ def test_get_token_smoketest(monkeypatch):
             "error": "invalid_client",
             "error_description": "Client authentication failed. Either the client or the client credentials are invalid.",
         }
+
     error_mock = MagicMock()
-    error_mock.return_value = MagicMock(
-        json=fake_post
-    )
+    error_mock.return_value = MagicMock(json=fake_post)
     monkeypatch.setattr(auth.requests, "post", error_mock)
     with pytest.raises(Exception, match="Client authentication failed"):
         auth.get_token()
