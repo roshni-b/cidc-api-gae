@@ -7,7 +7,7 @@ from cidc_api.csms import auth
 def test_get_token_smoketest(monkeypatch):
     error_mock = MagicMock()
     error_mock.return_value = MagicMock(
-        json={
+        json=lambda: {
             "error": "invalid_client",
             "error_description": "Client authentication failed. Either the client or the client credentials are invalid.",
         }
