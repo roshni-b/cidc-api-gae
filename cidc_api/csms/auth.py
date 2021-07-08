@@ -23,7 +23,7 @@ def get_token():
                     "client_id": CSMS_CLIENT_ID,
                     "client_secret": CSMS_CLIENT_SECRET,
                 },
-            ).json(),
+            ).json,
             datetime.now(),
         )
 
