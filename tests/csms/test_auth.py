@@ -5,20 +5,26 @@ from cidc_api.csms import auth
 
 
 def test_get_token_smoketest(monkeypatch):
-    def fake_post():
+    def fake_error_post():
         return {
             "error": "invalid_client",
             "error_description": "Client authentication failed. Either the client or the client credentials are invalid.",
         }
 
     error_mock = MagicMock()
-    error_mock.return_value = MagicMock(json=fake_post)
+    error_mock.return_value = MagicMock(json=fake_error_post)
     monkeypatch.setattr(auth.requests, "post", error_mock)
     with pytest.raises(Exception, match="Client authentication failed"):
         auth.get_token()
 
+    def fake_post():
+        return {
+            "access_token": True,
+            "expires_in": 100,
+        }
+
     post_mock = MagicMock()
-    post_mock.return_value = MagicMock(json={"access_token": True, "expires_in": 100,})
+    post_mock.return_value = MagicMock(json=fake_post)
     monkeypatch.setattr(auth.requests, "post", post_mock)
 
     assert auth.get_token()
