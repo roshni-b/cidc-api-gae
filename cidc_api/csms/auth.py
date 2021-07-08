@@ -23,17 +23,15 @@ def get_token():
                     "client_id": CSMS_CLIENT_ID,
                     "client_secret": CSMS_CLIENT_SECRET,
                 },
-            ),
+            ).json,
             datetime.now(),
         )
 
         # res definition from https://developer.okta.com/docs/reference/api/oidc/#response-properties-2
-        if "error" in res.json:
-            raise Exception(
-                res.json["error"] + ": " + res.json.get("error_description")
-            )
-        _TOKEN = res.json["access_token"]
-        _TOKEN_EXPIRY = time + timedelta(seconds=res.json["expires_in"])
+        if "error" in res:
+            raise Exception(res["error"] + ": " + res.get("error_description"))
+        _TOKEN = res["access_token"]
+        _TOKEN_EXPIRY = time + timedelta(seconds=res["expires_in"])
 
     return _TOKEN
 
