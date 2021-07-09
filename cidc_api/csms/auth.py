@@ -50,4 +50,4 @@ def get_with_authorization(url: str, *args, **kwargs):
     kwargs["headers"] = headers
     if not url.startswith(CSMS_BASE_URL):
         url = CSMS_BASE_URL + url
-    requests.get(url, *args, **kwargs)
+    return requests.get(url, *args, **kwargs)
