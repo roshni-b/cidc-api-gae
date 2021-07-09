@@ -102,7 +102,7 @@ if not environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not TESTING:
 
 # CSMS Integration Values
 CSMS_BASE_URL = environ.get("CSMS_BASE_URL")
-CSMS_TOKEN_URL = environ.get("CSMS_BASE_URL")
+CSMS_TOKEN_URL = environ.get("CSMS_TOKEN_URL")
 if not TESTING:
     secret_manager = get_secrets_manager()
     CSMS_CLIENT_SECRET = secret_manager.get("CSMS_CLIENT_SECRET")

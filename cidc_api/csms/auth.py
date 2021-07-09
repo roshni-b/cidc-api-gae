@@ -29,7 +29,6 @@ def get_token():
             ).json(),
             datetime.now(),
         )
-        logger.info(str(res))
 
         # res definition from https://developer.okta.com/docs/reference/api/oidc/#response-properties-2
         if "error" in res:
