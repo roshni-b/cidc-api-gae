@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from ..config.logging import get_logger
 import requests
 
 from ..config.settings import (
@@ -8,6 +9,8 @@ from ..config.settings import (
     CSMS_TOKEN_URL,
 )
 
+
+logger = get_logger(__name__)
 _TOKEN, _TOKEN_EXPIRY = None, datetime.now()
 
 
@@ -26,6 +29,7 @@ def get_token():
             ).json(),
             datetime.now(),
         )
+        logger.info(str(res))
 
         # res definition from https://developer.okta.com/docs/reference/api/oidc/#response-properties-2
         if "error" in res:
