@@ -32,7 +32,7 @@ permission_list_schema = PermissionListSchema()
 @permissions_bp.route("/test_csms", methods=["GET"])
 @requires_auth("permissions", [CIDCRole.ADMIN.value])
 def test_csms():
-    return csms_get("/docs").json()
+    return csms_get("/doc").json()
 
 
 @permissions_bp.route("/", methods=["GET"])
