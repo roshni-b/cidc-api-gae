@@ -32,3 +32,5 @@ env_variables:
   GOOGLE_PATIENT_SAMPLE_TOPIC: "patient_sample_update"
   GOOGLE_ARTIFACT_UPLOAD_TOPIC: "artifact_upload"
   GOOGLE_UPLOAD_ROLE: "projects/cidc-dfci-staging/roles/objectUploader"
+  CSMS_BASE_URL: "https://csms-api-uat.nci.nih.gov/api/v1"
+  CSMS_TOKEN_URL: "https://bioappdev.okta.com/oauth2/aus3urx1v0ilXZ6ud297/v1/token"
