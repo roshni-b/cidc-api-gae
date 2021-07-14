@@ -1229,7 +1229,7 @@ class TrialMetadata(CommonColumns):
                 trial_metadata,
                 jsonb_each(metadata_json->'assays') assays,
                 jsonb_array_elements(value) batches
-            where key not in ('olink', 'nanostring', 'elisa', 'cytof_e4412')
+            where key not in ('olink', 'nanostring', 'elisa', 'cytof_e4412', 'wes')
         """
 
         # Compute the number of samples associated with nanostring uploads.
@@ -1342,6 +1342,60 @@ class TrialMetadata(CommonColumns):
                 jsonb_array_length(metadata_json#>'{analysis,wes_tumor_only_analysis,runs}') as value
             from
                 trial_metadata
+        """
+
+        wes_assay_subquery = """
+            select
+                trial_id,
+                'wes' as key,
+                count(distinct pair#>'{tumor,cimac_id}') + count(distinct pair#>'{normal,cimac_id}') as value
+            from
+                trial_metadata,
+                jsonb_array_elements(metadata_json#>'{analysis,wes_analysis,pair_runs}') pair
+            group by trial_id
+        """
+
+        ## Calculate # of WES TO assay samples as (all - # paired WES samples)
+        # As jsonb_array_length is called for each entry in /assays/wes : array,
+        # it returns several rows which if `join`ed against wes_assay_subquery
+        # duplicates the value to be subtracted so `sum` doesn't work.
+        # Instead, `union` these two queries (`all` because repeated values)
+        # with opposing signs to subtract via `sum`
+        # Since # paired WES samples = `wes_assay_subquery` is a positive number,
+        # subtract total number of samples from it and negate
+
+        ## Eg
+        # /assays/wes : [{records: 3}, {records: 3}]
+        # wes_assay_subquery: 4
+        # so want 3+3 - 4 = 2
+
+        ## With double negative
+        # key           value
+        # --------------------
+        # wes             4
+        # wes_tumor_only -3
+        # wes_tumor_only -3
+        # --------------------
+        # -sum            2
+        wes_tumor_only_assay_subquery = f"""
+            select
+                trial_id,
+                'wes_tumor_only' as key,
+                -sum(value)
+            from (
+                select
+                    trial_id,
+                    key,
+                    - jsonb_array_length(batches->'records') as value
+                from
+                    trial_metadata,
+                    jsonb_each(metadata_json->'assays') assays,
+                    jsonb_array_elements(value) batches
+                where key = 'wes'
+            union all 
+                {wes_assay_subquery}
+            ) tbl
+            group by trial_id, key
         """
 
         rna_level1_analysis_subquery = """
@@ -1479,6 +1533,10 @@ class TrialMetadata(CommonColumns):
                     {wes_analysis_subquery}
                     union all
                     {wes_tumor_only_analysis_subquery}
+                    union all
+                    {wes_assay_subquery}
+                    union all
+                    {wes_tumor_only_assay_subquery}
                     union all
                     {rna_level1_analysis_subquery}
                     union all
