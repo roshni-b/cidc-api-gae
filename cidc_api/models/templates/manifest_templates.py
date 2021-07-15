@@ -2,12 +2,13 @@ from .core import MetadataTemplate, WorksheetConfig, Entry
 from .model_core import cimac_id_to_cimac_participant_id, identity
 
 ### Template example ###
-from .trial_metadata import ClinicalTrial, Participant, Sample, Shipment
+from .trial_metadata import Participant, Sample, Shipment
 from .extra_metadata import ClinicalData
 
 
 ClinicalDataTemplate = MetadataTemplate(
     upload_type="clinical_data",
+    purpose="manifest",
     worksheet_configs=[
         WorksheetConfig(
             "Tier 1",
@@ -52,6 +53,7 @@ ClinicalDataTemplate = MetadataTemplate(
 
 PBMCTemplate = MetadataTemplate(
     upload_type="pbmc",
+    purpose="manifest",
     worksheet_configs=[
         WorksheetConfig(
             "Shipment",

@@ -1,17 +1,12 @@
-from cidc_api.models.templates.core import Entry
 from sqlalchemy import (
     CheckConstraint,
     Column,
-    Date,
     Enum,
-    ForeignKey,
     ForeignKeyConstraint,
     Integer,
     Numeric,
     String,
-    UniqueConstraint,
 )
-from sqlalchemy.orm import relationship
 
 from .model_core import MetadataModel
 from .trial_metadata import Participant

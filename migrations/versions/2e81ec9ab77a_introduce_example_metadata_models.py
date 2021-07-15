@@ -220,7 +220,7 @@ def upgrade():
         ),
         sa.ForeignKeyConstraint(["trial_id"], ["clinical_trials.protocol_identifier"]),
         sa.PrimaryKeyConstraint("trial_id", "cimac_participant_id"),
-        sa.UniqueConstraint("trial_id", "cimac_participant_id"),
+        sa.UniqueConstraint("trial_id", "cimac_participant_id", name="unique_trial_participant"),
     )
     op.create_table(
         "samples",
@@ -559,8 +559,8 @@ def upgrade():
             ["shipments.trial_id", "shipments.manifest_id"],
         ),
         sa.PrimaryKeyConstraint("trial_id", "cimac_id"),
-        sa.UniqueConstraint("trial_id", "cimac_id"),
-        sa.UniqueConstraint("cimac_id"),
+        sa.UniqueConstraint("trial_id", "cimac_id", name="unique_trial_sample"),
+        sa.UniqueConstraint("cimac_id", name="unique_cimac_id"),
     )
     op.create_table(
         "aliquots",

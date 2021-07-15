@@ -1,15 +1,21 @@
 import datetime
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from enum import Enum
 from warnings import filterwarnings
 from typing import Optional, Dict, Callable, Any, List, Tuple, Type
+from typing import OrderedDict as OrderedDict_Type
+
+from sqlalchemy.sql.functions import mode
+
 
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
 import openpyxl
 from sqlalchemy import Column, Enum as SqlEnum
 
-from .model_core import _get_global_insertion_order, MetadataModel
+from .model_core import MetadataModel
+from .file_metadata import File
+from .utils import _get_global_insertion_order
 
 MODEL_INSERTION_ORDER = _get_global_insertion_order()
 
@@ -46,12 +52,17 @@ class Entry:
         self.gcs_uri_format = gcs_uri_format
         self.process_as = process_as
 
+        if gcs_uri_format and not hasattr(column.class_, "object_url"):
+            raise Exception(
+                f"gcs_uri_format should only be defined for columns on a File, not {column.class_.__name__}"
+            )
+
         self.doc = column.doc
         self.sqltype = column.type
         self.enums = self.sqltype.enums if isinstance(self.sqltype, SqlEnum) else None
         self.pytype = self.sqltype.python_type
 
-    def get_column_mapping(self, value) -> Dict[Column, Any]:
+    def get_column_mapping(self, value, context: dict = {}) -> Dict[Column, Any]:
         if value is None:
             if self.column.nullable:
                 return {self.column: None}
@@ -68,10 +79,19 @@ class Entry:
                 processed_value = self.pytype(value)
 
             column_mapping = {self.column: processed_value}
+            if self.gcs_uri_format:
+                format_dict = {k.name: v for k, v in column_mapping.items()}
+                format_dict.update({k.name: v for k, v in context.items()})
+                column_mapping[
+                    getattr(self.column.class_, "object_url")
+                ] = self.gcs_uri_format.format(**format_dict)
 
+            context.update(column_mapping)
             for column, process in self.process_as.items():
-                column_mapping[column] = process(value)
+                column_mapping[column] = process(value, column_mapping)
+
         except Exception as e:
+            raise e
             raise Exception(
                 f"Error processing {self.name}={value}({type(value)}) as {self.pytype}: {e}"
             )
@@ -208,21 +228,31 @@ class ExcelStyles:
 
 class MetadataTemplate:
     """
-    A metadata template. Must have attributes `upload_type` and `worksheets` defined.
+    A metadata template. Must have attributes `upload_type`, `purpose`, and `worksheets` defined.
     etc. etc...
     """
 
     upload_type: str
+    purpose: str
     worksheet_configs: List[WorksheetConfig]
+    constants: Dict[Column, Any]
 
     DATA_ROWS = 2000
     DATA_DICT_SHEETNAME = "Data Dictionary"
 
-    def __init__(self, upload_type: str, worksheet_configs: List[WorksheetConfig]):
+    def __init__(
+        self,
+        upload_type: str,
+        purpose: str,
+        worksheet_configs: List[WorksheetConfig],
+        constants: Dict[Column, Any] = {},
+    ):
         self.upload_type = upload_type
+        self.purpose = purpose
         self.worksheet_configs = worksheet_configs
+        self.constants = constants
 
-    def read(self, filename: str) -> List[MetadataModel]:
+    def read(self, filename: str) -> OrderedDict_Type[Type, List[MetadataModel]]:
         """
         Extract a list of SQLAlchemy models in insertion order from a populated
         instance of this template.
@@ -232,7 +262,7 @@ class MetadataTemplate:
         model_instances: List[MetadataModel] = []
 
         model_dicts: List[Dict[Column, Any]] = []
-        preamble_dict = {}
+        preamble_dict = self.constants.copy()
         # Extract partial model instances from the template
         for config in self.worksheet_configs:
             preamble_rows = []
@@ -262,10 +292,13 @@ class MetadataTemplate:
             for row in data_rows:
                 if all(cell.value is None for cell in row[1:]):
                     continue
+
+                context = preamble_dict.copy()
                 data_dict = {}
                 for i, entry in enumerate(data_configs, 1):
-                    cell = row[i].value
-                    data_dict.update(entry.get_column_mapping(cell))
+                    data_dict.update(entry.get_column_mapping(row[i].value, context))
+                    context.update(data_dict)
+
                 model_dicts.append(data_dict)
 
             for model_dict in model_dicts:
@@ -273,6 +306,11 @@ class MetadataTemplate:
                 for column, value in model_dict.items():
                     model_groups[column.class_][column.name] = value
                 for model, kwargs in model_groups.items():
+                    [
+                        kwargs.update(v)
+                        for k, v in model_groups.items()
+                        if k in model.__bases__
+                    ]
                     model_instances.append(model(**kwargs))
 
         # Group model instances with matching values in their primary key or
@@ -290,6 +328,15 @@ class MetadataTemplate:
             list
         )
         for model, groups in model_groups.items():
+            columns_to_set_later_by_fk = [
+                fk.parent
+                for k, v in deduped_instances.items()
+                for fk in (
+                    File if issubclass(model, File) else model
+                ).__table__.foreign_keys
+                if len(v) == 1 and fk.column.table.name == k.__tablename__
+            ]
+
             # special value None for all(unique_values is None)
             broad_instances = groups.pop(None, [])
             for specific_instances in groups.values():
@@ -304,15 +351,34 @@ class MetadataTemplate:
                     ):
                         setattr(instance, pre_col.name, pre_val)
 
-                if not any(pk is None for pk in instance.primary_key_values()):
+                if all(
+                    [
+                        # need to validate ALL of the primary keys
+                        any(
+                            [
+                                # ANY of these is a reason that the value is fine
+                                pk is not None,  # if it's set
+                                any(
+                                    [
+                                        c.name == fk.name
+                                        for fk in columns_to_set_later_by_fk
+                                    ]
+                                ),  # if it'll be set later
+                                c.server_default is not None,  # if it has a default
+                                c.autoincrement
+                                is True,  # if it autoincrements in the table
+                            ]
+                        )
+                        for c, pk in instance.primary_key_map().items()
+                    ]
+                ):
                     deduped_instances[model].append(instance)
 
-        ordered_instances = []
+        ordered_instances: OrderedDict_Type[Type, List[MetadataModel]] = OrderedDict()
         for next_model in MODEL_INSERTION_ORDER:
             next_instances = deduped_instances.get(next_model)
             if next_instances:
-                print(next_model.__name__, ":", len(next_instances))
-                ordered_instances.extend(next_instances)
+                ordered_instances[next_model] = next_instances
 
         return ordered_instances
 

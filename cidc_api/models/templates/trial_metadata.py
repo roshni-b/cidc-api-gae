@@ -207,7 +207,9 @@ class Shipment(MetadataModel):
         doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
     )
 
-    __table_args__ = (UniqueConstraint(trial_id, manifest_id),)
+    __table_args__ = (
+        UniqueConstraint(trial_id, manifest_id, name="unique_trial_manifest"),
+    )
 
     assay_priority = Column(
         Enum(
@@ -332,7 +334,9 @@ class Participant(MetadataModel):
     cohort_name = Column(String)
 
     __table_args__ = (
-        UniqueConstraint(trial_id, cimac_participant_id),
+        UniqueConstraint(
+            trial_id, cimac_participant_id, name="unique_trial_participant"
+        ),
         ForeignKeyConstraint(
             [trial_id, cohort_name], [Cohort.trial_id, Cohort.cohort_name]
         ),

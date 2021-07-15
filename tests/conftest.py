@@ -17,6 +17,18 @@ from cidc_api.models import (
     DownloadableFiles,
     TrialMetadata,
     Permissions,
+    Aliquot,
+    ClinicalTrial,
+    Cohort,
+    CollectionEvent,
+    Participant,
+    Sample,
+    Shipment,
+    HandeImage,
+    HandeRecord,
+    HandeUpload,
+    File,
+    Upload,
 )
 
 # Install the Chrome web driver and add it to the PATH env variable
@@ -51,10 +63,22 @@ def clean_db(cidc_api):
     with cidc_api.app_context():
         session = cidc_api.extensions["sqlalchemy"].db.session
         session.query(UploadJobs).delete()
+        session.query(HandeImage).delete()
+        session.query(File).delete()
+        session.query(HandeRecord).delete()
+        session.query(HandeUpload).delete()
+        session.query(Upload).delete()
+        session.query(Aliquot).delete()
+        session.query(Sample).delete()
+        session.query(Shipment).delete()
+        session.query(Participant).delete()
+        session.query(CollectionEvent).delete()
+        session.query(Cohort).delete()
+        session.query(ClinicalTrial).delete()
         session.query(Users).delete()
         session.query(DownloadableFiles).delete()
         session.query(TrialMetadata).delete()
-        session.query(Permissions).delete
+        session.query(Permissions).delete()
         session.commit()
 
     return session

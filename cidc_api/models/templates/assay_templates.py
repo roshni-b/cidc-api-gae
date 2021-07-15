@@ -1,4 +1,5 @@
 from .core import MetadataTemplate, WorksheetConfig, Entry
+from .model_core import get_property
 
 ### Template example ###
 from .assay_metadata import HandeImage, HandeRecord, HandeUpload
@@ -6,6 +7,7 @@ from .assay_metadata import HandeImage, HandeRecord, HandeUpload
 
 HandeAssay = MetadataTemplate(
     upload_type="hande",
+    purpose="assay",
     worksheet_configs=[
         WorksheetConfig(
             "H&E",
@@ -15,11 +17,12 @@ HandeAssay = MetadataTemplate(
             ],
             {
                 "Samples": [
-                    Entry(HandeRecord.cimac_id, name="cimac id",),
+                    Entry(HandeRecord.cimac_id, name="cimac id"),
                     Entry(
                         HandeImage.local_path,
                         name="image file",
-                        gcs_uri_format="{protocol identifier}/hande/{cimac id}/image_file.svs",
+                        gcs_uri_format="{trial_id}/hande/{cimac_id}/image_file.svs",
+                        process_as={HandeRecord.image_url: get_property("object_url")},
                     ),
                     Entry(
                         HandeRecord.tumor_tissue_percentage,
@@ -40,4 +43,5 @@ HandeAssay = MetadataTemplate(
             },
         )
     ],
+    constants={HandeUpload.upload_type: "hande", HandeUpload.multifile: True,},
 )

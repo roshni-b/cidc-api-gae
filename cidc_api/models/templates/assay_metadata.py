@@ -1,7 +1,6 @@
 from sqlalchemy import (
     CheckConstraint,
     Column,
-    ForeignKey,
     ForeignKeyConstraint,
     Integer,
     Numeric,
@@ -9,6 +8,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
+from .model_core import MetadataModel
 from .trial_metadata import Sample
 from .file_metadata import Upload, ImageFile
 
@@ -42,12 +42,12 @@ class HandeImage(ImageFile):
     )
 
 
-class HandeRecord(HandeUpload):
+class HandeRecord(MetadataModel):
     __tablename__ = "hande_records"
     assay_id = Column(Integer, nullable=False, primary_key=True)
     cimac_id = Column(String, nullable=False, primary_key=True)
     trial_id = Column(String, nullable=False)
-    image_url = Column(String, ForeignKey(HandeImage.object_url), nullable=False)
+    image_url = Column(String, nullable=False)
 
     tumor_tissue_percentage = Column(
         Numeric,
@@ -87,3 +87,8 @@ class HandeRecord(HandeUpload):
         ),
         ForeignKeyConstraint([trial_id, cimac_id], [Sample.trial_id, Sample.cimac_id]),
     )
+
+    @property
+    def image(self) -> HandeImage:
+        print(self.image_url, self.assay_id)
+        return HandeImage.get_by_id(self.image_url, self.assay_id)

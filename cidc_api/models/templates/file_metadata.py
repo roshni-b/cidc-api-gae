@@ -11,11 +11,10 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import relationship
 
 from .model_core import MetadataModel
 from .trial_metadata import ClinicalTrial
-from cidc_api.models import Users
+from ..models import Users
 
 
 ArtifactCreator = Enum(
@@ -52,7 +51,10 @@ class Upload(MetadataModel):
     )
 
     status = Column(
-        UploadStatus, nullable=False, doc="The current status of the upload."
+        UploadStatus,
+        nullable=False,
+        server_default=UploadStatus.enums[0],  # 'started'
+        doc="The current status of the upload.",
     )
     token = Column(
         UUID,
@@ -101,15 +103,20 @@ class Upload(MetadataModel):
 
     __mapper_args__ = {"polymorphic_on": upload_type, "polymorphic_identity": "base"}
 
+    def __init__(self, **kwargs):
+        from ...shared.auth import get_current_user
+
+        kwargs["uploader_email"] = get_current_user().email
+
+        super().__init__(**kwargs)
+
 
 class File(MetadataModel):
     __tablename__ = "files"
     object_url = Column(String, primary_key=True)
-    upload_id = Column(Integer, primary_key=True,)
-    trial_id = Column(
-        String, primary_key=False
-    )  # all True allows for use as multi Foreign Key
-    local_path = Column(String, doc="Path to a file on a user's computer.")
+    upload_id = Column(Integer, primary_key=True)
+    trial_id = Column(String, primary_key=False)
+    local_path = Column(String, unique=True, doc="Path to a file on a user's computer.")
 
     upload_placeholder = Column(
         String, doc="A placeholder for when artifact file is being uploaded."
