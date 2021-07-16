@@ -5,9 +5,6 @@ from warnings import filterwarnings
 from typing import Optional, Dict, Callable, Any, List, Tuple, Type
 from typing import OrderedDict as OrderedDict_Type
 
-from sqlalchemy.sql.functions import mode
-
-
 import xlsxwriter
 from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
 import openpyxl
@@ -72,8 +69,12 @@ class Entry:
         try:
             # Handle date/time parsing funkiness
             if self.pytype == datetime.time:
+                if not isinstance(value, datetime.datetime):
+                    value = openpyxl.utils.datetime.from_excel(value)
                 processed_value = value.time()
             elif self.pytype == datetime.date:
+                if not isinstance(value, datetime.datetime):
+                    value = openpyxl.utils.datetime.from_excel(value)
                 processed_value = value.date()
             else:
                 processed_value = self.pytype(value)

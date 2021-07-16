@@ -90,5 +90,4 @@ class HandeRecord(MetadataModel):
 
     @property
     def image(self) -> HandeImage:
-        print(self.image_url, self.assay_id)
         return HandeImage.get_by_id(self.image_url, self.assay_id)
