@@ -1,18 +1,20 @@
-from collections import defaultdict
 from functools import wraps
-from typing import Any, Dict, List, Optional, Tuple, Type
-from typing import OrderedDict as OrderedDict_Type
+from typing import Any, Dict, Optional, Tuple
 
 from flask import current_app
-from sqlalchemy import Column
 from sqlalchemy.orm import Session
-from sqlalchemy.sql.expression import table
 
 from cidc_api.config.db import BaseModel
 
+# some simple functions to handle common process_as cases
+# the parameters for all process_as functions are
+# value : Any, context : dict[Column, Any]
 identity = lambda v, _: v
 cimac_id_to_cimac_participant_id = lambda cimac_id, _: cimac_id[:7]
 
+# this is a special-case handler, where any property in context
+# can be retrieved by using get_property(< key >) as a process_as function
+# # created to get the `object_url` of files after GCS URI formatting
 get_property = lambda prop: lambda _, context: (
     [v for k, v in context.items() if k.name == prop] + [None]
 )[0]
@@ -40,9 +42,18 @@ class MetadataModel(BaseModel):
     __abstract__ = True
 
     def primary_key_values(self) -> Optional[Tuple[Any]]:
-        return tuple(self.primary_key_map().values())
+        """
+        Returns a tuple of the values of the primary key values
+        Special value None if all of the pk columns are None
+        """
+        pk_map = self.primary_key_map()
+        return tuple(pk_map.values()) if pk_map is not None else None
 
     def primary_key_map(self) -> Optional[Dict[str, Any]]:
+        """
+        Returns a dict of Column: value for any primary key column.
+        Special value None if all of the pk columns are None
+        """
         columns_to_check = [c for c in self.__table__.columns]
         for c in type(self).__bases__:
             if hasattr(c, "__table__"):
@@ -54,12 +65,16 @@ class MetadataModel(BaseModel):
                 value = getattr(self, column.name)
                 primary_key_values[column] = value
 
-        if all(v is None for v in primary_key_values):
+        if all(v is None for v in primary_key_values.values()):
             return None  # special value
 
         return primary_key_values
 
     def unique_field_values(self) -> Optional[Tuple[Any]]:
+        """
+        Returns a tuple of all values that are uniquely constrained (pk or unique).
+        Special value None if all of the unique columns are None
+        """
         columns_to_check = [c for c in self.__table__.columns]
         for c in type(self).__bases__:
             if hasattr(c, "__table__"):
@@ -84,6 +99,7 @@ class MetadataModel(BaseModel):
                 f"cannot merge {self.__class__} instance with {other.__class__} instance"
             )
 
+        # also need to handle columns for all superclasses
         for column in self.__table__.columns + [
             c
             for b in type(self).__bases__
@@ -102,6 +118,10 @@ class MetadataModel(BaseModel):
     @classmethod
     @with_default_session
     def get_by_id(cls, *id, session: Session):
+        """
+        Returns an instance of this class with given the primary keys if it exists
+        Special value None if no instance in the table matches the given values
+        """
         with current_app.app_context():
             ret = session.query(cls).get(id)
         return ret

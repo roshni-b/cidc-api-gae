@@ -5,7 +5,6 @@ from typing import List, OrderedDict, Type
 from sqlalchemy.orm import Session
 
 from .model_core import MetadataModel, with_default_session
-from .file_metadata import File
 
 
 def _get_global_insertion_order() -> List[MetadataModel]:
@@ -79,13 +78,26 @@ def insert_record_batch(
     for model in ordered_records.keys():
         records = ordered_records[model]
 
+        # set any columns that were left to fill in by fk
+        # can only set if there's only a single foreign instance
+        # also look at all the superclasses for hidden fk's
+        fk_to_check = [fk for fk in model.__table__.foreign_keys]
+        fk_to_check.extend(
+            [
+                fk
+                for b in model.__bases__
+                if hasattr(b, "__table__")
+                for fk in b.__table__.foreign_keys
+            ]
+        )
         for fk, target_class in {
             fk: k
             for k, v in ordered_records.items()
-            for fk in (
-                File if issubclass(model, File) else model
-            ).__table__.foreign_keys
-            if len(v) == 1 and fk.column.table.name == k.__tablename__
+            for fk in fk_to_check
+            if len(v) == 1
+            and fk.column.table.name
+            in [k.__tablename__]
+            + [b.__tablename__ for b in k.__bases__ if hasattr(b, "__tablename__")]
         }.items():
             for n in range(len(records)):
                 setattr(
@@ -94,6 +106,7 @@ def insert_record_batch(
                     getattr(ordered_records[target_class][0], fk.column.name),
                 )
 
+        # merge all records into session and keep a copy
         for n, record in enumerate(records):
             try:
                 record = session.merge(record)
@@ -102,6 +115,8 @@ def insert_record_batch(
                 print(e)
                 errors.append(e)
 
+        # flush these records to generate db-derived values
+        # in case they're needed for later fk's
         session.flush()
 
     if dry_run or len(errors):

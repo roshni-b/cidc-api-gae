@@ -34,6 +34,8 @@ class Entry:
       column: column attribute on a SQLAlchemy model class.
       name: optional human-readable label for this field, if not inferrable from `column`.
       process_as: optional dictionary mapping column attributes to data processing function.
+
+    TO IMPLEMENT:
       encrypt: whether the spreadsheet value should be encrypted before storage.
     """
 
@@ -60,6 +62,13 @@ class Entry:
         self.pytype = self.sqltype.python_type
 
     def get_column_mapping(self, value, context: dict = {}) -> Dict[Column, Any]:
+        """
+        Given a value and a surround context to evalutate it in, returns a dict
+        pointing table columns to their correctly-typed values. A single item
+        if there's no process_as defined for this entry.
+        Special handling for missing required values, date/time types, GCS URI
+        formatting. Handling process_as is handled last.
+        """
         if value is None:
             if self.column.nullable:
                 return {self.column: None}
@@ -92,10 +101,9 @@ class Entry:
                 column_mapping[column] = process(value, column_mapping)
 
         except Exception as e:
-            raise e
             raise Exception(
                 f"Error processing {self.name}={value}({type(value)}) as {self.pytype}: {e}"
-            )
+            ) from e
         return column_mapping
 
 
@@ -104,7 +112,6 @@ class WorksheetConfig:
     A worksheet within a metadata spreadsheet. A worksheet has a name, a list
     of `preamble_rows` and a dictionary mapping data column group headers to lists
     of `data_sections`.
-    etc. etc...
     """
 
     name: str
@@ -118,15 +125,6 @@ class WorksheetConfig:
         self.preamble = preamble
         self.data_sections = data_sections
 
-        self.distinct_models = self._get_distinct_models()
-
-    def _get_distinct_models(self) -> List[MetadataModel]:
-        entries = self.preamble + [
-            entry for entries in self.data_sections.values() for entry in entries
-        ]
-
-        return list(set([entry.column.class_ for entry in entries]))
-
 
 class RowType(Enum):
     """Annotations denoting what type of data a template row contains."""
@@ -139,6 +137,7 @@ class RowType(Enum):
 
 
 def row_type_from_string(maybe_type: str) -> Optional[RowType]:
+    """Returns None if the input is not a valid RowType."""
     try:
         return RowType(maybe_type)
     except ValueError:
@@ -229,8 +228,9 @@ class ExcelStyles:
 
 class MetadataTemplate:
     """
-    A metadata template. Must have attributes `upload_type`, `purpose`, and `worksheets` defined.
-    etc. etc...
+    A metadata template. Must have attributes `upload_type`, `purpose`, and `worksheet_configs` defined.
+    An optional `constants` dict allows for hidden values to be used later in reading the data, but does not
+    affect the output template XLSX from `.write()`
     """
 
     upload_type: str
@@ -260,12 +260,16 @@ class MetadataTemplate:
         """
         workbook = openpyxl.load_workbook(filename)
 
-        model_instances: List[MetadataModel] = []
-
-        model_dicts: List[Dict[Column, Any]] = []
+        # the preamble values flow across all sheets for context
+        # (such as trial_id) to only need to collect each value once
         preamble_dict = self.constants.copy()
+
         # Extract partial model instances from the template
+        model_instances: List[MetadataModel] = []
+        model_dicts: List[Dict[Column, Any]] = []
         for config in self.worksheet_configs:
+
+            # split the preamble and data rows
             preamble_rows = []
             data_rows = []
             for row in workbook[config.name].iter_rows():
@@ -281,32 +285,42 @@ class MetadataTemplate:
                 )
 
             # {<column instance>: <processed value, ...}
-            for i, row in enumerate(preamble_rows):
-                cell = row[2].value
-                entry = config.preamble[i]
-                preamble_dict.update(entry.get_column_mapping(cell))
+            for entry, row in zip(config.preamble, preamble_rows):
+                cell = row[2]  # row[0] is the type, row[1] is the title
+                preamble_dict.update(
+                    entry.get_column_mapping(cell.value)
+                )  # process the value
             model_dicts.append(preamble_dict)
 
+            # combine and flatten the lists of configs across all data_sections
             data_configs = [
                 entry for entries in config.data_sections.values() for entry in entries
             ]
             for row in data_rows:
+                # if no entries, skip it
                 if all(cell.value is None for cell in row[1:]):
                     continue
 
+                # context will be updated by every cell for each row,
+                # but preamble_dict needs to persist unchanged
                 context = preamble_dict.copy()
                 data_dict = {}
-                for i, entry in enumerate(data_configs, 1):
-                    data_dict.update(entry.get_column_mapping(row[i].value, context))
+                for cell, entry in zip(row[1:], data_configs):  # row[0] is the type
+                    data_dict.update(entry.get_column_mapping(cell.value, context))
                     context.update(data_dict)
 
                 model_dicts.append(data_dict)
 
+            # now let's take all our data from this sheet and make some models out of them
             for model_dict in model_dicts:
+                # separate by target class, regardless of class hierarchy
                 model_groups = defaultdict(dict)
                 for column, value in model_dict.items():
                     model_groups[column.class_][column.name] = value
+
+                # kwargs is {column.name: value}
                 for model, kwargs in model_groups.items():
+                    # also grab all the kwargs for all superclasses
                     [
                         kwargs.update(v)
                         for k, v in model_groups.items()
@@ -324,18 +338,32 @@ class MetadataTemplate:
             model_groups[instance.__class__][unique_values].append(instance)
 
         # Build a dictionary mapping model classes to deduplicated instances
-        # of that clsass.
+        # of that class. Make sure that all instances have valid pk's for insertion,
+        # remembering that some fk's can't be set until insert time
         deduped_instances: Dict[Type[MetadataModel], List[MetadataModel]] = defaultdict(
             list
         )
         for model, groups in model_groups.items():
+            # keep track of which columns can be set later by fk
+            # can only set if there's only a single foreign instance
+            # also look at all the superclasses for hidden fk's
+            fk_to_check = [fk for fk in model.__table__.foreign_keys]
+            fk_to_check.extend(
+                [
+                    fk
+                    for b in model.__bases__
+                    if hasattr(b, "__table__")
+                    for fk in b.__table__.foreign_keys
+                ]
+            )
             columns_to_set_later_by_fk = [
                 fk.parent
                 for k, v in deduped_instances.items()
-                for fk in (
-                    File if issubclass(model, File) else model
-                ).__table__.foreign_keys
-                if len(v) == 1 and fk.column.table.name == k.__tablename__
+                for fk in fk_to_check
+                if len(v) == 1
+                and fk.column.table.name
+                in [k.__tablename__]
+                + [b.__tablename__ for b in k.__bases__ if hasattr(b, "__tablename__")]
             ]
 
             # special value None for all(unique_values is None)
@@ -361,8 +389,8 @@ class MetadataTemplate:
                                 pk is not None,  # if it's set
                                 any(
                                     [
-                                        c.name == fk.name
-                                        for fk in columns_to_set_later_by_fk
+                                        c.name == fk_col.name
+                                        for fk_col in columns_to_set_later_by_fk
                                     ]
                                 ),  # if it'll be set later
                                 c.server_default is not None,  # if it has a default
@@ -375,6 +403,7 @@ class MetadataTemplate:
                 ):
                     deduped_instances[model].append(instance)
 
+        # now order the models for insertion based on the calculated order
         ordered_instances: OrderedDict_Type[Type, List[MetadataModel]] = OrderedDict()
         for next_model in MODEL_INSERTION_ORDER:
             next_instances = deduped_instances.get(next_model)
