@@ -636,8 +636,8 @@ details_dict = {
     "/tcr/replicate_/i2.fastq.gz": FileDetails("source", "", ""),
     "/tcr/SampleSheet.csv": FileDetails("miscellaneous", "", ""),
     "/tcr_analysis/summary_info.csv": FileDetails("miscellaneous", "", ""),
-    "/tcr_analysis/tra_clone.csv": FileDetails("miscellaneous", "", ""),
-    "/tcr_analysis/trb_clone.csv": FileDetails("miscellaneous", "", ""),
+    "/tcr_analysis/tra_clone.csv": FileDetails("analysis", "", ""),
+    "/tcr_analysis/trb_clone.csv": FileDetails("analysis", "", ""),
     "/tcr_analysis/report_trial.tar.gz": FileDetails("analysis", "", ""),
     # H&E
     "/hande/image_file.svs": FileDetails(
