@@ -386,17 +386,11 @@ assay_facets: Facets = {
         ),
         "Misc.": FacetConfig(["/tcr/SampleSheet.csv" "/tcr_analysis/summary_info.csv"]),
         "Analysis Data": FacetConfig(
-            [
-                "/tcr_analysis/tra_clone.csv",
-                "/tcr_analysis/trb_clone.csv",
-            ],
+            ["/tcr_analysis/tra_clone.csv", "/tcr_analysis/trb_clone.csv",],
             "Data files indicating TRA & TRB clones' UMI counts",
         ),
         "Reports": FacetConfig(
-            [
-                "/tcr_analysis/report_trial.tar.gz",
-            ],
-            "Report from TCRseq analysis",
+            ["/tcr_analysis/report_trial.tar.gz",], "Report from TCRseq analysis",
         ),
     },
     "ELISA": {"Data": FacetConfig(["/elisa/assay.xlsx"])},
