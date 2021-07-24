@@ -242,7 +242,7 @@ assay_facets: Facets = {
                 "/wes_tumor_only/analysis/maf_tnscope_output.maf",
                 "/wes_tumor_only/analysis/vcf_gz_tnscope_filter.vcf.gz",
                 "/wes_tumor_only/analysis/maf_tnscope_filter.maf",
-                "/wes_tumor_only/analysis/tnscope_exons.vcf.gz"
+                "/wes_tumor_only/analysis/tnscope_exons.vcf.gz",
                 "/wes_tumor_only/analysis/vcf_compare.txt",
             ]
         ),
