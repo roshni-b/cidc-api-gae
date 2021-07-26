@@ -7,8 +7,8 @@ from cidc_api.csms import auth
 def test_get_token_smoketest(monkeypatch):
     def fake_error_post():
         return {
-            "error": "invalid_client",
-            "error_description": "Client authentication failed. Either the client or the client credentials are invalid.",
+            "errorCode": "invalid_client",
+            "errorSummary": "Client authentication failed. Either the client or the client credentials are invalid.",
         }
 
     error_mock = MagicMock()
