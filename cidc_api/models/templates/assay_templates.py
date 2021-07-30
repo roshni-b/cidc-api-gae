@@ -1,8 +1,18 @@
-from .core import MetadataTemplate, WorksheetConfig, Entry
-from .model_core import get_property
+from cidc_api.models.templates.core import MetadataTemplate, WorksheetConfig, Entry
+from cidc_api.models.templates.model_core import get_property
 
-### Template example ###
-from .assay_metadata import HandeImage, HandeRecord, HandeUpload
+from cidc_api.models.templates.assay_metadata import (
+    HandeImage,
+    HandeRecord,
+    HandeUpload,
+    WESRecord,
+    WESUpload,
+)
+from cidc_api.models.templates.file_metadata import (
+    BamFile,
+    Fastq_gzFile,
+    NGSAssayFiles,
+)
 
 
 HandeAssay = MetadataTemplate(
@@ -13,11 +23,11 @@ HandeAssay = MetadataTemplate(
             "H&E",
             [
                 Entry(HandeUpload.trial_id, name="protocol identifier"),
-                Entry(HandeUpload.assay_creator, name="assay creator"),
+                Entry(HandeUpload.assay_creator),
             ],
             {
                 "Samples": [
-                    Entry(HandeRecord.cimac_id, name="cimac id"),
+                    Entry(HandeRecord.cimac_id),
                     Entry(
                         HandeImage.local_path,
                         name="image file",
@@ -38,10 +48,94 @@ HandeAssay = MetadataTemplate(
                     ),
                     Entry(HandeRecord.necrosis_percentage, name="necrosis (% area)",),
                     Entry(HandeRecord.fibrosis_percentage, name="fibrosis (% area)",),
-                    Entry(HandeRecord.comment, name="comment",),
+                    Entry(HandeRecord.comment),
                 ]
             },
         )
     ],
     constants={HandeUpload.upload_type: "hande", HandeUpload.multifile: True,},
 )
+
+WesFastqAssay = MetadataTemplate(
+    upload_type="wes",
+    purpose="assay",
+    worksheet_configs=[
+        WorksheetConfig(
+            "WES",
+            [
+                Entry(WESUpload.trial_id, name="protocol identifier"),
+                Entry(WESUpload.assay_creator),
+                Entry(WESUpload.sequencing_protocol),
+                Entry(WESUpload.library_kit),
+                Entry(WESUpload.sequencer_platform),
+                Entry(WESUpload.paired_end_reads),
+                Entry(WESUpload.read_length),
+                Entry(WESUpload.bait_set),
+            ],
+            {
+                "Samples": [
+                    Entry(WESRecord.cimac_id),
+                    Entry(NGSAssayFiles.lane),
+                    Entry(
+                        Fastq_gzFile.local_path,
+                        gcs_uri_format="{trial_id}/wes/{cimac_id}/r1_L{lane}.fastq.gz",
+                        process_as={
+                            NGSAssayFiles.r1_object_url: get_property("object_url"),
+                        },
+                    ),
+                    Entry(
+                        Fastq_gzFile.local_path,
+                        gcs_uri_format="{trial_id}/wes/{cimac_id}/r2_L{lane}.fastq.gz",
+                        process_as={
+                            NGSAssayFiles.r2_object_url: get_property("object_url"),
+                        },
+                    ),
+                    Entry(WESRecord.sequencing_date),
+                    Entry(WESRecord.quality_flag),
+                ]
+            },
+        )
+    ],
+    constants={WESUpload.upload_type: "wes", WESUpload.multifile: True,},
+)
+
+WesBamAssay = MetadataTemplate(
+    upload_type="wes",
+    purpose="assay",
+    worksheet_configs=[
+        WorksheetConfig(
+            "WES",
+            [
+                Entry(WESUpload.trial_id, name="protocol identifier"),
+                Entry(WESUpload.assay_creator),
+                Entry(WESUpload.sequencing_protocol),
+                Entry(WESUpload.library_kit),
+                Entry(WESUpload.sequencer_platform),
+                Entry(WESUpload.paired_end_reads),
+                Entry(WESUpload.read_length),
+                Entry(WESUpload.bait_set),
+            ],
+            {
+                "Samples": [
+                    Entry(WESRecord.cimac_id),
+                    Entry(NGSAssayFiles.number),
+                    Entry(
+                        BamFile.local_path,
+                        gcs_uri_format="{trial_id}/wes/{cimac_id}/reads_{number}.bam",
+                        process_as={
+                            NGSAssayFiles.bam_object_url: get_property("object_url"),
+                        },
+                    ),
+                    Entry(WESRecord.sequencing_date),
+                    Entry(WESRecord.quality_flag),
+                ]
+            },
+        )
+    ],
+    constants={WESUpload.upload_type: "wes", WESUpload.multifile: True,},
+)
+
+
+if __name__ == "__main__":
+    WesFastqAssay.write("tests/models/templates/examples/wes_fastq_assay.xlsx")
+    WesBamAssay.write("tests/models/templates/examples/wes_bam_assay.xlsx")

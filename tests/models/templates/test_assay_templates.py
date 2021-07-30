@@ -1,12 +1,15 @@
+from datetime import datetime
 import os.path
 from unittest.mock import MagicMock
 
 from cidc_api.models import (
-    File,
     HandeAssay,
     HandeUpload,
     insert_record_batch,
     Users,
+    WesBamAssay,
+    WesFastqAssay,
+    WESUpload,
     with_default_session,
 )
 from cidc_api.shared import auth
@@ -27,6 +30,7 @@ def test_hande_assay(clean_db, cidc_api, monkeypatch):
 
     with cidc_api.app_context():
         records = HandeAssay.read(os.path.join(EXAMPLE_DIR, "hande_assay.xlsx"))
+        print(records)
         errors = insert_record_batch(records)
         assert len(errors) == 0, "\n".join([str(e) for e in errors])
 
@@ -44,7 +48,7 @@ def test_hande_assay(clean_db, cidc_api, monkeypatch):
             for i in (1, 2):
                 record, image = records[i - 1], images[i - 1]
                 assert record.cimac_id == f"CTTTPP1{i}1.00"
-                assert record.assay_id == entry.id
+                assert record.upload_id == entry.id
                 assert record.trial_id == "test_trial"
                 for k in [
                     "tumor_tissue_percentage",
@@ -66,5 +70,123 @@ def test_hande_assay(clean_db, cidc_api, monkeypatch):
                 assert image.data_format == "hande_image.svs"
 
                 assert record.image.unique_field_values() == image.unique_field_values()
+
+        check_insertion()
+
+
+def test_wes_fastq_assay(clean_db, cidc_api, monkeypatch):
+    mock_get_current_user(monkeypatch)
+    cidc_api = setup_example(cidc_api)
+
+    with cidc_api.app_context():
+        records = WesFastqAssay.read(os.path.join(EXAMPLE_DIR, "wes_fastq_assay.xlsx"))
+        errors = insert_record_batch(records)
+        assert len(errors) == 0, "\n".join([str(e) for e in errors])
+
+        @with_default_session
+        def check_insertion(session):
+            entry = session.query(WESUpload).first()
+
+            assert entry is not None
+            assert entry.trial_id == "test_trial"
+            assert (
+                entry.sequencing_protocol
+                == "Express Somatic Human WES (Deep Coverage) v1.1"
+            )
+            assert entry.library_kit == "Hyper Prep ICE Exome Express: 1.0"
+            assert entry.sequencer_platform == "Illumina - NextSeq 550"
+            assert entry.paired_end_reads == "Paired"
+            assert entry.read_length == 100
+            assert entry.bait_set == "whole_exome_illumina_coding_v1"
+
+            records = [r for r in entry.records]
+            assert len(records) == 2
+            for i in (1, 2):
+                record = records[i - 1]
+                assert record.cimac_id == f"CTTTPP1{i}1.00"
+                assert (
+                    record.sequencing_date
+                    == datetime.strptime("20100101", "%Y%m%d").date()
+                )
+                assert record.quality_flag in (1, 1.0)
+
+                files = [f for f in record.files]
+                for n, file in enumerate(files):
+                    assert file.lane == 1 + n
+                    assert (
+                        file.r1_object_url
+                        == f"test_trial/wes/CTTTPP1{i}1.00/r1_L{1+n}.fastq.gz"
+                    )
+                    assert (
+                        file.r2_object_url
+                        == f"test_trial/wes/CTTTPP1{i}1.00/r2_L{1+n}.fastq.gz"
+                    )
+
+                    assert (
+                        file.r1.local_path
+                        == f"/local/path/to/fwd.1.{1 + i%2}.1"
+                        + ("_2" if n == 1 else "")
+                        + ".fastq.gz"
+                    )
+                    assert (
+                        file.r2.local_path
+                        == f"/local/path/to/rev.1.{1 + i%2}.1"
+                        + ("_2" if n == 1 else "")
+                        + ".fastq.gz"
+                    )
+
+        check_insertion()
+
+
+def test_wes_bam_assay(clean_db, cidc_api, monkeypatch):
+    mock_get_current_user(monkeypatch)
+    cidc_api = setup_example(cidc_api)
+
+    with cidc_api.app_context():
+        records = WesBamAssay.read(os.path.join(EXAMPLE_DIR, "wes_bam_assay.xlsx"))
+        errors = insert_record_batch(records)
+        assert len(errors) == 0, "\n".join([str(e) for e in errors])
+
+        @with_default_session
+        def check_insertion(session):
+            entry = session.query(WESUpload).first()
+
+            assert entry is not None
+            assert entry.trial_id == "test_trial"
+            assert (
+                entry.sequencing_protocol
+                == "Express Somatic Human WES (Deep Coverage) v1.1"
+            )
+            assert entry.library_kit == "Hyper Prep ICE Exome Express: 1.0"
+            assert entry.sequencer_platform == "Illumina - NextSeq 550"
+            assert entry.paired_end_reads == "Paired"
+            assert entry.read_length == 100
+            assert entry.bait_set == "whole_exome_illumina_coding_v1"
+
+            records = [r for r in entry.records]
+            assert len(records) == 2
+            for i in (1, 2):
+                record = records[i - 1]
+                assert record.cimac_id == f"CTTTPP1{i}1.00"
+                assert (
+                    record.sequencing_date
+                    == datetime.strptime("20100101", "%Y%m%d").date()
+                )
+                assert record.quality_flag in (1, 1.0)
+
+                files = [f for f in record.files]
+                for n, file in enumerate(files):
+                    assert file.number == 1 + n
+                    assert (
+                        file.bam_object_url
+                        == f"test_trial/wes/CTTTPP1{i}1.00/reads_{1+n}.bam"
+                    )
+
+                    assert (
+                        file.bam.local_path
+                        == f"gs://local/path/to/fwd.1.{1 + i%2}.1"
+                        + ("_2" if n == 1 else "")
+                        + ".bam"
+                    )
 
         check_insertion()

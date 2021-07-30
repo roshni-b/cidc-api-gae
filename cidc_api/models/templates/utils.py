@@ -1,10 +1,20 @@
-from cidc_api.models.templates.file_metadata import UploadStatus
 from collections import defaultdict
-from typing import List, OrderedDict, Type
+from typing import List, OrderedDict, Set, Type
 
 from sqlalchemy.orm import Session
 
+from .file_metadata import Upload
 from .model_core import MetadataModel, with_default_session
+
+
+def _all_subclasses(cls: Type) -> Set[Type]:
+    return set(cls.__subclasses__()).union(
+        [s for c in cls.__subclasses__() for s in _all_subclasses(c)]
+    )
+
+
+def _all_bases(cls: Type) -> Set[Type]:
+    return set(cls.__bases__).union([s for c in cls.__bases__ for s in _all_bases(c)])
 
 
 def _get_global_insertion_order() -> List[MetadataModel]:
@@ -13,52 +23,66 @@ def _get_global_insertion_order() -> List[MetadataModel]:
     between models. For a given model, all models it depends on are guaranteed to
     appear before it in this list.
     """
-
-    def all_subclasses(cls: Type):
-        return set(cls.__subclasses__()).union(
-            [s for c in cls.__subclasses__() for s in all_subclasses(c)]
-        )
-
-    from .file_metadata import Upload
-
-    models = all_subclasses(MetadataModel)
+    models = _all_subclasses(MetadataModel)
 
     # Build a dictionary mapping table names to model classes -
     # we use this below to look up the model classes associated with
     # a given foreign key.
-    table_to_model = {}
+    table_to_model = defaultdict(list)
     for m in models:
-        if m.__tablename__ not in table_to_model:
-            table_to_model[m.__tablename__] = [m]
-        else:
-            table_to_model[m.__tablename__].append(m)
+        table_to_model[m.__tablename__].append(m)
 
-    # Build two graphs representing foreign-key relationships between models:
-    # - fks_to_parents, mapping models to the set of models they depend on
-    # - parents_to_fks, mapping models to the set of models that depend on them
+    # Build a graph representing foreign-key relationships,
+    # mapping models to the set of models they depend on
+    fks_on_model = defaultdict(set)
     fks_to_parents = defaultdict(set)
-    parent_to_fks = defaultdict(set)
     for model in models:
-        for fk in model.__table__.foreign_keys:
+        fks_on_model[model] = model.__table__.foreign_keys.union(
+            {
+                fk
+                for b in _all_bases(model)
+                if hasattr(b, "__table__")
+                for fk in b.__table__.foreign_keys
+            }
+        )
+        for fk in fks_on_model[model]:
             fk_models = table_to_model.get(fk.column.table.name, [])
             for fk_model in fk_models:
-                parent_to_fks[model].add(fk_model)
-                fks_to_parents[fk_model].add(model)
+                if not issubclass(fk_model, model):
+                    fks_to_parents[model].add(fk_model)
+
+                # special handling to make sure all Upload subclasses get merged earlier
+                # class inheritance will take care of relations within Upload subclasses
+                ## created to prevent Upload from being created after relevant Files that need upload_id
+                if issubclass(model, Upload) and not issubclass(fk_model, Upload):
+                    for c in _all_subclasses(Upload):
+                        if c is not fk_model and not issubclass(fk_model, c):
+                            fks_to_parents[c].add(fk_model)
+
+                if issubclass(fk_model, Upload) and not issubclass(model, Upload):
+                    for c in _all_subclasses(Upload):
+                        if c is not model and not issubclass(c, model):
+                            fks_to_parents[model].add(c)
 
     # Topologically sort the dependency graph to produce a valid insertion order
     # using Kahn's algorithm: https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm
     ordered_models = []
-    depless_models = set(
-        model for model in models if len(model.__table__.foreign_keys) == 0
-    )
+    depless_models = set(model for model in models if len(fks_to_parents[model]) == 0)
     while len(depless_models) > 0:
-        model = depless_models.pop()
-        ordered_models.append(model)
-        for fk_model in fks_to_parents[model]:
-            fks = parent_to_fks[fk_model]
-            fks.remove(model)
-            if len(fks) == 0:
-                depless_models.add(fk_model)
+        adding = depless_models.pop()
+        ordered_models.append(adding)
+
+        for model, fk_models in fks_to_parents.items():
+            if adding in fk_models:
+                fks_to_parents[model].remove(adding)
+
+                if len(fks_to_parents[model]) == 0:
+                    depless_models.add(model)
+
+        fks_to_parents.pop(adding)
+
+    if len(fks_to_parents) > 0:
+        raise Exception(f"Cannot figure out how to insert: {fks_to_parents}")
 
     return ordered_models
 
@@ -85,7 +109,7 @@ def insert_record_batch(
         fk_to_check.extend(
             [
                 fk
-                for b in model.__bases__
+                for b in _all_bases(model)
                 if hasattr(b, "__table__")
                 for fk in b.__table__.foreign_keys
             ]
@@ -97,8 +121,14 @@ def insert_record_batch(
             if len(v) == 1
             and fk.column.table.name
             in [k.__tablename__]
-            + [b.__tablename__ for b in k.__bases__ if hasattr(b, "__tablename__")]
+            + [b.__tablename__ for b in _all_bases(k) if hasattr(b, "__tablename__")]
         }.items():
+            print(
+                "setting",
+                fk.parent.name,
+                "=",
+                getattr(ordered_records[target_class][0], fk.column.name),
+            )
             for n in range(len(records)):
                 setattr(
                     records[n],

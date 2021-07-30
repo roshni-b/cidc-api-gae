@@ -3,7 +3,7 @@ import os.path
 import pytest
 
 from cidc_api.models import (
-    ClinicalDataTemplate,
+    # ClinicalDataTemplate,
     insert_record_batch,
     Participant,
     PBMCTemplate,
@@ -16,9 +16,9 @@ from .examples import EXAMPLE_DIR
 from .utils import set_up_example_trial
 
 
-def test_clinical_data_template(cidc_api):
-    with cidc_api.app_context():
-        ClinicalDataTemplate.write("clinical_data_manifest.xlsx")
+# def test_clinical_data_template(cidc_api):
+#     with cidc_api.app_context():
+#         ClinicalDataTemplate.write("clinical_data_manifest.xlsx")
 
 
 def test_pbmc_template(clean_db, cidc_api, tmp_path):

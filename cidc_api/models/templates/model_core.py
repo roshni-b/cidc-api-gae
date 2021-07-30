@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, Tuple
 from flask import current_app
 from sqlalchemy.orm import Session
 
-from cidc_api.config.db import BaseModel
+from ...config.db import BaseModel
 
 # some simple functions to handle common process_as cases
 # the parameters for all process_as functions are
@@ -54,8 +54,10 @@ class MetadataModel(BaseModel):
         Returns a dict of Column: value for any primary key column.
         Special value None if all of the pk columns are None
         """
+        from .utils import _all_bases
+
         columns_to_check = [c for c in self.__table__.columns]
-        for c in type(self).__bases__:
+        for c in _all_bases(type(self)):
             if hasattr(c, "__table__"):
                 columns_to_check.extend(c.__table__.columns)
 
@@ -75,8 +77,10 @@ class MetadataModel(BaseModel):
         Returns a tuple of all values that are uniquely constrained (pk or unique).
         Special value None if all of the unique columns are None
         """
+        from .utils import _all_bases
+
         columns_to_check = [c for c in self.__table__.columns]
-        for c in type(self).__bases__:
+        for c in _all_bases(type(self)):
             if hasattr(c, "__table__"):
                 columns_to_check.extend(c.__table__.columns)
 
@@ -100,20 +104,49 @@ class MetadataModel(BaseModel):
             )
 
         # also need to handle columns for all superclasses
+        from .utils import _all_bases
+
         for column in self.__table__.columns + [
             c
-            for b in type(self).__bases__
+            for b in _all_bases(type(self))
             if hasattr(b, "__table__")
             for c in b.__table__.columns
         ]:
-            current = getattr(self, column.name)
-            incoming = getattr(other, column.name)
-            if current is None:
-                setattr(self, column.name, incoming)
-            elif incoming is not None and current != incoming:
-                raise Exception(
-                    f"found conflicting values for {self.__tablename__}.{column.name}: {current}!={other}"
-                )
+            if hasattr(self, column.name):
+                current = getattr(self, column.name)
+                incoming = getattr(other, column.name)
+                if current is None:
+                    setattr(self, column.name, incoming)
+                elif incoming is not None and current != incoming:
+                    if hasattr(type(self), "__table__"):
+                        print(
+                            {
+                                c.name: getattr(self, c.name)
+                                for c in type(self).__table__.columns
+                                + [
+                                    c
+                                    for b in _all_bases(type(self))
+                                    if hasattr(b, "__table__")
+                                    for c in b.__table__.columns
+                                ]
+                            }
+                        )
+                    if hasattr(type(other), "__table__"):
+                        print(
+                            {
+                                c.name: getattr(other, c.name)
+                                for c in type(other).__table__.columns
+                                + [
+                                    c
+                                    for b in _all_bases(type(other))
+                                    if hasattr(b, "__table__")
+                                    for c in b.__table__.columns
+                                ]
+                            }
+                        )
+                    raise Exception(
+                        f"found conflicting values for {self.__tablename__}.{column.name}: {current}!={other}"
+                    )
 
     @classmethod
     @with_default_session

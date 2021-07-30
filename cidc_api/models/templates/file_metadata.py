@@ -1,3 +1,4 @@
+from flask import current_app
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
@@ -9,12 +10,14 @@ from sqlalchemy import (
     Integer,
     String,
     text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
 
 from .model_core import MetadataModel
-from .trial_metadata import ClinicalTrial
-from ..models import Users
+from .trial_metadata import ClinicalTrial, Sample
+from ..models import Users, with_default_session
 
 
 ArtifactCreator = Enum(
@@ -111,6 +114,127 @@ class Upload(MetadataModel):
         super().__init__(**kwargs)
 
 
+class NGSUpload(Upload):
+    __tablename__ = "ngs_uploads"
+
+    id = Column(
+        Integer,
+        autoincrement=True,
+        primary_key=True,
+        doc="A unique ID to identify this upload.",
+    )
+    trial_id = Column(
+        String, primary_key=True,  # both True allows for use as multi Foreign Key
+    )
+    sequencer_platform = Column(
+        Enum(
+            "Illumina - HiSeq 2500",
+            "Illumina - HiSeq 3000",
+            "Illumina - NextSeq 550",
+            "Illumina - HiSeq 4000",
+            "Illumina - NovaSeq 6000",
+            "MiSeq",
+            name="sequencer_platform_enum",
+        ),
+        doc="Sequencer Model, e.g. HiSeq 2500, NextSeq, NovaSeq.",
+    )
+    library_kit = Column(
+        Enum(
+            "Hyper Prep ICE Exome Express: 1.0",
+            "KAPA HyperPrep",
+            "IDT duplex UMI adapters",
+            "TWIST",
+            name="library_kit_enum",
+        ),
+        doc="The library construction kit.",
+    )
+    paired_end_reads = Column(
+        Enum("Paired", "Single", name="paired_end_reads_enum"),
+        doc="Indicates if the sequencing was performed paired or single ended.",
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint([id, trial_id], [Upload.id, Upload.trial_id]),
+    )
+
+    records = relationship(
+        "NGSAssayFiles", back_populates="upload", sync_backref=False, viewonly=True
+    )
+
+    __mapper_args__ = {"polymorphic_identity": "ngs_base"}
+
+
+class NGSAssayFiles(MetadataModel):
+    __tablename__ = "ngs_assay_file_collections"
+    id = Column(
+        Integer,
+        autoincrement=True,
+        primary_key=True,
+        doc="A unique ID to identify this upload.",
+    )
+
+    upload_id = Column(Integer, nullable=False)
+    cimac_id = Column(String, nullable=False)
+    trial_id = Column(String, nullable=False)
+
+    r1_object_url = Column(String, doc="Fastq file for the first fragment.",)
+    r2_object_url = Column(String, doc="Fastq file for the second fragment.",)
+    lane = Column(Integer, doc="The lane number from which the reads were generated.")
+
+    bam_object_url = Column(String, doc="Bam file",)
+    number = Column(
+        Integer,
+        doc="An arbitrary number assigned to identify different otherwise equivalent replicates.",
+    )
+
+    upload = relationship(
+        NGSUpload, back_populates="records", sync_backref=False, viewonly=True
+    )
+    __table_args__ = (
+        ForeignKeyConstraint([trial_id, upload_id], [NGSUpload.trial_id, NGSUpload.id]),
+        ForeignKeyConstraint([trial_id, cimac_id], [Sample.trial_id, Sample.cimac_id]),
+        CheckConstraint(
+            "(r1_object_url is not null and r2_object_url is not null) or bam_object_url is not null"
+        ),
+        ForeignKeyConstraint(
+            [trial_id, upload_id, r1_object_url],
+            ["files.trial_id", "files.upload_id", "files.object_url"],
+        ),
+        ForeignKeyConstraint(
+            [trial_id, upload_id, r2_object_url],
+            ["files.trial_id", "files.upload_id", "files.object_url"],
+        ),
+        ForeignKeyConstraint(
+            [trial_id, upload_id, bam_object_url],
+            ["files.trial_id", "files.upload_id", "files.object_url"],
+        ),
+    )
+
+    @classmethod
+    @with_default_session
+    def get_by_id(cls, upload_id, cimac_id, trial_id, session):
+        """While a primary key needs to be unique, we want there to be multiple records returned given the ids."""
+        with current_app.app_context():
+            ret = session.query(cls).filter(
+                cls.upload_id == upload_id,
+                cls.cimac_id == cimac_id,
+                cls.trial_id == trial_id,
+            )
+        return ret
+
+    @property
+    def r1(self):
+        return Fastq_gzFile.get_by_id(self.r1_object_url)
+
+    @property
+    def r2(self):
+        return Fastq_gzFile.get_by_id(self.r2_object_url)
+
+    @property
+    def bam(self):
+        return BamFile.get_by_id(self.bam_object_url)
+
+
 class File(MetadataModel):
     __tablename__ = "files"
     object_url = Column(String, primary_key=True)
@@ -147,11 +271,13 @@ class File(MetadataModel):
 
     __table_args__ = (
         ForeignKeyConstraint([trial_id, upload_id], [Upload.trial_id, Upload.id],),
+        UniqueConstraint(trial_id, upload_id, object_url),
     )
     __mapper_args__ = {"polymorphic_on": data_format, "polymorphic_identity": "base"}
 
 
 # As the subclasses below do NOT have __tablename__ defined
+# # except for file combination at the bottom
 # they will all be included in `files` with any subclass-specific
 # columns being NULL for any other object.
 

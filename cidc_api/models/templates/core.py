@@ -1,3 +1,4 @@
+from cidc_api.models.templates.assay_metadata import WESUpload
 import datetime
 from collections import defaultdict, OrderedDict
 from enum import Enum
@@ -11,8 +12,7 @@ import openpyxl
 from sqlalchemy import Column, Enum as SqlEnum
 
 from .model_core import MetadataModel
-from .file_metadata import File
-from .utils import _get_global_insertion_order
+from .utils import _get_global_insertion_order, _all_bases
 
 MODEL_INSERTION_ORDER = _get_global_insertion_order()
 
@@ -36,7 +36,7 @@ class Entry:
       process_as: optional dictionary mapping column attributes to data processing function.
 
     TO IMPLEMENT:
-      encrypt: whether the spreadsheet value should be encrypted before storage.
+      encrypt: whether the spreadsheet value should be encrypted before storage. 
     """
 
     def __init__(
@@ -324,7 +324,7 @@ class MetadataTemplate:
                     [
                         kwargs.update(v)
                         for k, v in model_groups.items()
-                        if k in model.__bases__
+                        if k in _all_bases(model)
                     ]
                     model_instances.append(model(**kwargs))
 
@@ -351,20 +351,20 @@ class MetadataTemplate:
             fk_to_check.extend(
                 [
                     fk
-                    for b in model.__bases__
+                    for b in _all_bases(model)
                     if hasattr(b, "__table__")
                     for fk in b.__table__.foreign_keys
                 ]
             )
-            columns_to_set_later_by_fk = [
-                fk.parent
-                for k, v in deduped_instances.items()
-                for fk in fk_to_check
-                if len(v) == 1
-                and fk.column.table.name
-                in [k.__tablename__]
-                + [b.__tablename__ for b in k.__bases__ if hasattr(b, "__tablename__")]
-            ]
+            columns_to_set_later_by_fk = []
+            for k, v in deduped_instances.items():
+                for fk in fk_to_check:
+                    if len(v) == 1 and fk.column.table.name in [k.__tablename__] + [
+                        b.__tablename__
+                        for b in _all_bases(k)
+                        if hasattr(b, "__tablename__")
+                    ]:
+                        columns_to_set_later_by_fk.append(fk.parent)
 
             # special value None for all(unique_values is None)
             broad_instances = groups.pop(None, [])
@@ -406,7 +406,7 @@ class MetadataTemplate:
         # now order the models for insertion based on the calculated order
         ordered_instances: OrderedDict_Type[Type, List[MetadataModel]] = OrderedDict()
         for next_model in MODEL_INSERTION_ORDER:
-            next_instances = deduped_instances.get(next_model)
+            next_instances = deduped_instances.pop(next_model, None)
             if next_instances:
                 ordered_instances[next_model] = next_instances
 
