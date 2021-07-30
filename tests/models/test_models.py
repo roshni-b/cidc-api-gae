@@ -608,6 +608,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         key=sorter,
     )
     assert received == expected
+    assert all("misc_data" not in entry for entry in received)
 
 
 @db_test

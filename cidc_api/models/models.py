@@ -1229,7 +1229,7 @@ class TrialMetadata(CommonColumns):
                 trial_metadata,
                 jsonb_each(metadata_json->'assays') assays,
                 jsonb_array_elements(value) batches
-            where key not in ('olink', 'nanostring', 'elisa', 'cytof_e4412', 'wes')
+            where key not in ('olink', 'nanostring', 'elisa', 'cytof_e4412', 'wes', 'misc_data')
         """
 
         # Compute the number of samples associated with nanostring uploads.

@@ -30,9 +30,10 @@ def get_token():
             datetime.now(),
         )
 
-        # res definition from https://developer.okta.com/docs/reference/api/oidc/#response-properties-2
-        if "error" in res:
-            raise Exception(res["error"] + ": " + res.get("error_description"))
+        # res definition from https://developer.okta.com/docs/reference/api/oidc/#response-example-error-7
+        if "errorCode" in res:
+            raise Exception(res["errorCode"] + ": " + res.get("errorSummary"))
+
         _TOKEN = res["access_token"]
         _TOKEN_EXPIRY = time + timedelta(seconds=res["expires_in"])
 

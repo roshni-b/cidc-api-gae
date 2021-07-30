@@ -242,7 +242,7 @@ assay_facets: Facets = {
                 "/wes_tumor_only/analysis/maf_tnscope_output.maf",
                 "/wes_tumor_only/analysis/vcf_gz_tnscope_filter.vcf.gz",
                 "/wes_tumor_only/analysis/maf_tnscope_filter.maf",
-                "/wes_tumor_only/analysis/tnscope_exons.vcf.gz"
+                "/wes_tumor_only/analysis/tnscope_exons.vcf.gz",
                 "/wes_tumor_only/analysis/vcf_compare.txt",
             ]
         ),
@@ -386,12 +386,11 @@ assay_facets: Facets = {
         ),
         "Misc.": FacetConfig(["/tcr/SampleSheet.csv" "/tcr_analysis/summary_info.csv"]),
         "Analysis Data": FacetConfig(
-            [
-                "/tcr_analysis/tra_clone.csv",
-                "/tcr_analysis/trb_clone.csv",
-                "/tcr_analysis/report_trial.tar.gz",
-            ],
-            "Data files and Report from TCRseq analysis indicating TRA & TRB clones' UMI counts",
+            ["/tcr_analysis/tra_clone.csv", "/tcr_analysis/trb_clone.csv",],
+            "Data files indicating TRA & TRB clones' UMI counts",
+        ),
+        "Reports": FacetConfig(
+            ["/tcr_analysis/report_trial.tar.gz",], "Report from TCRseq analysis",
         ),
     },
     "ELISA": {"Data": FacetConfig(["/elisa/assay.xlsx"])},
