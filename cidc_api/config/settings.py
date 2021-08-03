@@ -58,7 +58,7 @@ if not environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not TESTING:
     with open(creds_file_name, "w") as creds_file:
         creds_file.write(secret_manager.get("APP_ENGINE_CREDENTIALS"))
     environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_file_name
-    
+
 ### Configure prism encrypt ###
 if not TESTING:
     secret_manager = get_secrets_manager()
