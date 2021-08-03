@@ -44,6 +44,21 @@ for family in ["manifests", "metadata", "analyses"]:
     family_dir = path.join(TEMPLATES_DIR, family)
     mkdir(family_dir)
 
+# Download the credentials file to a temporary file,
+# then set the GOOGLE_APPLICATION_CREDENTIALS env variable
+# to its path.
+#
+# NOTE: doing this shouldn't be necessary from within App Engine,
+# but for some reason, google.cloud.storage.Blob.generate_signed_url
+# fails with a credentials-related error unless this is explicitly
+# set.
+if not environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not TESTING:
+    secret_manager = get_secrets_manager()
+    _, creds_file_name = tempfile.mkstemp(".json")
+    with open(creds_file_name, "w") as creds_file:
+        creds_file.write(secret_manager.get("APP_ENGINE_CREDENTIALS"))
+    environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_file_name
+    
 ### Configure prism encrypt ###
 if not TESTING:
     secret_manager = get_secrets_manager()
@@ -84,21 +99,6 @@ GOOGLE_MAX_DOWNLOAD_PERMISSIONS = 20
 ### File paths ###
 this_directory = path.dirname(path.abspath(__file__))
 MIGRATIONS_PATH = path.join(this_directory, "..", "..", "migrations")
-
-# Download the credentials file to a temporary file,
-# then set the GOOGLE_APPLICATION_CREDENTIALS env variable
-# to its path.
-#
-# NOTE: doing this shouldn't be necessary from within App Engine,
-# but for some reason, google.cloud.storage.Blob.generate_signed_url
-# fails with a credentials-related error unless this is explicitly
-# set.
-if not environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not TESTING:
-    secret_manager = get_secrets_manager()
-    _, creds_file_name = tempfile.mkstemp(".json")
-    with open(creds_file_name, "w") as creds_file:
-        creds_file.write(secret_manager.get("APP_ENGINE_CREDENTIALS"))
-    environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_file_name
 
 # CSMS Integration Values
 CSMS_BASE_URL = environ.get("CSMS_BASE_URL")
