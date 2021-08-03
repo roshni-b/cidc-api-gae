@@ -627,7 +627,7 @@ details_dict = {
     ),
     # Miscellaneous Data
     "/misc_data/": FileDetails(
-        "miscellaneous", "Unharmonized, one-off, or not-yet-supported data.", ""
+        "source", "Unharmonized, one-off, or not-yet-supported data.", ""
     ),
     # TCR
     "/tcr/replicate_/r1.fastq.gz": FileDetails("source", "", ""),
