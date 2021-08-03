@@ -1,4 +1,3 @@
-from cidc_api.models.templates.assay_metadata import WESUpload
 import os
 import importlib
 
