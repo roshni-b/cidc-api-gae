@@ -123,12 +123,6 @@ def insert_record_batch(
             in [k.__tablename__]
             + [b.__tablename__ for b in _all_bases(k) if hasattr(b, "__tablename__")]
         }.items():
-            print(
-                "setting",
-                fk.parent.name,
-                "=",
-                getattr(ordered_records[target_class][0], fk.column.name),
-            )
             for n in range(len(records)):
                 setattr(
                     records[n],
@@ -142,7 +136,6 @@ def insert_record_batch(
                 record = session.merge(record)
                 ordered_records[model][n] = record
             except Exception as e:
-                print(e)
                 errors.append(e)
 
         # flush these records to generate db-derived values

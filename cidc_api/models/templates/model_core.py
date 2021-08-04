@@ -118,32 +118,6 @@ class MetadataModel(BaseModel):
                 if current is None:
                     setattr(self, column.name, incoming)
                 elif incoming is not None and current != incoming:
-                    if hasattr(type(self), "__table__"):
-                        print(
-                            {
-                                c.name: getattr(self, c.name)
-                                for c in type(self).__table__.columns
-                                + [
-                                    c
-                                    for b in _all_bases(type(self))
-                                    if hasattr(b, "__table__")
-                                    for c in b.__table__.columns
-                                ]
-                            }
-                        )
-                    if hasattr(type(other), "__table__"):
-                        print(
-                            {
-                                c.name: getattr(other, c.name)
-                                for c in type(other).__table__.columns
-                                + [
-                                    c
-                                    for b in _all_bases(type(other))
-                                    if hasattr(b, "__table__")
-                                    for c in b.__table__.columns
-                                ]
-                            }
-                        )
                     raise Exception(
                         f"found conflicting values for {self.__tablename__}.{column.name}: {current}!={other}"
                     )
