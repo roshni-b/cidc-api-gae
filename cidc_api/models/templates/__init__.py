@@ -1,9 +1,10 @@
-from .assay_templates import *
-from .manifest_templates import *
-
 from .trial_metadata import *
 from .file_metadata import *
 from .assay_metadata import *
+
+# Templates have to be imported after the tables they reference
+from .assay_templates import *
+from .manifest_templates import *
 
 from .model_core import *
 from .core import *
