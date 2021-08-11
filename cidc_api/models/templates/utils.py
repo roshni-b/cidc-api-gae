@@ -7,14 +7,14 @@ from .file_metadata import Upload
 from .model_core import MetadataModel, with_default_session
 
 
+def _all_bases(cls: Type) -> Set[Type]:
+    return set(cls.__bases__).union([s for c in cls.__bases__ for s in _all_bases(c)])
+
+
 def _all_subclasses(cls: Type) -> Set[Type]:
     return set(cls.__subclasses__()).union(
         [s for c in cls.__subclasses__() for s in _all_subclasses(c)]
     )
-
-
-def _all_bases(cls: Type) -> Set[Type]:
-    return set(cls.__bases__).union([s for c in cls.__bases__ for s in _all_bases(c)])
 
 
 def _get_global_insertion_order() -> List[MetadataModel]:
@@ -149,3 +149,16 @@ def insert_record_batch(
     session.close()
 
     return errors
+
+
+def get_full_template_name(template: "MetadataTemplate"):
+    """Returns a fully qualified name of a metadata template in the form '<assay_name>_<purpose>'
+    where <assay_name> is snake_case and <purpose> in ['assay', 'analysis', 'manifest']
+    """
+    temp_name = template.__name__  # as ABBREVCamelCasePurpose
+    return "".join(
+        [
+            "_" + i if i != j and n else i
+            for n, (i, j) in enumerate(zip(temp_name, temp_name.lower()))
+        ]
+    ).lower()  # as abbrev_camel_case_purpose

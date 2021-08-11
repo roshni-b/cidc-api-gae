@@ -1,4 +1,3 @@
-from cidc_api.models.models import with_default_session
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -11,9 +10,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
+from .file_metadata import ImageFile, NGSAssayFiles, NGSUpload, Upload
 from .model_core import MetadataModel
 from .trial_metadata import Sample
-from .file_metadata import ImageFile, NGSAssayFiles, NGSUpload, Upload
 
 
 class HandeUpload(Upload):

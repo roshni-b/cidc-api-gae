@@ -1,18 +1,27 @@
-from cidc_api.models.templates.assay_metadata import WESUpload
 import datetime
 from collections import defaultdict, OrderedDict
 from enum import Enum
 from warnings import filterwarnings
-from typing import Optional, Dict, Callable, Any, List, Tuple, Type
-from typing import OrderedDict as OrderedDict_Type
+from typing import (
+    Any,
+    BinaryIO,
+    Dict,
+    Callable,
+    List,
+    Optional,
+    OrderedDict as OrderedDict_Type,
+    Tuple,
+    Type,
+    Union,
+)
 
-import xlsxwriter
-from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
 import openpyxl
 from sqlalchemy import Column, Enum as SqlEnum
+import xlsxwriter
+from xlsxwriter.utility import xl_rowcol_to_cell, xl_range
 
 from .model_core import MetadataModel
-from .utils import _get_global_insertion_order, _all_bases
+from .utils import _all_bases, _get_global_insertion_order, insert_record_batch
 
 MODEL_INSERTION_ORDER = _get_global_insertion_order()
 
@@ -253,7 +262,16 @@ class MetadataTemplate:
         self.worksheet_configs = worksheet_configs
         self.constants = constants
 
-    def read(self, filename: str) -> OrderedDict_Type[Type, List[MetadataModel]]:
+    def read_and_insert(self, filename: Union[str, BinaryIO]):
+        """
+        Extract the models from a populated instance of this template and try to
+        insert them, rolling back and returning a list of errors if any are encountered.
+        """
+        return insert_record_batch(self.read(filename))
+
+    def read(
+        self, filename: Union[str, BinaryIO]
+    ) -> OrderedDict_Type[Type, List[MetadataModel]]:
         """
         Extract a list of SQLAlchemy models in insertion order from a populated
         instance of this template.

@@ -1,10 +1,9 @@
+from sqlalchemy import Column
 from typing import Any, Dict, List
 
-from sqlalchemy import Column
-from .core import MetadataTemplate, WorksheetConfig, Entry
+from .core import Entry, MetadataTemplate, WorksheetConfig
 from .model_core import cimac_id_to_cimac_participant_id, identity
 
-### Template example ###
 from .trial_metadata import Participant, Sample, Shipment
 
 # from .extra_metadata import ClinicalData
@@ -162,7 +161,7 @@ def _BaseManifestTemplate(
     )
 
 
-PBMCTemplate = _BaseManifestTemplate(
+PBMCManifest = _BaseManifestTemplate(
     upload_type="pbmc",
     filled_by_biorepository=[
         Entry(Sample.box_number),
@@ -190,7 +189,7 @@ PBMCTemplate = _BaseManifestTemplate(
     ],
 )
 
-TissueSlideTemplate = _BaseManifestTemplate(
+TissueSlideManifest = _BaseManifestTemplate(
     upload_type="tissue_slide",
     filled_by_biorepository=[
         Entry(Sample.box_number),

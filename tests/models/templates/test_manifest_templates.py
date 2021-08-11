@@ -6,10 +6,10 @@ from cidc_api.models import (
     # ClinicalDataTemplate,
     insert_record_batch,
     Participant,
-    PBMCTemplate,
+    PBMCManifest,
     Sample,
     Shipment,
-    TissueSlideTemplate,
+    TissueSlideManifest,
 )
 from .examples import EXAMPLE_DIR
 from .utils import set_up_example_trial
@@ -24,18 +24,18 @@ def test_pbmc_template(clean_db, cidc_api, tmp_path):
     # test write and empty read
     f = tmp_path / "pbmc_template.xlsx"
     with cidc_api.app_context():
-        PBMCTemplate.write(f)
+        PBMCManifest.write(f)
 
         # empty read test shows that format is correct
         # and confirms that empty templates fail
         with pytest.raises(Exception, match="required value protocol identifier"):
-            PBMCTemplate.read(f)
+            PBMCManifest.read(f)
 
     # test successful read
     with cidc_api.app_context():
         set_up_example_trial(clean_db, cidc_api)
 
-        records = PBMCTemplate.read(os.path.join(EXAMPLE_DIR, "pbmc_manifest.xlsx"))
+        records = PBMCManifest.read(os.path.join(EXAMPLE_DIR, "pbmc_manifest.xlsx"))
         assert len(records) > 0
         errors = insert_record_batch(records)
         assert len(errors) == 0, "\n".join(str(e) for e in errors)
@@ -158,18 +158,18 @@ def test_tissue_slide_template(clean_db, cidc_api, tmp_path):
     # test write and empty read
     f = tmp_path / "tissue_slide_template.xlsx"
     with cidc_api.app_context():
-        TissueSlideTemplate.write(f)
+        TissueSlideManifest.write(f)
 
         # empty read test shows that format is correct
         # and confirms that empty templates fail
         with pytest.raises(Exception, match="required value protocol identifier"):
-            TissueSlideTemplate.read(f)
+            TissueSlideManifest.read(f)
 
     # test successful read
     with cidc_api.app_context():
         set_up_example_trial(clean_db, cidc_api)
 
-        records = TissueSlideTemplate.read(
+        records = TissueSlideManifest.read(
             os.path.join(EXAMPLE_DIR, "tissue_slide_manifest.xlsx")
         )
         assert len(records) > 0

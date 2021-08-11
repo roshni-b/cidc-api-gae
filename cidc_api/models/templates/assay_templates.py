@@ -1,14 +1,14 @@
-from cidc_api.models.templates.core import MetadataTemplate, WorksheetConfig, Entry
-from cidc_api.models.templates.model_core import get_property
+from .core import Entry, MetadataTemplate, WorksheetConfig
+from .model_core import get_property
 
-from cidc_api.models.templates.assay_metadata import (
+from .assay_metadata import (
     HandeImage,
     HandeRecord,
     HandeUpload,
     WESRecord,
     WESUpload,
 )
-from cidc_api.models.templates.file_metadata import (
+from .file_metadata import (
     BamFile,
     Fastq_gzFile,
     NGSAssayFiles,

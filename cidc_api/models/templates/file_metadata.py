@@ -15,9 +15,10 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
+from ..models import Users, with_default_session
+
 from .model_core import MetadataModel
 from .trial_metadata import ClinicalTrial, Sample
-from ..models import Users, with_default_session
 
 
 ArtifactCreator = Enum(
