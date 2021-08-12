@@ -1416,7 +1416,13 @@ def test_user_get_data_access_report(clean_db, monkeypatch):
             else:
                 if t == trial:
                     assert set(user_df.permissions).issubset(
-                        ["wes_bam,ihc", "ihc,wes_bam", "olink"]
+                        ["wes_bam,ihc", "ihc,wes_bam"]
                     )
                 else:
                     assert set(["*"]) == set(user_df.permissions)
+
+    assert set(
+        result_df[result_df.trial_id == "*"][
+            result_df.email == cimac_user.email
+        ].permissions
+    ) == set(["olink"])
