@@ -107,7 +107,6 @@ assay_facets: Facets = {
             ],
             "Keys for mapping from respective enumeration indices to the cell labels",
         ),
-        "Intermediates": FacetConfig(["/cytof_10021_9204/intermediate.fcs"]),
     },
     "WES": {
         "Source": FacetConfig(

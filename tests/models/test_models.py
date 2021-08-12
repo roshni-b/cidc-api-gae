@@ -492,23 +492,13 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "protocol_identifier": "tm1",
         "participants": [{"samples": []}],
         "assays": {
-            "cytof_10021_9204": [
+            "cytof": [
                 {
                     "records": cytof_record_with_output * 2,
                     "excluded_samples": records * 2,
                 },
                 {"records": records * 2},
                 {"records": records},
-            ],
-            "cytof_e4412": [
-                {
-                    "participants": [
-                        {"samples": records},
-                        {"samples": cytof_record_with_output * 5},
-                        {"samples": records * 2},
-                    ],
-                    "excluded_samples": records,
-                }
             ],
             "olink": {
                 "batches": [
@@ -552,7 +542,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         [
             {
                 "expected_assays": [],
-                "cytof": 13.0,
+                "cytof": 5.0,
                 "olink": 8.0,
                 "trial_id": "tm2",
                 "file_size_bytes": 10,
@@ -564,7 +554,6 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "elisa": 0.0,
                 "h&e": 0.0,
                 "mif": 0.0,
-                "cytof_analysis": 7.0,
                 "rna_level1_analysis": 10.0,
                 "tcr_analysis": 6.0,
                 "wes_analysis": 0.0,
@@ -574,7 +563,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "excluded_samples": {
                     "tcr_analysis": records * 4,
                     "rna_level1_analysis": records * 2,
-                    "cytof_analysis": records * 3,
+                    "cytof_analysis": records * 2,
                 },
             },
             {
@@ -591,7 +580,6 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "nanostring": 3.0,
                 "h&e": 5.0,
                 "mif": 5.0,
-                "cytof_analysis": 0.0,
                 "rna_level1_analysis": 0.0,
                 "tcr_analysis": 0.0,
                 "wes_analysis": 5.0,
@@ -606,6 +594,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         ],
         key=sorter,
     )
+    print(received, "\n\n", expected)
     assert received == expected
     assert all("misc_data" not in entry for entry in received)
 

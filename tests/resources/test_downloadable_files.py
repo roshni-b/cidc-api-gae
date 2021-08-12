@@ -35,7 +35,7 @@ def setup_user(cidc_api, monkeypatch) -> int:
 
 trial_id_1 = "test-trial-1"
 trial_id_2 = "test-trial-2"
-upload_types = ["wes_bam", "cytof_10021_9204"]
+upload_types = ["wes_bam", "cytof"]
 
 
 def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
@@ -65,7 +65,7 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
     cytof_file = make_file(
         trial_id_2,
         "cytof/.../analysis.zip",
-        "cytof_10021_9204",
+        "cytof",
         "/cytof_analysis/analysis.zip",
     )
 
