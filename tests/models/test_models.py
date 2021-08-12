@@ -1363,6 +1363,8 @@ def test_user_get_data_access_report(clean_db, monkeypatch):
 
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
+    trial2 = TrialMetadata(trial_id=TRIAL_ID + "2", metadata_json=METADATA)
+    trial2.insert()
 
     upload_types = ["wes_bam", "ihc"]
 
@@ -1377,8 +1379,25 @@ def test_user_get_data_access_report(clean_db, monkeypatch):
                 upload_type=t,
             ).insert()
 
+    # Add a cross-assay permission
+    Permissions(
+        granted_to_user=cimac_user.id,
+        granted_by_user=admin_user.id,
+        trial_id=trial2.trial_id,
+        upload_type=None,
+    ).insert()
+
+    # Add a cross-trial permission as well
+    Permissions(
+        granted_to_user=cimac_user.id,
+        granted_by_user=admin_user.id,
+        trial_id=None,
+        upload_type="olink",
+    ).insert()
+
     bio = io.BytesIO()
     result_df = Users.get_data_access_report(bio)
+    print(result_df)
     bio.seek(0)
 
     # Make sure bytes were written to the BytesIO instance
@@ -1388,11 +1407,19 @@ def test_user_get_data_access_report(clean_db, monkeypatch):
     assert set(result_df.columns) == set(
         ["email", "role", "organization", "trial_id", "permissions"]
     )
-    for user in [admin_user, cimac_user]:
-        user_df = result_df[result_df.email == user.email]
-        assert set([user.role]) == set(user_df.role)
-        assert set([user.organization]) == set(user_df.organization)
-        if user == admin_user:
-            assert set(["*"]) == set(user_df.permissions)
-        else:
-            assert set(user_df.permissions).issubset(["wes_bam,ihc", "ihc,wes_bam"])
+    for t in [trial, trial2]:
+        for user in [admin_user, cimac_user]:
+            user_df = result_df[result_df.trial_id == t.trial_id][
+                result_df.email == user.email
+            ]
+            assert set([user.role]) == set(user_df.role)
+            assert set([user.organization]) == set(user_df.organization)
+            if user == admin_user:
+                assert set(["*"]) == set(user_df.permissions)
+            else:
+                if t == trial:
+                    assert set(user_df.permissions).issubset(
+                        ["wes_bam,ihc", "ihc,wes_bam", "olink"]
+                    )
+                else:
+                    assert set(["*"]) == set(user_df.permissions)
