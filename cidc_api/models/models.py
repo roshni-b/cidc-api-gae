@@ -424,10 +424,14 @@ class Users(CommonColumns):
 
         df = pd.DataFrame(
             query, columns=["email", "organization", "role", "trial_id", "permissions"]
-        )
+        ).fillna("*")
 
         with pd.ExcelWriter(io) as writer:
-            for trial_id, trial_group in df.groupby("trial_id"):
+            for trial_id in df["trial_id"].unique():
+                if trial_id == "*":
+                    continue
+
+                trial_group = df[(df["trial_id"] == trial_id) | (df["trial_id"] == "*")]
                 trial_group.to_excel(writer, sheet_name=trial_id, index=False)
 
         return df
@@ -1220,7 +1224,6 @@ class TrialMetadata(CommonColumns):
             select
                 trial_id,
                 case
-                    when key = 'cytof_10021_9204' then 'cytof'
                     when key = 'hande' then 'h&e'
                     else key
                 end as key,
@@ -1229,7 +1232,7 @@ class TrialMetadata(CommonColumns):
                 trial_metadata,
                 jsonb_each(metadata_json->'assays') assays,
                 jsonb_array_elements(value) batches
-            where key not in ('olink', 'nanostring', 'elisa', 'cytof_e4412', 'wes', 'misc_data')
+            where key not in ('olink', 'nanostring', 'elisa', 'wes', 'misc_data')
         """
 
         # Compute the number of samples associated with nanostring uploads.
@@ -1277,46 +1280,6 @@ class TrialMetadata(CommonColumns):
             from
                 trial_metadata,
                 jsonb_array_elements(metadata_json#>'{assays,elisa}') entry
-        """
-
-        # Compute the number of samples associated with cytof_4412 uploads.
-        # cytof_e4412 metadata has a slightly different structure than typical
-        # assays, where each batch has an array of participants, and each participant has
-        # an array of sample-level entries.
-        cytof_e4412_subquery = """
-            select
-                trial_id,
-                'cytof' as key,
-                jsonb_array_length(participant->'samples') as value
-            from
-                trial_metadata,
-                jsonb_array_elements(metadata_json#>'{assays,cytof_e4412}') batches,
-                jsonb_array_elements(batches->'participants') participant
-            union all
-            select
-                trial_id,
-                'cytof_analysis' as key,
-                case
-                    when sample->'output_files' is not null then 1 else 0
-                end as value
-            from
-                trial_metadata,
-                jsonb_array_elements(metadata_json#>'{assays,cytof_e4412}') batches,
-                jsonb_array_elements(batches->'participants') participant,
-                jsonb_array_elements(participant->'samples') sample               
-        """
-
-        cytof_10021_9204_analysis_subquery = """
-            select
-                trial_id,
-                'cytof_analysis' as key,
-                case
-                    when record->'output_files' is not null then 1 else 0
-                end as value
-            from
-                trial_metadata,
-                jsonb_array_elements(metadata_json#>'{assays,cytof_10021_9204}') batch,
-                jsonb_array_elements(batch->'records') record
         """
 
         # Count the distinct tumor and normal samples that have associated analysis data.
@@ -1437,18 +1400,10 @@ class TrialMetadata(CommonColumns):
                     select
                         trial_id,
                         'cytof_analysis' as key,
-                        jsonb_array_elements(batches->'excluded_samples') as sample
-                    from
-                        trial_metadata,
-                        jsonb_array_elements(metadata_json#>'{assays,cytof_e4412}') batches
-                    union all
-                    select
-                        trial_id,
-                        'cytof_analysis' as key,
                         jsonb_array_elements(batch->'excluded_samples') as sample
                     from
                         trial_metadata,
-                        jsonb_array_elements(metadata_json#>'{assays,cytof_10021_9204}') batch
+                        jsonb_array_elements(metadata_json#>'{assays,cytof}') batch
                     union all
                     select
                         trial_id,
@@ -1525,10 +1480,6 @@ class TrialMetadata(CommonColumns):
                     {olink_subquery}
                     union all
                     {elisa_subquery}
-                    union all
-                    {cytof_e4412_subquery}
-                    union all
-                    {cytof_10021_9204_analysis_subquery}
                     union all
                     {wes_analysis_subquery}
                     union all
