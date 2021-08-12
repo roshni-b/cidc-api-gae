@@ -421,11 +421,12 @@ class Users(CommonColumns):
         ).fillna("*")
 
         with pd.ExcelWriter(io) as writer:
-            for trial_id, trial_group in df.groupby("trial_id"):
-                if trial_id != "*":
-                    trial_group.to_excel(writer, sheet_name=trial_id, index=False)
-                else:
-                    trial_group.to_excel(writer, sheet_name="--all--", index=False)
+            for trial_id in df["trial_id"].unique():
+                if trial_id == "*":
+                    continue
+
+                trial_group = df[(df["trial_id"] == trial_id) | (df["trial_id"] == "*")]
+                trial_group.to_excel(writer, sheet_name=trial_id, index=False)
 
         return df
 
