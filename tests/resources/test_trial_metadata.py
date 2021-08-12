@@ -134,10 +134,7 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
             [
                 ("cytof", "/cytof/spike_in.fcs"),
                 ("cytof", "/cytof/source_.fcs"),
-                (
-                    "cytof",
-                    "/cytof_analysis/combined_cell_counts_profiling.csv",
-                ),
+                ("cytof", "/cytof_analysis/combined_cell_counts_profiling.csv",),
                 ("wes", "/wes/r1_L.fastq.gz"),
             ]
         ):
