@@ -78,7 +78,6 @@ assay_facets: Facets = {
             [
                 "/cytof_analysis/cell_counts_assignment.csv",
                 "/cytof_analysis/cell_counts_compartment.csv",
-                "/cytof_analysis/profiling.csv",
                 "/cytof_analysis/cell_counts_profiling.csv",
             ],
             "Summary cell count expression of individual cell types in each sample",
