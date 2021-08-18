@@ -94,10 +94,13 @@ class Entry:
                 if not isinstance(value, datetime.datetime):
                     value = openpyxl.utils.datetime.from_excel(value)
                 processed_value = value.date()
+
             else:
                 processed_value = self.pytype(value)
 
             column_mapping = {self.column: processed_value}
+
+            # Handle GCS URI formatting
             if self.gcs_uri_format:
                 format_dict = {k.name: v for k, v in column_mapping.items()}
                 format_dict.update({k.name: v for k, v in context.items()})
@@ -105,6 +108,7 @@ class Entry:
                     getattr(self.column.class_, "object_url")
                 ] = self.gcs_uri_format.format(**format_dict)
 
+            # Finally, handle process_as
             context.update(column_mapping)
             for column, process in self.process_as.items():
                 column_mapping[column] = process(value, column_mapping)
@@ -278,8 +282,9 @@ class MetadataTemplate:
         """
         workbook = openpyxl.load_workbook(filename)
 
-        # the preamble values flow across all sheets for context
-        # (such as trial_id) to only need to collect each value once
+        # The preamble values flow across all sheets for context
+        # (such as trial_id) to only need to collect each value once.
+        # Constants also are used for all sheets.
         preamble_dict = self.constants.copy()
 
         # Extract partial model instances from the template
@@ -340,9 +345,9 @@ class MetadataTemplate:
                 for model, kwargs in model_groups.items():
                     # also grab all the kwargs for all superclasses
                     [
-                        kwargs.update(v)
-                        for k, v in model_groups.items()
-                        if k in _all_bases(model)
+                        kwargs.update(other_kwargs)
+                        for other_model, other_kwargs in model_groups.items()
+                        if other_model in _all_bases(model)
                     ]
                     model_instances.append(model(**kwargs))
 
@@ -412,8 +417,7 @@ class MetadataTemplate:
                                     ]
                                 ),  # if it'll be set later
                                 c.server_default is not None,  # if it has a default
-                                c.autoincrement
-                                is True,  # if it autoincrements in the table
+                                c.autoincrement is True,  # if it autoincrements
                             ]
                         )
                         for c, pk in instance.primary_key_map().items()

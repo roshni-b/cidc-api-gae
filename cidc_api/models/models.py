@@ -276,6 +276,7 @@ class CommonColumns(BaseModel):  # type: ignore
 
     @classmethod
     def get_unique_columns(cls):
+        """Get a list of all the unique columns in this table."""
         return [
             column for column in cls.__table__.c if column.unique or column.primary_key
         ]

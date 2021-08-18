@@ -278,7 +278,6 @@ class File(MetadataModel):
 
 
 # As the subclasses below do NOT have __tablename__ defined
-# # except for file combination at the bottom
 # they will all be included in `files` with any subclass-specific
 # columns being NULL for any other object.
 

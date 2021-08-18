@@ -11,6 +11,9 @@ from .model_core import *
 from .core import *
 from .utils import *
 
+# This maps from full_template_name prism/CLI-compatible
+# assay names to the MetadataTemplate instances that
+# handles each type of upload.
 TEMPLATE_MAP = {
     get_full_template_name(v): v
     for v in dict(globals(), **locals())
