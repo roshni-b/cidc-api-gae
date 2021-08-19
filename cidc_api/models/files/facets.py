@@ -62,6 +62,24 @@ assay_facets: Facets = {
             "Tabulated data across all samples in a batch",
         ),
     },
+    "ATAC-Seq": {
+        "Source": FacetConfig(
+            [
+                "/atacseq/r1_L.fastq.gz",
+                "/atacseq/r2_L.fastq.gz",
+                "/atacseq/analysis/aligned_sorted.bam",
+            ]
+        ),
+        "Peaks": FacetConfig(
+            [
+                "/atacseq/analysis/peaks/sorted_peaks.bed",
+                "/atacseq/analysis/peaks/sorted_summits.bed",
+                "/atacseq/analysis/peaks/sorted_peaks.narrowPeak",
+                "/atacseq/analysis/peaks/treat_pileup.bw",
+            ]
+        ),
+        "Report": FacetConfig(["/atacseq/analysis/report.zip"]),
+    },
     "CyTOF": {
         "Source": FacetConfig(
             [
