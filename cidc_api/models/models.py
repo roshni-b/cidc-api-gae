@@ -1499,6 +1499,8 @@ class TrialMetadata(CommonColumns):
                     {rna_level1_analysis_subquery}
                     union all
                     {tcr_analysis_subquery}
+                    union all
+                    {cytof_analysis_subquery}
                 ) q
                 group by trial_id, key
             ) sample_summaries
