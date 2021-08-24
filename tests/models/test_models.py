@@ -544,6 +544,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
             {
                 "expected_assays": [],
                 "cytof": 5.0,
+                "cytof_analysis": 2.0,
                 "olink": 8.0,
                 "trial_id": "tm2",
                 "file_size_bytes": 10,
@@ -571,6 +572,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "expected_assays": ["ihc", "olink"],
                 "elisa": 7.0,
                 "cytof": 0.0,
+                "cytof_analysis": 0.0,
                 "olink": 0.0,
                 "trial_id": "tm1",
                 "file_size_bytes": 5,
