@@ -1,7 +1,8 @@
 from sqlalchemy.orm.session import Session
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..models import TrialMetadata, UploadJobs
+from .model_core import MetadataModel
 from .trial_metadata import (
     ClinicalTrial,
     Cohort,
@@ -10,7 +11,7 @@ from .trial_metadata import (
     Sample,
     Shipment,
 )
-from .utils import with_default_session
+from .utils import with_default_session, _all_bases
 
 
 def _make_sample_to_shipment_map(trial_id: str, session: Session) -> Dict[str, str]:
@@ -23,6 +24,7 @@ def _make_sample_to_shipment_map(trial_id: str, session: Session) -> Dict[str, s
     uploads = (
         session.query(UploadJobs)
         .filter(UploadJobs.trial_id == trial_id, UploadJobs.multifile == False)
+        .order_by(UploadJobs._created)
         .all()
     )
     for upload in uploads:
@@ -76,6 +78,22 @@ def syncall_from_blobs(session: Session, dry_run: bool = False,) -> List[Excepti
     return errors
 
 
+def _get_all_values(
+    target: MetadataModel, old: dict, drop: List[str] = []
+) -> Dict[str, Any]:
+    """Returns all of the values from `old` that are columns of `target` excepting anything keys in `drop`"""
+    columns_to_check = [c for c in target.__table__.columns]
+    for b in _all_bases(type(target)):
+        if hasattr(b, "__table__"):
+            columns_to_check.extend(b.__table__.columns)
+
+    return {
+        c.name: old[c.name]
+        for c in columns_to_check
+        if c.name not in drop and c.name in target
+    }
+
+
 def _generate_new_trial(
     trial: TrialMetadata, session: Session
 ) -> Tuple[List[Exception], Optional[ClinicalTrial]]:
@@ -89,11 +107,11 @@ def _generate_new_trial(
         new_trial = session.merge(
             ClinicalTrial(
                 protocol_identifier=trial.trial_id,
-                **{
-                    c.name: trial.metadata_json[c.name]
-                    for c in ClinicalTrial.__table__.columns
-                    if c.name != "protocol_identifier" and c.name in trial.metadata_json
-                },
+                **_get_all_values(
+                    target=ClinicalTrial,
+                    old=trial.metadata_json,
+                    drop=["protocol_identifier"],
+                ),
             )
         )
         session.flush()
@@ -156,11 +174,7 @@ def _sync_shipments(
             session.merge(
                 Shipment(
                     trial_id=new_trial.protocol_identifier,
-                    **{
-                        c.name: shipment[c.name]
-                        for c in Shipment.__table__.columns
-                        if c.name in shipment
-                    },
+                    **_get_all_values(target=Shipment, old=shipment),
                 )
             )
         except Exception as e:
@@ -192,11 +206,7 @@ def _sync_participants_and_samples(
             new_partic = session.merge(
                 Participant(
                     trial_id=new_trial.protocol_identifier,
-                    **{
-                        c.name: partic[c.name]
-                        for c in Participant.__table__.columns
-                        if c.name in partic
-                    },
+                    **_get_all_values(target=Participant, old=partic),
                 )
             )
             # need to flush to add the Participant to then reference on the Sample
@@ -213,11 +223,7 @@ def _sync_participants_and_samples(
                         trial_id=new_trial.protocol_identifier,
                         cimac_participant_id=new_partic.cimac_participant_id,
                         shipment_manifest_id=shipment_map[sample["cimac_id"]],
-                        **{
-                            c.name: sample[c.name]
-                            for c in Sample.__table__.columns
-                            if c.name in sample
-                        },
+                        **_get_all_values(target=Sample, old=sample),
                     )
                 )
             except Exception as e:
