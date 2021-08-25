@@ -521,6 +521,11 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                     {"records": records * 2, "excluded_samples": records * 1},
                 ]
             },
+            "cytof_analysis": {
+                "batches": [
+                    {"records": records * 2, "excluded_samples": records * 2}
+                ]
+            }
         },
     }
     TrialMetadata(trial_id="tm1", metadata_json=tm1).insert(validate_metadata=False)
