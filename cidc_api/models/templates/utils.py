@@ -146,7 +146,6 @@ def insert_record_batch(
         session.rollback()
     else:
         session.commit()
-    session.close()
 
     return errors
 

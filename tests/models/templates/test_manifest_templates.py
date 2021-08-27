@@ -40,13 +40,18 @@ def test_pbmc_template(clean_db, cidc_api, tmp_path):
         errors = insert_record_batch(records)
         assert len(errors) == 0, "\n".join(str(e) for e in errors)
 
+    assert_pbmc_worked(cidc_api, clean_db)
+
+
+def assert_pbmc_worked(cidc_api, clean_db):
+    with cidc_api.app_context():
         shipments = clean_db.query(Shipment).all()
         participants = (
             clean_db.query(Participant).order_by(Participant.cimac_participant_id).all()
         )
         samples = clean_db.query(Sample).all()
 
-        assert len(shipments) == 1
+        assert len(shipments) == 1, ",".join([s.manifest_id for s in shipments])
         shipment = shipments[0]
         assert shipment.trial_id == "test_trial"
         assert shipment.manifest_id == "test_prism_trial_id_PBMC"

@@ -86,6 +86,11 @@ def test_wes_fastq_assay(clean_db, cidc_api, monkeypatch):
         errors = insert_record_batch(records)
         assert len(errors) == 0, "\n".join([str(e) for e in errors])
 
+    assert_wes_fastq_worked(cidc_api, clean_db)
+
+
+def assert_wes_fastq_worked(cidc_api, clean_db):
+    with cidc_api.app_context():
         entry = clean_db.query(WESUpload).first()
 
         assert entry is not None
