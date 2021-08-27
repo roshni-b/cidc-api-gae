@@ -5,6 +5,7 @@ from deepdiff import DeepDiff
 from datetime import datetime
 from contextlib import contextmanager
 from collections import namedtuple
+import os.path
 from unittest.mock import MagicMock
 from typing import Tuple
 
@@ -35,6 +36,10 @@ from cidc_api.models import (
     ValidationMultiError,
 )
 
+from ..models.templates.examples import EXAMPLE_DIR
+from ..models.templates.utils import setup_example, set_up_example_trial
+from ..models.templates.test_manifest_templates import assert_pbmc_worked
+from ..models.templates.test_assay_templates import assert_wes_fastq_worked
 from ..utils import make_role, mock_current_user, make_admin, mock_gcloud_client
 
 trial_id = "test_trial"
@@ -391,7 +396,10 @@ class UploadMocks:
         prismify_file_entries=None,
         prismify_extra=None,
         prismify_errors=None,
+        whitelist_openpyxl: bool = False,
     ):
+        self.whiteliste_openpyxl = whitelist_openpyxl
+
         self.grant_write = MagicMock()
         monkeypatch.setattr(
             "cidc_api.shared.gcloud_client.grant_upload_access", self.grant_write
@@ -425,9 +433,10 @@ class UploadMocks:
             self.publish_patient_sample_update,
         )
 
-        self.open_xlsx = MagicMock(name="open_xlsx")
-        self.open_xlsx.return_value = MagicMock(name="open_xlsx.return_value")
-        monkeypatch.setattr("openpyxl.load_workbook", self.open_xlsx)
+        if not whitelist_openpyxl:
+            self.open_xlsx = MagicMock(name="open_xlsx")
+            self.open_xlsx.return_value = MagicMock(name="open_xlsx.return_value")
+            monkeypatch.setattr("openpyxl.load_workbook", self.open_xlsx)
 
         self.iter_errors = MagicMock(name="iter_errors")
         self.iter_errors.return_value = (_ for _ in range(0))
@@ -448,8 +457,9 @@ class UploadMocks:
 
     def make_all_assertions(self):
         self.prismify.assert_called_once()
-        self.open_xlsx.assert_called_once()
         self.iter_errors.assert_called_once()
+        if not self.whiteliste_openpyxl:
+            self.open_xlsx.assert_called_once()
 
     def clear_all(self):
         for attr in self.__dict__.values():
@@ -625,33 +635,53 @@ def test_admin_upload(cidc_api, clean_db, monkeypatch):
     """Ensure an admin can upload assays and manifests without specific permissions."""
     user_id = setup_trial_and_user(cidc_api, monkeypatch)
     make_admin(user_id, cidc_api)
-    mocks = UploadMocks(monkeypatch)
+    mocks = UploadMocks(monkeypatch, whitelist_openpyxl=True)
 
     client = cidc_api.test_client()
 
+    set_up_example_trial(clean_db, cidc_api)
     res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
+        MANIFEST_UPLOAD,
+        data=form_data(
+            "pbmc.xlsx",
+            open(os.path.join(EXAMPLE_DIR, "pbmc_manifest.xlsx"), "rb"),
+            "pbmc",
+        ),
     )
     assert res.status_code == 200
+    assert_pbmc_worked(cidc_api, clean_db)
 
+    setup_example(clean_db, cidc_api)
     res = client.post(
-        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes_fastq")
+        ASSAY_UPLOAD,
+        data=form_data(
+            "wes.xlsx",
+            open(os.path.join(EXAMPLE_DIR, "wes_fastq_assay.xlsx"), "rb"),
+            "wes_fastq",
+        ),
     )
     assert res.status_code == 200
+    assert_wes_fastq_worked(cidc_api, clean_db)
 
 
 def test_upload_manifest(cidc_api, clean_db, monkeypatch, caplog):
     """Ensure the upload_manifest endpoint follows the expected execution flow"""
     user_id = setup_trial_and_user(cidc_api, monkeypatch)
-    mocks = UploadMocks(monkeypatch)
+    mocks = UploadMocks(monkeypatch, whitelist_openpyxl=True)
 
     client = cidc_api.test_client()
+    setup_example(clean_db, cidc_api)
 
     # NCI users can upload manifests without explicit permission
     make_nci_biobank_user(user_id, cidc_api)
     with caplog.at_level(logging.DEBUG):
         res = client.post(
-            MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
+            MANIFEST_UPLOAD,
+            data=form_data(
+                "pbmc.xlsx",
+                open(os.path.join(EXAMPLE_DIR, "pbmc_manifest.xlsx"), "rb"),
+                "pbmc",
+            ),
         )
     assert res.status_code == 200
 
@@ -668,15 +698,21 @@ def test_upload_manifest(cidc_api, clean_db, monkeypatch, caplog):
 def test_upload_manifest_twice(cidc_api, clean_db, monkeypatch):
     """Ensure that doing upload_manifest twice will produce only one DownloadableFiles"""
     user_id = setup_trial_and_user(cidc_api, monkeypatch)
-    mocks = UploadMocks(monkeypatch)
+    mocks = UploadMocks(monkeypatch, whitelist_openpyxl=True)
 
     client = cidc_api.test_client()
+    setup_example(clean_db, cidc_api)
 
     grant_upload_permission(user_id, "pbmc", cidc_api)
     make_nci_biobank_user(user_id, cidc_api)
 
     res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"a"), "pbmc")
+        MANIFEST_UPLOAD,
+        data=form_data(
+            "pbmc.xlsx",
+            open(os.path.join(EXAMPLE_DIR, "pbmc_manifest.xlsx"), "rb"),
+            "pbmc",
+        ),
     )
     assert res.status_code == 200
 
@@ -688,7 +724,12 @@ def test_upload_manifest_twice(cidc_api, clean_db, monkeypatch):
 
     # uploading second time
     res = client.post(
-        MANIFEST_UPLOAD, data=form_data("pbmc.xlsx", io.BytesIO(b"b"), "pbmc")
+        MANIFEST_UPLOAD,
+        data=form_data(
+            "pbmc.xlsx",
+            open(os.path.join(EXAMPLE_DIR, "pbmc_manifest.xlsx"), "rb"),
+            "pbmc",
+        ),
     )
     assert res.status_code == 200
 
@@ -741,11 +782,18 @@ def test_upload_wes(cidc_api, clean_db, monkeypatch):
         prismify_file_entries=[
             finfo("localfile.ext", "test_trial/url/file.ext", "uuid-1", None, False)
         ],
+        whitelist_openpyxl=True,
     )
+    setup_example(clean_db, cidc_api)
 
     # No permission to upload yet
     res = client.post(
-        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes_fastq")
+        ASSAY_UPLOAD,
+        data=form_data(
+            "wes.xlsx",
+            open(os.path.join(EXAMPLE_DIR, "wes_fastq_assay.xlsx"), "rb"),
+            "wes_fastq",
+        ),
     )
     assert res.status_code == 401
     assert "not authorized to upload wes_fastq data" in str(
@@ -758,7 +806,12 @@ def test_upload_wes(cidc_api, clean_db, monkeypatch):
     grant_upload_permission(user_id, "wes_fastq", cidc_api)
 
     res = client.post(
-        ASSAY_UPLOAD, data=form_data("wes.xlsx", io.BytesIO(b"1234"), "wes_fastq")
+        ASSAY_UPLOAD,
+        data=form_data(
+            "wes.xlsx",
+            open(os.path.join(EXAMPLE_DIR, "wes_fastq_assay.xlsx"), "rb"),
+            "wes_fastq",
+        ),
     )
     assert res.status_code == 200
     assert "url_mapping" in res.json
