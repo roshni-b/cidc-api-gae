@@ -18,15 +18,20 @@ from cidc_api.models.templates.sync_schemas import (
 from .utils import set_up_example_trial
 
 
+@pytest.mark.skip(reason="For local testing of syncall_from_blobs; comment out to run")
+def test_run_syncall_from_blobs(cidc_api):
+    with cidc_api.app_context():
+        err = syncall_from_blobs()
+        if err:
+            print(len(err))
+            raise err[0]
+        assert len(err) == 0, "\n".join([str(e) for e in err])
+
+
 def test_make_sample_to_shipment_map():
     clean_db = MagicMock()
     clean_db.query.return_value = MagicMock()
     mock_return = MagicMock()
-
-    mock_return.metadata_patch = {}
-    clean_db.query.return_value.filter.return_value.all.return_value = [mock_return]
-    with pytest.raises(AssertionError, match="Multiple/no shipments in single upload"):
-        _make_sample_to_shipment_map("trial_id", clean_db)
 
     mock_return.metadata_patch = {
         "shipments": [
@@ -34,8 +39,10 @@ def test_make_sample_to_shipment_map():
             {"manifest_id": "test_manifest2",},
         ],
     }
-    clean_db.query.return_value.filter.return_value.all.return_value = [mock_return]
-    with pytest.raises(AssertionError, match="Multiple/no shipments in single upload"):
+    clean_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_return
+    ]
+    with pytest.raises(Exception, match="Multiple shipments in single upload"):
         _make_sample_to_shipment_map("trial_id", clean_db)
 
     mock_return.metadata_patch = {
@@ -45,7 +52,9 @@ def test_make_sample_to_shipment_map():
             {"samples": [{"cimac_id": "CTTTPP211.00"}, {"cimac_id": "CTTTPP212.00"},],},
         ],
     }
-    clean_db.query.return_value.filter.return_value.all.return_value = [mock_return]
+    clean_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        mock_return
+    ]
     assert _make_sample_to_shipment_map("trial_id", clean_db) == {
         "CTTTPP111.00": "test_manifest",
         "CTTTPP112.00": "test_manifest",

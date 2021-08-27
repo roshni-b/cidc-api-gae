@@ -15,16 +15,17 @@ from sqlalchemy.orm import relationship
 from .model_core import MetadataModel
 
 AssaysEnum = Enum(
-    "Olink",
-    "WES",
-    "RNAseq",
-    "IHC",
+    "ATACseq",
     "CyTOF",
-    "H&E",
     "ELISA",
+    "H&E",
+    "IHC",
     "mIF",
     "mIHC",
+    "Olink",
+    "RNAseq",
     "TCRseq",
+    "WES",
     name="assay_enum",
 )
 ConcentrationUnits = Enum(
@@ -57,7 +58,7 @@ Replacement = Enum(
     name="replace_enum",
 )
 VolumeUnits = Enum(
-    "Microliter", "Milliliter", "Not Reported", "Other", name="volume_units_enum"
+    "Microliters", "Milliliters", "Not Reported", "Other", name="volume_units_enum"
 )
 
 
@@ -468,6 +469,8 @@ class Sample(MetadataModel):
             "Cerebrospinal Fluid",
             "Lymph Node",
             "Stool",
+            "Cell Product",
+            "White Blood Cell Apheresis",
             "Not Reported",
             "Other",
             name="sample_types_enum",

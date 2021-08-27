@@ -100,16 +100,17 @@ def upgrade():
         sa.Column(
             "assay_type",
             sa.Enum(
-                "Olink",
-                "WES",
-                "RNAseq",
-                "IHC",
+                "ATACseq",
                 "CyTOF",
-                "H&E",
                 "ELISA",
+                "H&E",
+                "IHC",
                 "mIF",
                 "mIHC",
+                "Olink",
+                "RNAseq",
                 "TCRseq",
+                "WES",
                 name="assay_enum",
             ),
             nullable=False,
@@ -252,6 +253,8 @@ def upgrade():
                 "Cerebrospinal Fluid",
                 "Lymph Node",
                 "Stool",
+                "Cell Product",
+                "White Blood Cell Apheresis",
                 "Not Reported",
                 "Other",
                 name="sample_types_enum",
@@ -322,8 +325,8 @@ def upgrade():
         sa.Column(
             "sample_volume_units",
             sa.Enum(
-                "Microliter",
-                "Milliliter",
+                "Microliters",
+                "Milliliters",
                 "Not Reported",
                 "Other",
                 name="volume_units_enum",
@@ -354,8 +357,8 @@ def upgrade():
         sa.Column(
             "processed_sample_volume_units",
             sa.Enum(
-                "Microliter",
-                "Milliliter",
+                "Microliters",
+                "Milliliters",
                 "Not Reported",
                 "Other",
                 name="volume_units_enum",
@@ -394,8 +397,8 @@ def upgrade():
         sa.Column(
             "sample_derivative_volume_units",
             sa.Enum(
-                "Microliter",
-                "Milliliter",
+                "Microliters",
+                "Milliliters",
                 "Not Reported",
                 "Other",
                 name="volume_units_enum",

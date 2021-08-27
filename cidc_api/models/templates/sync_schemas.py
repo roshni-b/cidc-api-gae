@@ -23,15 +23,21 @@ def _make_sample_to_shipment_map(trial_id: str, session: Session) -> Dict[str, s
 
     uploads = (
         session.query(UploadJobs)
-        .filter(UploadJobs.trial_id == trial_id, UploadJobs.multifile == False)
+        .filter(UploadJobs.trial_id == trial_id)
         .order_by(UploadJobs._created)
         .all()
     )
     for upload in uploads:
         shipments = upload.metadata_patch.get("shipments", [])
-        assert (
-            len(shipments) == 1
-        ), f"Multiple/no shipments in single upload: {upload.id} on trial {upload.trial_id}"
+        print(len(shipments))
+        if len(shipments) == 0:
+            continue
+        elif len(shipments) > 1:
+            raise Exception(
+                f"Multiple shipments in single upload: {upload.id} on trial {upload.trial_id}"
+            )
+        # else: # len(shipments) == 1
+
         manifest_id = shipments[0]["manifest_id"]
 
         for partic in upload.metadata_patch["participants"]:
@@ -90,7 +96,7 @@ def _get_all_values(
     return {
         c.name: old[c.name]
         for c in columns_to_check
-        if c.name not in drop and c.name in target
+        if c.name not in drop and c.name in old
     }
 
 
