@@ -15,7 +15,7 @@ from werkzeug.exceptions import (
 )
 from marshmallow.exceptions import ValidationError
 
-from ..models import CommonColumns, BaseModel, BaseSchema, ValidationMultiError
+from ..models import BaseModel, BaseSchema, ValidationMultiError
 from ..config.settings import ENV
 
 
@@ -92,7 +92,7 @@ ETAG_HEADER = "if-match"
 
 
 def with_lookup(
-    model: CommonColumns,
+    model: BaseModel,
     url_param: str,
     check_etag: bool = False,
     find_func: Optional[Callable[[Union[int, str]], BaseModel]] = None,
@@ -125,7 +125,7 @@ def with_lookup(
 
 
 def lookup(
-    model: CommonColumns,
+    model: BaseModel,
     record_id: Union[int, str],
     check_etag: bool = False,
     find_func: Optional[Callable[[Union[int, str]], BaseModel]] = None,

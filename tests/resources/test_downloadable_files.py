@@ -289,6 +289,7 @@ def test_get_filelist(cidc_api, clean_db, monkeypatch):
                 object_url=str(id),
                 upload_type="",
                 file_size_bytes=0,
+                facet_group="foobar",
                 uploaded_timestamp=datetime.now(),
             )
             df.insert()
