@@ -151,14 +151,19 @@ def insert_record_batch(
     return errors
 
 
-def get_full_template_name(template: "MetadataTemplate"):
-    """Returns a fully qualified name of a metadata template in the form '<assay_name>_<purpose>'
-    where <assay_name> is snake_case and <purpose> in ['assay', 'analysis', 'manifest']
+def get_full_template_name(temp_name: str):
+    """Returns a fully qualified name of a metadata template in the form '<assay_name>'
+    where <assay_name> is snake_case
     """
-    temp_name = template.__name__  # as ABBREVCamelCasePurpose
+    # as AbbrevCamelCasePurpose
+    for purpose in ["Assay", "Analysis", "Manifest"]:
+        if temp_name.endswith(purpose):
+            temp_name = temp_name[: -len(purpose)]
+            break
+
     return "".join(
         [
             "_" + i if i != j and n else i
             for n, (i, j) in enumerate(zip(temp_name, temp_name.lower()))
         ]
-    ).lower()  # as abbrev_camel_case_purpose
+    ).lower()  # as abbrev_camel_case

@@ -161,7 +161,7 @@ def _BaseManifestTemplate(
     )
 
 
-PBMCManifest = _BaseManifestTemplate(
+PbmcManifest = _BaseManifestTemplate(
     upload_type="pbmc",
     filled_by_biorepository=[
         Entry(Sample.box_number),

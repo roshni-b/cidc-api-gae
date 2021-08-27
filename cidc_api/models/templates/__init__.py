@@ -15,7 +15,7 @@ from .utils import *
 # assay names to the MetadataTemplate instances that
 # handles each type of upload.
 TEMPLATE_MAP = {
-    get_full_template_name(v): v
-    for v in dict(globals(), **locals())
-    if isinstance(v, MetadataTemplate)
+    get_full_template_name(name): value
+    for name, value in dict(globals(), **locals()).items()
+    if isinstance(value, MetadataTemplate)
 }
