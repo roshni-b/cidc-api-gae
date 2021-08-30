@@ -12,6 +12,9 @@ from .trial_metadata import (
     Shipment,
 )
 from .utils import with_default_session, _all_bases
+from ..config.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def _make_sample_to_shipment_map(trial_id: str, session: Session) -> Dict[str, str]:
@@ -29,7 +32,6 @@ def _make_sample_to_shipment_map(trial_id: str, session: Session) -> Dict[str, s
     )
     for upload in uploads:
         shipments = upload.metadata_patch.get("shipments", [])
-        print(len(shipments))
         if len(shipments) == 0:
             continue
         elif len(shipments) > 1:
@@ -80,6 +82,14 @@ def syncall_from_blobs(session: Session, dry_run: bool = False,) -> List[Excepti
     else:
         session.commit()
     session.close()
+
+    if len(errors):
+        logger.error(
+            f"Errors in syncall_from_blobs: {len(errors)}\n"
+            + "\n".join([str(e) for e in errors])
+        )
+    else:
+        logger.info("No errors in syncall_from_blobs")
 
     return errors
 
