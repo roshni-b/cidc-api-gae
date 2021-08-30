@@ -1,7 +1,7 @@
-from flask import Blueprint
+from flask import Blueprint, jsonify
 
 from ..models import CIDCRole, syncall_from_blobs
-from ..shared.auth import get_current_user, requires_auth
+from ..shared.auth import requires_auth
 from ..csms import get_with_authorization as csms_get
 
 admin_bp = Blueprint("admin", __name__)
@@ -16,8 +16,12 @@ def test_csms():
 @admin_bp.route("/load_from_blobs", methods=["GET"])
 @requires_auth("csms", [CIDCRole.ADMIN.value])
 def load_from_blobs():
-    errs = syncall_from_blobs()
-    if len(errs):
-        return f"Error: {errs}", 500
+    errors = syncall_from_blobs()
+    if len(errors):
+        res = jsonify(errors=errors)
+        res.status_code = 500
+        return res
     else:
-        return "Success", 200
+        res = jsonify(status="success")
+        res.status_code = 200
+        return res
