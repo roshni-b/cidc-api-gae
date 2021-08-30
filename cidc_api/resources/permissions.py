@@ -21,7 +21,6 @@ from ..shared.rest_utils import (
     unmarshal_request,
     delete_response,
 )
-from ..csms import get_with_authorization as csms_get
 
 permissions_bp = Blueprint("permissions", __name__)
 
