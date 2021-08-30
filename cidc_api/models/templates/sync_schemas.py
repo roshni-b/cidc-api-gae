@@ -12,7 +12,7 @@ from .trial_metadata import (
     Shipment,
 )
 from .utils import with_default_session, _all_bases
-from ..config.logging import get_logger
+from ...config.logging import get_logger
 
 logger = get_logger(__name__)
 
