@@ -23,3 +23,4 @@ Please include and complete the following checklist. You can mark an item as com
 - [ ] Type Annotations - All new code has been type annotated in the function signatures using type hints
 - [ ] Docstrings - Docstrings have been provided for functions
 - [ ] Documentation - README has been updated to explain major changes & new features
+- [ ] Package version - Manually bumped the API package version in [setup.py](https://github.com/CIMAC-CIDC/cidc-api-gae/blob/master/setup.py#L21)
