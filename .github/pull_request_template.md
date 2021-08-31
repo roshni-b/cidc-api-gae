@@ -16,7 +16,7 @@ Add notes on possible known quirks/drawbacks of this solution.
 
 ## Checklist
 
-Please include and complete the following checklist. You can mark an item as complete with the `- [x]` prefix
+Please include and complete the following checklist. You can mark an item as complete with the `- [x]` prefix:
 
 - [ ] Tests - Added unit tests for new code, regression tests for bugs and updated the integration tests if required
 - [ ] Formatting & Linting - `black` and `flake8` have been used to ensure styling guidelines are met
