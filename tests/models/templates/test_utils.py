@@ -6,6 +6,7 @@ from flask.globals import session
 
 from cidc_api.models.templates import in_single_transaction, TEMPLATE_MAP
 
+
 def test_in_single_transaction_smoketest(cidc_api):
     session = MagicMock()
     func1, func2 = MagicMock(), MagicMock()
