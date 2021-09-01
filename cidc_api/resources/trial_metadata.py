@@ -1,15 +1,22 @@
+from cidc_api.models.templates.trial_metadata import Cohort, CollectionEvent
+from collections import OrderedDict
 from flask import Blueprint, jsonify
 from webargs import fields
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, NotFound
 
 from ..shared.auth import get_current_user, requires_auth
 from ..models import (
     CIDCRole,
+    ClinicalTrial,
+    in_single_transaction,
+    insert_record_batch,
+    IntegrityError,
+    remove_record_batch,
     TrialMetadata,
     TrialMetadataSchema,
     TrialMetadataListSchema,
-    IntegrityError,
 )
+from ..models.templates.sync_schemas import _get_all_values
 from ..shared.rest_utils import (
     with_lookup,
     marshal_response,
@@ -65,6 +72,23 @@ def create_trial_metadata(trial):
     except IntegrityError as e:
         raise BadRequest(str(e.orig))
 
+    # relational hook validates by "upsert"
+    errs = insert_record_batch(
+        {
+            ClinicalTrial: [
+                ClinicalTrial(
+                    # borrowing from sync_schemas since we're already unmarshalling
+                    # better handled by a UI change to {key: value}, then old=**request.json
+                    **_get_all_values(target=ClinicalTrial, old=trial.metadata_json)
+                )
+            ]
+        }
+    )
+    if errs:
+        raise BadRequest(
+            f"Errors in relational add: {len(errs)}\n" + "\n".join(str(e) for e in errs)
+        )
+
     return trial
 
 
@@ -104,5 +128,55 @@ def update_trial_metadata_by_trial_id(trial, trial_updates):
                 )
 
     trial.update(changes=trial_updates)
+
+    # should be moved to @with_lookup which raises NotFound internally
+    db_trial = ClinicalTrial.get_by_id(trial.trial_id)
+    if db_trial is None:
+        raise NotFound(f"Trial {trial.trial_id} not found in relational tables.")
+
+    # relational hook validates by "upsert"
+    # also might need to remove things too
+    ordered_records_to_add, records_to_remove = OrderedDict(), []
+    ordered_records_to_add[ClinicalTrial] = [
+        ClinicalTrial(
+            # borrowing from sync_schemas since we're already unmarshalling
+            # better handled by a UI change to {key: value}, then old=**request.json
+            **_get_all_values(target=ClinicalTrial, old=trial.metadata_json)
+        )
+    ]
+
+    # currently need to compare metadata to look for changes in other tables
+    # as UI always returns full list of all values
+    for json_key, db_key, model in [
+        ("allowed_cohort_names", "cohort_name", Cohort),
+        ("allowed_collection_event_names", "event_name", CollectionEvent),
+    ]:
+        old, new = (
+            set(getattr(db_trial, json_key)),
+            set(metadata_updates.get(json_key, [])),
+        )
+        if old != new:
+            to_add, to_remove = new.difference(old), old.difference(new)
+            if len(to_add):
+                ordered_records_to_add[model] = [
+                    model(**{"trial_id": trial.trial_id, db_key: value})
+                    for value in to_add
+                ]
+            if len(to_remove):
+                for value in to_remove:
+                    record = model.get_by_id(trial.trial_id, value)
+                    if record:
+                        records_to_remove.append(record)
+
+    errs = in_single_transaction(
+        {
+            insert_record_batch: {"ordered_records": ordered_records_to_add},
+            remove_record_batch: {"records": records_to_remove},
+        }
+    )
+    if errs:
+        raise BadRequest(
+            f"Errors in relational add: {len(errs)}\n" + "\n".join(str(e) for e in errs)
+        )
 
     return trial

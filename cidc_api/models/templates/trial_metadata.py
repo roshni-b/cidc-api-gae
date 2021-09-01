@@ -1,3 +1,5 @@
+from sqlalchemy.orm.session import Session
+from cidc_api.models.models import with_default_session
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -147,14 +149,26 @@ class ClinicalTrial(MetadataModel):
     )
 
     @property
-    def allowed_cohort_names(self):
+    @with_default_session
+    def allowed_cohort_names(self, session: Session):
         """Allowed values for Participant.cohort_name for this trial."""
-        return [c.cohort_name for c in self.cohorts]
+        return [
+            c.cohort_name
+            for c in session.query(Cohort)
+            .filter(Cohort.trial_id == self.protocol_identifier)
+            .all()
+        ]
 
     @property
-    def allowed_collection_event_names(self):
+    @with_default_session
+    def allowed_collection_event_names(self, session: Session):
         """Allowed values for Sample.collection_event_name for this trial."""
-        return [ce.event_name for ce in self.collection_events]
+        return [
+            ce.event_name
+            for ce in session.query(CollectionEvent)
+            .filter(CollectionEvent.trial_id == self.protocol_identifier)
+            .all()
+        ]
 
 
 class Cohort(MetadataModel):

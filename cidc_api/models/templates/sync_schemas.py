@@ -243,6 +243,13 @@ def _sync_participants_and_samples(
                     )
                 )
             except Exception as e:
-                errors.append(e)
+                if sample["cimac_id"] not in shipment_map:
+                    errors.append(
+                        Exception(
+                            f"No manifest_id found for sample {sample['cimac_id']}"
+                        )
+                    )
+                else:
+                    errors.append(e)
 
     return errors
