@@ -89,7 +89,6 @@ def update_trial_from_metadata_json(trial_md: dict) -> List[Exception]:
 
     old_collections = set(db_trial.allowed_collection_event_names)
     new_collections = set(trial_md.get("allowed_collection_event_names", []))
-    print(old_collections, new_collections)
     ordered_records_to_add[CollectionEvent] = [
         CollectionEvent(trial_id=trial_md["protocol_identifier"], event_name=value)
         for value in new_collections.difference(old_collections)
