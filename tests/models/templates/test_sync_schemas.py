@@ -1,3 +1,4 @@
+import cidc_api
 from datetime import datetime
 import json
 import os
@@ -36,14 +37,14 @@ def test_make_sample_to_shipment_map():
     mock_return.metadata_patch = {
         "shipments": [
             {"manifest_id": "test_manifest"},
-            {"manifest_id": "test_manifest2",},
+            {"manifest_id": "test_manifest2"},
         ],
     }
     clean_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
         mock_return
     ]
     with pytest.raises(Exception, match="Multiple shipments in single upload"):
-        _make_sample_to_shipment_map("trial_id", clean_db)
+        _make_sample_to_shipment_map("trial_id", session=clean_db)
 
     mock_return.metadata_patch = {
         "shipments": [{"manifest_id": "test_manifest"}],
@@ -55,7 +56,7 @@ def test_make_sample_to_shipment_map():
     clean_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
         mock_return
     ]
-    assert _make_sample_to_shipment_map("trial_id", clean_db) == {
+    assert _make_sample_to_shipment_map("trial_id", session=clean_db) == {
         "CTTTPP111.00": "test_manifest",
         "CTTTPP112.00": "test_manifest",
         "CTTTPP211.00": "test_manifest",

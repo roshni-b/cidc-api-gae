@@ -1,3 +1,9 @@
+__all__ = [
+    # "ClinicalDataTemplate",
+    "PbmcManifest",
+    "TissueSlideManifest",
+]
+
 from sqlalchemy import Column
 from typing import Any, Dict, List
 

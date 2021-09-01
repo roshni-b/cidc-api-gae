@@ -1,3 +1,11 @@
+__all__ = [
+    "HandeImage",
+    "HandeRecord",
+    "HandeUpload",
+    "WESRecord",
+    "WESUpload",
+]
+
 from sqlalchemy import (
     CheckConstraint,
     Column,

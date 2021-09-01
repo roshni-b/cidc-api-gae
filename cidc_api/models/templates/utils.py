@@ -1,6 +1,15 @@
+__all__ = [
+    "_all_bases",
+    "_all_subclasses",
+    "_get_global_insertion_order",
+    "in_single_transaction",
+    "insert_record_batch",
+    "get_full_template_name",
+    "remove_record_batch",
+]
+
 from collections import defaultdict
-from logging import error
-from typing import Any, Callable, Dict, List, OrderedDict, Set, Tuple, Type
+from typing import Any, Callable, Dict, List, OrderedDict, Set, Type
 
 from sqlalchemy.orm import Session
 
@@ -91,9 +100,10 @@ def _get_global_insertion_order() -> List[MetadataModel]:
 @with_default_session
 def insert_record_batch(
     ordered_records: OrderedDict[Type, List[MetadataModel]],
-    session: Session,
+    *,
     dry_run: bool = False,
     hold_commit: bool = False,
+    session: Session,
 ) -> List[Exception]:
     """
     Try to insert the given list of models into the database in a single transaction,
@@ -150,6 +160,8 @@ def insert_record_batch(
             session.rollback()
         else:
             session.commit()
+    else:
+        session.flush()
 
     return errors
 
@@ -157,9 +169,10 @@ def insert_record_batch(
 @with_default_session
 def remove_record_batch(
     records: List[MetadataModel],
-    session: Session,
+    *,
     dry_run: bool = False,
     hold_commit: bool = False,
+    session: Session,
 ) -> List[Exception]:
     """
     Try to safely remove the given list of models from the database in a single transaction,
@@ -171,6 +184,9 @@ def remove_record_batch(
 
     # merge all records into session and keep a copy
     for record in records:
+        if record is None:
+            continue
+
         try:
             record = session.delete(record)
         except Exception as e:
@@ -181,6 +197,8 @@ def remove_record_batch(
             session.rollback()
         else:
             session.commit()
+    else:
+        session.flush()
 
     return errors
 
@@ -188,8 +206,9 @@ def remove_record_batch(
 @with_default_session
 def in_single_transaction(
     calls: OrderedDict[Callable[[Any], List[Exception]], Dict[str, Any]],
-    session: Session,
+    *,
     dry_run: bool = False,
+    session: Session,
 ) -> List[Exception]:
     """Given an arbitrary set of calls, make all of them in a single transaction,
     rolling back and returning a list of errors if any are encountered. If `dry_run` is `True`,

@@ -38,8 +38,8 @@ def test_in_single_transaction_smoketest(cidc_api):
 def test_get_full_template_name():
     assert list(TEMPLATE_MAP.keys()) == [
         "hande",
-        "wes_fastq",
         "wes_bam",
+        "wes_fastq",
         "pbmc",
         "tissue_slide",
     ]

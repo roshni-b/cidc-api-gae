@@ -1,3 +1,4 @@
+from cidc_api.models.templates.trial_metadata import CollectionEvent
 from cidc_api.models.models import with_default_session
 from cidc_api.models.templates.utils import insert_record_batch
 from collections import OrderedDict
@@ -53,13 +54,13 @@ def setup_trial_metadata(cidc_api, user_id=None) -> Tuple[int, int]:
                             "sample_location": "",
                             "type_of_primary_container": "Other",
                             "type_of_sample": "Other",
-                            "collection_event_name": "",
+                            "collection_event_name": "event",
                             "parent_sample_id": "",
                         }
                     ],
                 }
             ],
-            "allowed_collection_event_names": [""],
+            "allowed_collection_event_names": [] if n == 2 else ["event"],
             "allowed_cohort_names": [],
             "assays": {},
             "analysis": {},
@@ -68,9 +69,10 @@ def setup_trial_metadata(cidc_api, user_id=None) -> Tuple[int, int]:
         trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
         trial.insert()
 
-        errs = insert_record_batch(
-            {ClinicalTrial: [ClinicalTrial(protocol_identifier=trial_id)]}
-        )
+        records = OrderedDict()
+        records[ClinicalTrial] = [ClinicalTrial(protocol_identifier=trial_id)]
+        records[CollectionEvent] = [CollectionEvent(event_name="event")]
+        errs = insert_record_batch(records)
         assert len(errs) == 0, "\n".join(str(e) for e in errs)
 
         if grant_perm and user_id:
