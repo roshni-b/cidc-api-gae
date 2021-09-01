@@ -1,3 +1,4 @@
+from typing import List
 from sqlalchemy.orm.session import Session
 from cidc_api.models.models import with_default_session
 from sqlalchemy import (
@@ -150,7 +151,7 @@ class ClinicalTrial(MetadataModel):
 
     @property
     @with_default_session
-    def allowed_cohort_names(self, session: Session):
+    def allowed_cohort_names(self, session: Session) -> List[str]:
         """Allowed values for Participant.cohort_name for this trial."""
         return [
             c.cohort_name
@@ -161,7 +162,7 @@ class ClinicalTrial(MetadataModel):
 
     @property
     @with_default_session
-    def allowed_collection_event_names(self, session: Session):
+    def allowed_collection_event_names(self, session: Session) -> List[str]:
         """Allowed values for Sample.collection_event_name for this trial."""
         return [
             ce.event_name
