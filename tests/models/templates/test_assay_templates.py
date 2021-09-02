@@ -40,7 +40,6 @@ def test_hande_assay(clean_db, cidc_api, monkeypatch, tmp_path):
 
     with cidc_api.app_context():
         records = HandeAssay.read(os.path.join(EXAMPLE_DIR, "hande_assay.xlsx"))
-        print(records)
         errors = insert_record_batch(records)
         assert len(errors) == 0, "\n".join([str(e) for e in errors])
 

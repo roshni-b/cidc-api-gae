@@ -3,6 +3,9 @@
 This file doesn't contain tests for methods that don't directly correspond
 to data resources, like endpoints that handle upload-related functionality.
 """
+from cidc_api.models.templates.trial_metadata import ClinicalTrial
+from collections import OrderedDict
+from cidc_api.models.templates.utils import insert_record_batch
 from copy import deepcopy
 from unittest.mock import MagicMock
 from datetime import datetime
@@ -186,6 +189,11 @@ def setup_db_records(cidc_api):
         )
         Permissions(**permissions["json"], **extra).insert(compute_etag=False)
         UploadJobs(**upload_jobs["json"], **extra).insert(compute_etag=False)
+
+        records = OrderedDict()
+        records[ClinicalTrial] = [ClinicalTrial(protocol_identifier="foo")]
+        errs = insert_record_batch(records)
+        assert len(errs) == 0, "\n".join(str(e) for e in errs)
 
 
 def assert_dict_contains(base, target):

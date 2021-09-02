@@ -1,3 +1,9 @@
+__all__ = [
+    "HandeAssay",
+    "WesBamAssay",
+    "WesFastqAssay",
+]
+
 from .core import Entry, MetadataTemplate, WorksheetConfig
 from .model_core import get_property
 

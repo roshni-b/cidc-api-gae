@@ -1,5 +1,15 @@
+__all__ = [
+    "_all_bases",
+    "_all_subclasses",
+    "_get_global_insertion_order",
+    "in_single_transaction",
+    "insert_record_batch",
+    "get_full_template_name",
+    "remove_record_batch",
+]
+
 from collections import defaultdict
-from typing import List, OrderedDict, Set, Type
+from typing import Any, Callable, Dict, List, OrderedDict, Set, Type
 
 from sqlalchemy.orm import Session
 
@@ -90,13 +100,16 @@ def _get_global_insertion_order() -> List[MetadataModel]:
 @with_default_session
 def insert_record_batch(
     ordered_records: OrderedDict[Type, List[MetadataModel]],
-    session: Session,
+    *,
     dry_run: bool = False,
+    hold_commit: bool = False,
+    session: Session,
 ) -> List[Exception]:
     """
     Try to insert the given list of models into the database in a single transaction,
     rolling back and returning a list of errors if any are encountered. If `dry_run` is `True`,
     rollback the transaction regardless of whether any errors are encountered.
+    If `hold_commit` is passed, all rollback / commit are ignored.
     """
     errors = []
     for model in ordered_records.keys():
@@ -142,6 +155,72 @@ def insert_record_batch(
         # in case they're needed for later fk's
         session.flush()
 
+    if not hold_commit:
+        if dry_run or len(errors):
+            session.rollback()
+        else:
+            session.commit()
+    else:
+        session.flush()
+
+    return errors
+
+
+@with_default_session
+def remove_record_batch(
+    records: List[MetadataModel],
+    *,
+    dry_run: bool = False,
+    hold_commit: bool = False,
+    session: Session,
+) -> List[Exception]:
+    """
+    Try to safely remove the given list of models from the database in a single transaction,
+    rolling back and returning a list of errors if any are encountered. If `dry_run` is `True`,
+    rollback the transaction regardless of whether any errors are encountered.
+    If `hold_commit` is passed, all rollback / commit are ignored.
+    """
+    errors = []
+
+    # merge all records into session and keep a copy
+    for record in records:
+        if record is None:
+            continue
+
+        try:
+            record = session.delete(record)
+        except Exception as e:
+            errors.append(e)
+
+    if not hold_commit:
+        if dry_run or len(errors):
+            session.rollback()
+        else:
+            session.commit()
+    else:
+        session.flush()
+
+    return errors
+
+
+@with_default_session
+def in_single_transaction(
+    calls: OrderedDict[Callable[[Any], List[Exception]], Dict[str, Any]],
+    *,
+    dry_run: bool = False,
+    session: Session,
+) -> List[Exception]:
+    """Given an arbitrary set of calls, make all of them in a single transaction,
+    rolling back and returning a list of errors if any are encountered. If `dry_run` is `True`,
+    rollback the transaction regardless of whether any errors are encountered.
+    """
+    errors = []
+    for func, kwargs in calls.items():
+        kwargs.update({"session": session, "hold_commit": True})
+        errors.extend(func(**kwargs))
+        session.flush()
+
+    # no hold_commit here because we need to close the transaction
     if dry_run or len(errors):
         session.rollback()
     else:
