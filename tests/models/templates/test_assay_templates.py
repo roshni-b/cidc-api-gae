@@ -26,7 +26,7 @@ def mock_get_current_user(monkeypatch):
 
 def test_hande_assay(clean_db, cidc_api, monkeypatch, tmp_path):
     # test write and empty read
-    f = tmp_path / "pbmc_template.xlsx"
+    f = tmp_path / "hande_assay.xlsx"
     with cidc_api.app_context():
         HandeAssay.write(f)
 
