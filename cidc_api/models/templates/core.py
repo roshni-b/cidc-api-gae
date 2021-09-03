@@ -97,13 +97,19 @@ class Entry:
         try:
             # Handle date/time parsing funkiness
             if self.pytype == datetime.time:
-                if not isinstance(value, datetime.datetime):
-                    value = openpyxl.utils.datetime.from_excel(value)
-                processed_value = value.time()
+                try:
+                    if not isinstance(value, datetime.datetime):
+                        value = openpyxl.utils.datetime.from_excel(value)
+                    processed_value = value.time()
+                except:
+                    raise TypeError(f"{value} is not a valid time")
             elif self.pytype == datetime.date:
-                if not isinstance(value, datetime.datetime):
-                    value = openpyxl.utils.datetime.from_excel(value)
-                processed_value = value.date()
+                try:
+                    if not isinstance(value, datetime.datetime):
+                        value = openpyxl.utils.datetime.from_excel(value)
+                    processed_value = value.date()
+                except:
+                    raise TypeError(f"{value} is not a valid date")
 
             else:
                 processed_value = self.pytype(value)
@@ -125,7 +131,7 @@ class Entry:
 
         except Exception as e:
             raise Exception(
-                f"Error processing {self.name}={value}({type(value)}) as {self.pytype}: {e}"
+                f"Error in processing {self.name}={value}({type(value)}) as {self.pytype}: {e}"
             ) from e
         return column_mapping
 
@@ -371,8 +377,8 @@ class MetadataTemplate:
                 except Exception as e:
                     # add a bit of context
                     raise Exception(
-                        f"Error in processing preamble {entry.name} in worksheet {config.name}"
-                    ) from e
+                        f"Error in processing preamble {entry.name} in worksheet {config.name}: {e.__cause__ if e.__cause__ is not None else e}"
+                    )
 
             model_dicts.append(preamble_dict)
 
@@ -381,7 +387,7 @@ class MetadataTemplate:
                 entry for entries in config.data_sections.values() for entry in entries
             ]
             if len(data_rows):
-                header_width = len([c.value is not None for c in data_header])
+                header_width = len([c for c in data_header if c.value is not None])
                 # check the shape of the data
                 if header_width != len(data_configs):
                     raise Exception(
@@ -410,8 +416,8 @@ class MetadataTemplate:
                     except Exception as e:
                         # add some context here
                         raise Exception(
-                            f"Error in processing {entry.name} for data row #{n+1} in worksheet {config.name}"
-                        ) from e
+                            f"Error in processing {entry.name} for data row #{n+1} in worksheet {config.name}: {e.__cause__ if e.__cause__ is not None else e}"
+                        )
                     context.update(data_dict)
 
                 model_dicts.append(data_dict)
