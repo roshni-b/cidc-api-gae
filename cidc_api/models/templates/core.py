@@ -371,7 +371,7 @@ class MetadataTemplate:
                 except Exception as e:
                     # add a bit of context
                     raise Exception(
-                        "Error in processing preamble {entry.name} in worksheet {config.name}"
+                        f"Error in processing preamble {entry.name} in worksheet {config.name}"
                     ) from e
 
             model_dicts.append(preamble_dict)
@@ -380,12 +380,13 @@ class MetadataTemplate:
             data_configs = [
                 entry for entries in config.data_sections.values() for entry in entries
             ]
-            header_width = len([c.value is not None for c in data_header])
-            # check the shape of the data
-            if len(data_rows) and header_width != len(data_configs):
-                raise Exception(
-                    f"Expected {len(data_configs)} data columns but saw {header_width} in worksheet {config.name}"
-                )
+            if len(data_rows):
+                header_width = len([c.value is not None for c in data_header])
+                # check the shape of the data
+                if header_width != len(data_configs):
+                    raise Exception(
+                        f"Expected {len(data_configs)} data columns but saw {header_width} in worksheet {config.name}"
+                    )
 
             for n, row in enumerate(data_rows):
                 data_values = {
