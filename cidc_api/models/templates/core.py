@@ -119,9 +119,9 @@ class Entry:
                 ] = self.gcs_uri_format.format(**format_dict)
 
             # Finally, handle process_as
-            context.update(column_mapping)
             for column, process in self.process_as.items():
-                column_mapping[column] = process(value, column_mapping)
+                context.update(column_mapping)
+                column_mapping[column] = process(value, context)
 
         except Exception as e:
             raise Exception(
@@ -276,12 +276,17 @@ class MetadataTemplate:
         self.worksheet_configs = worksheet_configs
         self.constants = constants
 
-    def read_and_insert(self, filename: Union[str, BinaryIO]):
+    def read_and_insert(self, filename: Union[str, BinaryIO]) -> List[Exception]:
         """
         Extract the models from a populated instance of this template and try to
         insert them, rolling back and returning a list of errors if any are encountered.
         """
-        return insert_record_batch(self.read(filename))
+        try:
+            records = self.read(filename)
+        except Exception as e:
+            return [e]
+        else:
+            return insert_record_batch(records)
 
     def read(
         self, filename: Union[str, BinaryIO]
@@ -305,23 +310,28 @@ class MetadataTemplate:
             # split the preamble and data rows
             preamble_rows = []
             data_rows = []
+            data_header = None
             for row in workbook[config.name].iter_rows():
-                row_type = row_type_from_string(row[0].value)
+                row_type = row_type_from_string(row[0].value)  # row[0]is the type
                 if row_type == RowType.PREAMBLE:
-                    preamble_rows.append(row)
+                    preamble_rows.append(row[1:])
                 elif row_type == RowType.DATA:
-                    data_rows.append(row)
+                    # if no entries, skip it
+                    if not all(cell.value is None for cell in row[1:]):
+                        data_rows.append(row[1:])
+                elif row_type == RowType.HEADER:
+                    data_header = row[1:]
 
             if len(preamble_rows) != len(config.preamble):
                 raise Exception(
-                    f"Expected {len(config.preamble)} preamble rows but saw {len(preamble_rows)}"
+                    f"Expected {len(config.preamble)} preamble rows but saw {len(preamble_rows)} on {config.name}"
                 )
 
             # {<column instance>: <processed value, ...}
-            for entry, row in zip(config.preamble, preamble_rows):
-                cell = row[2]  # row[0] is the type, row[1] is the title
+            preamble_values = {row[0].value: row[1].value for row in preamble_rows}
+            for entry in config.preamble:
                 preamble_dict.update(
-                    entry.get_column_mapping(cell.value)
+                    entry.get_column_mapping(preamble_values[entry.name])
                 )  # process the value
             model_dicts.append(preamble_dict)
 
@@ -329,17 +339,27 @@ class MetadataTemplate:
             data_configs = [
                 entry for entries in config.data_sections.values() for entry in entries
             ]
+            if len(data_rows) and data_header is None:
+                raise Exception(f"Received #data rows without a #header")
+            elif len(data_rows) and len(data_header) != len(data_configs):
+                raise Exception(
+                    f"Expected {len(data_configs)} data columns but saw {len(data_header)} on {config.name}"
+                )
+
             for row in data_rows:
-                # if no entries, skip it
-                if all(cell.value is None for cell in row[1:]):
-                    continue
+                data_values = {
+                    title_cell.value: data_cell.value
+                    for title_cell, data_cell in zip(data_header, row)
+                }
 
                 # context will be updated by every cell for each row,
                 # but preamble_dict needs to persist unchanged
                 context = preamble_dict.copy()
                 data_dict = {}
-                for cell, entry in zip(row[1:], data_configs):  # row[0] is the type
-                    data_dict.update(entry.get_column_mapping(cell.value, context))
+                for entry in data_configs:
+                    data_dict.update(
+                        entry.get_column_mapping(data_values[entry.name], context)
+                    )
                     context.update(data_dict)
 
                 model_dicts.append(data_dict)

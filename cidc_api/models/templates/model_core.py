@@ -127,7 +127,7 @@ class MetadataModel(BaseModel):
                     setattr(self, column.name, incoming)
                 elif incoming is not None and current != incoming:
                     raise Exception(
-                        f"found conflicting values for {self.__tablename__}.{column.name}: {current}!={other}"
+                        f"found conflicting values for {self.__tablename__}.{column.name} for {self.primary_key_values()}: {current}!={incoming}"
                     )
 
     @classmethod

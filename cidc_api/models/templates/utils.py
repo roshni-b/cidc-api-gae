@@ -155,13 +155,12 @@ def insert_record_batch(
         # in case they're needed for later fk's
         session.flush()
 
-    if not hold_commit:
-        if dry_run or len(errors):
-            session.rollback()
-        else:
-            session.commit()
-    else:
+    if hold_commit:
         session.flush()
+    elif dry_run or len(errors):
+        session.rollback()
+    else:
+        session.commit()
 
     return errors
 
@@ -192,13 +191,12 @@ def remove_record_batch(
         except Exception as e:
             errors.append(e)
 
-    if not hold_commit:
-        if dry_run or len(errors):
-            session.rollback()
-        else:
-            session.commit()
-    else:
+    if hold_commit:
         session.flush()
+    elif dry_run or len(errors):
+        session.rollback()
+    else:
+        session.commit()
 
     return errors
 

@@ -214,14 +214,8 @@ def test_tissue_slide_template(clean_db, cidc_api, tmp_path):
             assert partic.trial_participant_id == f"TTTP0{i+1}"
             if i == 0:
                 assert partic.cohort_name == "Arm_Z"
-                assert partic.gender == "Female"
-                assert partic.race == "Asian"
-                assert partic.ethnicity == "Hispanic or Latino"
             else:  # i == 1
                 assert partic.cohort_name == "Arm_A"
-                assert partic.gender == "Male"
-                assert partic.race == "Native Hawaiian/Pacific Islander"
-                assert partic.ethnicity == "Unknown"
 
         assert len(samples) == 4
         for i, sample in enumerate(samples):
@@ -238,18 +232,8 @@ def test_tissue_slide_template(clean_db, cidc_api, tmp_path):
             assert sample.shipment_manifest_id == shipment.manifest_id
             assert sample.shipping_entry_number == i + 1
             assert sample.box_number == "2"
-            assert (
-                sample.surgical_pathology_report_id
-                == f"Surgical pathology report {i+1}"
-            )
-            assert sample.clinical_report_id == f"clinical report {i+1}"
             assert sample.parent_sample_id == f"TRIALGROUP {i+1}"
             assert sample.processed_sample_id == "BIOBANK 1"
-            assert sample.site_description == "ANAL CANAL & ANUS"
-            assert sample.topography_code == "C00.1"
-            assert sample.topography_description == "LIP"
-            assert sample.histology_behavior == "8004/3"
-            assert sample.histology_behavior_description == "Neoplasm, malignant"
             assert sample.sample_location == f"A{i+1}"
             assert sample.type_of_sample == "Tumor Tissue"
             assert (
@@ -271,10 +255,6 @@ def test_tissue_slide_template(clean_db, cidc_api, tmp_path):
             assert sample.quality_of_sample == "Pass"
             assert sample.sample_replacement == "Replacement Not Requested"
             assert sample.residual_sample_use == "Not Reported"
-            assert (
-                sample.diagnosis_verification
-                == "Local review consistent with diagnostic pathology report"
-            )
             assert sample.intended_assay == shipment.assay_type
 
             if i == 0:

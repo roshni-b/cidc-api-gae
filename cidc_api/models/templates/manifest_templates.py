@@ -69,45 +69,68 @@ def _BaseManifestTemplate(
     upload_type: str,
     filled_by_biorepository: List[Entry],
     filled_by_cimac_lab: List[Entry],
+    essential_patient_data: bool = False,
     constants: Dict[Column, Any] = {},
 ):
-    return MetadataTemplate(
-        upload_type=upload_type,
-        purpose="manifest",
-        worksheet_configs=[
-            WorksheetConfig(
-                "Shipment",
-                [
+    worksheets = [
+        WorksheetConfig(
+            "Shipment",
+            [
+                Entry(
+                    Shipment.trial_id,
+                    name="protocol identifier",
+                    process_as={
+                        Participant.trial_id: identity,
+                        Sample.trial_id: identity,
+                    },
+                ),
+                Entry(
+                    Shipment.manifest_id,
+                    process_as={Sample.shipment_manifest_id: identity},
+                ),
+                Entry(Shipment.assay_priority),
+                Entry(
+                    Shipment.assay_type, process_as={Sample.intended_assay: identity},
+                ),
+                Entry(Shipment.receiving_party),
+                Entry(Shipment.courier),
+                Entry(Shipment.tracking_number),
+                Entry(Shipment.account_number),
+                Entry(Shipment.shipping_condition),
+                Entry(Shipment.date_shipped),
+                Entry(Shipment.date_received),
+                Entry(Shipment.quality_of_shipment),
+                Entry(Shipment.ship_from),
+                Entry(Shipment.ship_to),
+            ],
+            {},
+        ),
+        WorksheetConfig(
+            "Samples",
+            [],
+            {
+                "IDs": [
+                    Entry(Sample.shipping_entry_number),
+                    Entry(Sample.collection_event_name),
+                    Entry(Participant.cohort_name),
+                    Entry(Participant.trial_participant_id),
+                    Entry(Sample.parent_sample_id),
+                    Entry(Sample.processed_sample_id),
                     Entry(
-                        Shipment.trial_id,
-                        name="protocol identifier",
+                        Sample.cimac_id,
                         process_as={
-                            Participant.trial_id: identity,
-                            Sample.trial_id: identity,
+                            Sample.cimac_participant_id: cimac_id_to_cimac_participant_id,
+                            Participant.cimac_participant_id: cimac_id_to_cimac_participant_id,
                         },
                     ),
-                    Entry(
-                        Shipment.manifest_id,
-                        process_as={Sample.shipment_manifest_id: identity},
-                    ),
-                    Entry(Shipment.assay_priority),
-                    Entry(
-                        Shipment.assay_type,
-                        process_as={Sample.intended_assay: identity},
-                    ),
-                    Entry(Shipment.receiving_party),
-                    Entry(Shipment.courier),
-                    Entry(Shipment.tracking_number),
-                    Entry(Shipment.account_number),
-                    Entry(Shipment.shipping_condition),
-                    Entry(Shipment.date_shipped),
-                    Entry(Shipment.date_received),
-                    Entry(Shipment.quality_of_shipment),
-                    Entry(Shipment.ship_from),
-                    Entry(Shipment.ship_to),
                 ],
-                {},
-            ),
+                "Filled by Biorepository": filled_by_biorepository,
+                "Filled by CIMAC Lab": filled_by_cimac_lab,
+            },
+        ),
+    ]
+    if essential_patient_data:
+        worksheets.append(
             WorksheetConfig(
                 "Essential Patient Data",
                 [],
@@ -139,30 +162,12 @@ def _BaseManifestTemplate(
                         Entry(Participant.ethnicity),
                     ],
                 },
-            ),
-            WorksheetConfig(
-                "Samples",
-                [],
-                {
-                    "IDs": [
-                        Entry(Sample.shipping_entry_number),
-                        Entry(Sample.collection_event_name),
-                        Entry(Participant.cohort_name),
-                        Entry(Participant.trial_participant_id),
-                        Entry(Sample.parent_sample_id),
-                        Entry(Sample.processed_sample_id),
-                        Entry(
-                            Sample.cimac_id,
-                            process_as={
-                                Participant.cimac_participant_id: cimac_id_to_cimac_participant_id
-                            },
-                        ),
-                    ],
-                    "Filled by Biorepository": filled_by_biorepository,
-                    "Filled by CIMAC Lab": filled_by_cimac_lab,
-                },
-            ),
-        ],
+            )
+        )
+    return MetadataTemplate(
+        upload_type=upload_type,
+        purpose="manifest",
+        worksheet_configs=worksheets,
         constants=constants,
     )
 
@@ -193,6 +198,7 @@ PbmcManifest = _BaseManifestTemplate(
         Entry(Sample.residual_sample_use),
         Entry(Sample.comments),
     ],
+    essential_patient_data=True,
 )
 
 TissueSlideManifest = _BaseManifestTemplate(
@@ -219,4 +225,5 @@ TissueSlideManifest = _BaseManifestTemplate(
         Entry(Sample.residual_sample_use),
         Entry(Sample.comments),
     ],
+    essential_patient_data=False,
 )
