@@ -30,9 +30,8 @@ def test_hande_assay(clean_db, cidc_api, monkeypatch, tmp_path):
     with cidc_api.app_context():
         HandeAssay.write(f)
 
-        # empty read test shows that format is correct
-        # and confirms that empty templates fail
-        with pytest.raises(Exception, match="required value Protocol identifier"):
+        # confirm that empty templates fail
+        with pytest.raises(Exception, match="Error in processing preamble"):
             HandeAssay.read(f)
 
     mock_get_current_user(monkeypatch)

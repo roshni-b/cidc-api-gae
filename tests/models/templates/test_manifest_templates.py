@@ -26,9 +26,8 @@ def test_pbmc_template(clean_db, cidc_api, tmp_path):
     with cidc_api.app_context():
         PbmcManifest.write(f)
 
-        # empty read test shows that format is correct
-        # and confirms that empty templates fail
-        with pytest.raises(Exception, match="required value Protocol identifier"):
+        # confirm that empty templates fail
+        with pytest.raises(Exception, match="Error in processing preamble"):
             PbmcManifest.read(f)
 
     # test successful read
@@ -165,9 +164,8 @@ def test_tissue_slide_template(clean_db, cidc_api, tmp_path):
     with cidc_api.app_context():
         TissueSlideManifest.write(f)
 
-        # empty read test shows that format is correct
-        # and confirms that empty templates fail
-        with pytest.raises(Exception, match="required value Protocol identifier"):
+        # confirm that empty templates fail
+        with pytest.raises(Exception, match="Error in processing preamble"):
             TissueSlideManifest.read(f)
 
     # test successful read
