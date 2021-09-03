@@ -306,52 +306,92 @@ class MetadataTemplate:
         model_instances: List[MetadataModel] = []
         model_dicts: List[Dict[Column, Any]] = []
         for config in self.worksheet_configs:
+            if config.name not in workbook:
+                raise Exception(
+                    f"Missing expected worksheet {config.name}, please include even if all fields are optional"
+                )
 
             # split the preamble and data rows
             preamble_rows = []
             data_rows = []
             data_header = None
-            for row in workbook[config.name].iter_rows():
-                row_type = row_type_from_string(row[0].value)  # row[0]is the type
+            for n, row in enumerate(workbook[config.name].iter_rows()):
+                # if no entries, skip it
+                if all(cell.value is None for cell in row[1:]):
+                    continue
+                # row[0] is the type
+                row_type: RowType = row_type_from_string(
+                    row[0].value
+                )  # None if not a valid type
+
+                # only pay attention if we have a reason to care
                 if row_type == RowType.PREAMBLE:
                     preamble_rows.append(row[1:])
-                elif row_type == RowType.DATA:
-                    # if no entries, skip it
-                    if not all(cell.value is None for cell in row[1:]):
-                        data_rows.append(row[1:])
+
                 elif row_type == RowType.HEADER:
-                    data_header = row[1:]
+                    # if it's already been defined, that's an error
+                    if data_header is not None:
+                        raise Exception(
+                            f"Second header row encountered at #{n+1} in worksheet {config.name}"
+                        )
+                    else:
+                        data_header = row[1:]
 
-            if len(preamble_rows) != len(config.preamble):
-                raise Exception(
-                    f"Expected {len(config.preamble)} preamble rows but saw {len(preamble_rows)} on {config.name}"
-                )
+                elif row_type == RowType.DATA:
+                    if data_header is None:
+                        raise Exception(
+                            f"Encountered data row (#{n+1} in worksheet {config.name!r}) before header row"
+                        )
+                    else:
+                        data_rows.append(row[1:])
 
-            # {<column instance>: <processed value, ...}
+                # ignore everything else
+                else:
+                    pass
+
+            # turn the preamble into a mapping
             preamble_values = {
-                row[0].value.lower(): row[1].value for row in preamble_rows
+                str(row[0].value).lower(): row[1].value
+                for row in preamble_rows
+                if row[0].value is not None
             }
+            # check the shape of the preamble
+            if len(preamble_values) != len(config.preamble):
+                raise Exception(
+                    f"Expected {len(config.preamble)} preamble rows but saw {len(preamble_values)} in worksheet {config.name}"
+                )
             for entry in config.preamble:
-                preamble_dict.update(
-                    entry.get_column_mapping(preamble_values[entry.name.lower()])
-                )  # process the value
+                # process the value
+                try:
+                    preamble_dict.update(
+                        entry.get_column_mapping(
+                            preamble_values.get(entry.name.lower())
+                        )
+                    )
+                except Exception as e:
+                    # add a bit of context
+                    raise Exception(
+                        "Error in processing preamble {entry.name} in worksheet {config.name}"
+                    ) from e
+
             model_dicts.append(preamble_dict)
 
             # combine and flatten the lists of configs across all data_sections
             data_configs = [
                 entry for entries in config.data_sections.values() for entry in entries
             ]
-            if len(data_rows) and data_header is None:
-                raise Exception(f"Received #data rows without a #header")
-            elif len(data_rows) and len(data_header) != len(data_configs):
+            header_width = len([c.value is not None for c in data_header])
+            # check the shape of the data
+            if len(data_rows) and header_width != len(data_configs):
                 raise Exception(
-                    f"Expected {len(data_configs)} data columns but saw {len(data_header)} on {config.name}"
+                    f"Expected {len(data_configs)} data columns but saw {header_width} in worksheet {config.name}"
                 )
 
-            for row in data_rows:
+            for n, row in enumerate(data_rows):
                 data_values = {
-                    title_cell.value.lower(): data_cell.value
+                    str(title_cell.value).lower(): data_cell.value
                     for title_cell, data_cell in zip(data_header, row)
+                    if title_cell.value is not None
                 }
 
                 # context will be updated by every cell for each row,
@@ -359,11 +399,18 @@ class MetadataTemplate:
                 context = preamble_dict.copy()
                 data_dict = {}
                 for entry in data_configs:
-                    data_dict.update(
-                        entry.get_column_mapping(
-                            data_values[entry.name.lower()], context
+                    # process the value
+                    try:
+                        data_dict.update(
+                            entry.get_column_mapping(
+                                data_values.get(entry.name.lower()), context
+                            )
                         )
-                    )
+                    except Exception as e:
+                        # add some context here
+                        raise Exception(
+                            f"Error in processing {entry.name} for data row #{n+1} in worksheet {config.name}"
+                        ) from e
                     context.update(data_dict)
 
                 model_dicts.append(data_dict)
@@ -391,7 +438,7 @@ class MetadataTemplate:
             Type[MetadataModel], Dict[Tuple, List[MetadataModel]]
         ] = defaultdict(lambda: defaultdict(list))
         for instance in model_instances:
-            unique_values = instance.unique_field_values()
+            unique_values: Tuple = instance.unique_field_values()
             model_groups[instance.__class__][unique_values].append(instance)
 
         # Build a dictionary mapping model classes to deduplicated instances
