@@ -21,7 +21,7 @@ from .trial_metadata import Participant, Sample, Shipment
 #     worksheet_configs=[
 #         WorksheetConfig(
 #             "Tier 1",
-#             [Entry(ClinicalData.trial_id, name="protocol identifier",),],
+#             [Entry(ClinicalData.trial_id, name="Protocol identifier")],
 #             {
 #                 "Demographics": [
 #                     Entry(
@@ -29,8 +29,8 @@ from .trial_metadata import Participant, Sample, Shipment
 #                         process_as={ClinicalData.cimac_participant_id: identity},
 #                     ),
 #                     Entry(ClinicalData.race),
-#                     Entry(ClinicalData.gender, name="sex",),
-#                     Entry(ClinicalData.ethnicity),
+#                     Entry(ClinicalData.gender, name="Sex",),
+#                     Entry(ClinicalData.ethnicity, name="Ethnic group"),
 #                     Entry(ClinicalData.age),
 #                 ],
 #                 "History": [
@@ -78,7 +78,7 @@ def _BaseManifestTemplate(
             [
                 Entry(
                     Shipment.trial_id,
-                    name="protocol identifier",
+                    name="Protocol identifier",
                     process_as={
                         Participant.trial_id: identity,
                         Sample.trial_id: identity,
@@ -110,10 +110,10 @@ def _BaseManifestTemplate(
             [],
             {
                 "IDs": [
-                    Entry(Sample.shipping_entry_number),
+                    Entry(Sample.shipping_entry_number, name="Entry (#)"),
                     Entry(Sample.collection_event_name),
                     Entry(Participant.cohort_name),
-                    Entry(Participant.trial_participant_id),
+                    Entry(Participant.trial_participant_id, name="Participant id"),
                     Entry(Sample.parent_sample_id),
                     Entry(Sample.processed_sample_id),
                     Entry(
@@ -136,7 +136,8 @@ def _BaseManifestTemplate(
                 [],
                 {
                     "Path Concordance Verification": [
-                        Entry(Participant.trial_participant_id),
+                        Entry(Sample.shipping_entry_number, name="Entry (#)",),
+                        Entry(Participant.trial_participant_id, name="Participant id",),
                         Entry(
                             Sample.cimac_id,
                             process_as={
@@ -153,13 +154,16 @@ def _BaseManifestTemplate(
                         Entry(Sample.site_description),
                         Entry(Sample.topography_code),
                         Entry(Sample.topography_description),
-                        Entry(Sample.histology_behavior),
-                        Entry(Sample.histology_behavior_description),
+                        Entry(Sample.histology_behavior, name="Histology/behavior"),
+                        Entry(
+                            Sample.histology_behavior_description,
+                            name="Histology/behavior description",
+                        ),
                     ],
                     "Demographics": [
                         Entry(Participant.gender, name="Sex"),
                         Entry(Participant.race),
-                        Entry(Participant.ethnicity),
+                        Entry(Participant.ethnicity, name="Ethnic group"),
                     ],
                 },
             )
@@ -210,7 +214,7 @@ TissueSlideManifest = _BaseManifestTemplate(
         Entry(Sample.type_of_tumor_sample),
         Entry(Sample.sample_collection_procedure),
         Entry(Sample.core_number),
-        Entry(Sample.fixation_stabilization_type),
+        Entry(Sample.fixation_stabilization_type, name="Fixation/stabilization type"),
         Entry(Sample.processed_sample_type),
         Entry(Sample.processed_sample_quantity),
     ],
