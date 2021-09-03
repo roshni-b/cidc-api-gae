@@ -28,7 +28,7 @@ HandeAssay = MetadataTemplate(
         WorksheetConfig(
             "H&E",
             [
-                Entry(HandeUpload.trial_id, name="protocol identifier"),
+                Entry(HandeUpload.trial_id, name="Protocol identifier"),
                 Entry(HandeUpload.assay_creator),
             ],
             {
@@ -36,24 +36,24 @@ HandeAssay = MetadataTemplate(
                     Entry(HandeRecord.cimac_id),
                     Entry(
                         HandeImage.local_path,
-                        name="image file",
+                        name="Image file",
                         gcs_uri_format="{trial_id}/hande/{cimac_id}/image_file.svs",
                         process_as={HandeRecord.image_url: get_property("object_url")},
                     ),
                     Entry(
                         HandeRecord.tumor_tissue_percentage,
-                        name="tumor tissue (% total area)",
+                        name="Tumor tissue (% total area)",
                     ),
                     Entry(
                         HandeRecord.viable_tumor_percentage,
-                        name="viable tumor (% area)",
+                        name="Viable tumor (% area)",
                     ),
                     Entry(
                         HandeRecord.viable_stroma_percentage,
-                        name="viable stroma (% area)",
+                        name="Viable stroma (% area)",
                     ),
-                    Entry(HandeRecord.necrosis_percentage, name="necrosis (% area)",),
-                    Entry(HandeRecord.fibrosis_percentage, name="fibrosis (% area)",),
+                    Entry(HandeRecord.necrosis_percentage, name="Necrosis (% area)",),
+                    Entry(HandeRecord.fibrosis_percentage, name="Fibrosis (% area)",),
                     Entry(HandeRecord.comment),
                 ]
             },
@@ -69,7 +69,7 @@ WesFastqAssay = MetadataTemplate(
         WorksheetConfig(
             "WES",
             [
-                Entry(WESUpload.trial_id, name="protocol identifier"),
+                Entry(WESUpload.trial_id, name="Protocol identifier"),
                 Entry(WESUpload.assay_creator),
                 Entry(WESUpload.sequencing_protocol),
                 Entry(WESUpload.library_kit),
@@ -84,6 +84,7 @@ WesFastqAssay = MetadataTemplate(
                     Entry(NGSAssayFiles.lane),
                     Entry(
                         Fastq_gzFile.local_path,
+                        name="Forward fastq",
                         gcs_uri_format="{trial_id}/wes/{cimac_id}/r1_L{lane}.fastq.gz",
                         process_as={
                             NGSAssayFiles.r1_object_url: get_property("object_url"),
@@ -91,6 +92,7 @@ WesFastqAssay = MetadataTemplate(
                     ),
                     Entry(
                         Fastq_gzFile.local_path,
+                        name="Reverse fastq",
                         gcs_uri_format="{trial_id}/wes/{cimac_id}/r2_L{lane}.fastq.gz",
                         process_as={
                             NGSAssayFiles.r2_object_url: get_property("object_url"),
@@ -112,7 +114,7 @@ WesBamAssay = MetadataTemplate(
         WorksheetConfig(
             "WES",
             [
-                Entry(WESUpload.trial_id, name="protocol identifier"),
+                Entry(WESUpload.trial_id, name="Protocol identifier"),
                 Entry(WESUpload.assay_creator),
                 Entry(WESUpload.sequencing_protocol),
                 Entry(WESUpload.library_kit),
@@ -127,6 +129,7 @@ WesBamAssay = MetadataTemplate(
                     Entry(NGSAssayFiles.number),
                     Entry(
                         BamFile.local_path,
+                        name="Bam file",
                         gcs_uri_format="{trial_id}/wes/{cimac_id}/reads_{number}.bam",
                         process_as={
                             NGSAssayFiles.bam_object_url: get_property("object_url"),

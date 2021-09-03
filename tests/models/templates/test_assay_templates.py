@@ -32,7 +32,7 @@ def test_hande_assay(clean_db, cidc_api, monkeypatch, tmp_path):
 
         # empty read test shows that format is correct
         # and confirms that empty templates fail
-        with pytest.raises(Exception, match="required value protocol identifier"):
+        with pytest.raises(Exception, match="required value Protocol identifier"):
             HandeAssay.read(f)
 
     mock_get_current_user(monkeypatch)

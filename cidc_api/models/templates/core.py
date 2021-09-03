@@ -66,7 +66,7 @@ class Entry:
         process_as: Dict[Column, Callable[[str], Any]] = {},
     ):
         self.column = column
-        self.name = name if name else column.name.replace("_", " ")
+        self.name = name if name else column.name.replace("_", " ").capitalize()
         self.gcs_uri_format = gcs_uri_format
         self.process_as = process_as
 
@@ -328,10 +328,12 @@ class MetadataTemplate:
                 )
 
             # {<column instance>: <processed value, ...}
-            preamble_values = {row[0].value: row[1].value for row in preamble_rows}
+            preamble_values = {
+                row[0].value.lower(): row[1].value for row in preamble_rows
+            }
             for entry in config.preamble:
                 preamble_dict.update(
-                    entry.get_column_mapping(preamble_values[entry.name])
+                    entry.get_column_mapping(preamble_values[entry.name.lower()])
                 )  # process the value
             model_dicts.append(preamble_dict)
 
@@ -348,7 +350,7 @@ class MetadataTemplate:
 
             for row in data_rows:
                 data_values = {
-                    title_cell.value: data_cell.value
+                    title_cell.value.lower(): data_cell.value
                     for title_cell, data_cell in zip(data_header, row)
                 }
 
@@ -358,7 +360,9 @@ class MetadataTemplate:
                 data_dict = {}
                 for entry in data_configs:
                     data_dict.update(
-                        entry.get_column_mapping(data_values[entry.name], context)
+                        entry.get_column_mapping(
+                            data_values[entry.name.lower()], context
+                        )
                     )
                     context.update(data_dict)
 
