@@ -126,8 +126,11 @@ class MetadataModel(BaseModel):
                 if current is None:
                     setattr(self, column.name, incoming)
                 elif incoming is not None and current != incoming:
+                    pks = {
+                        col.name: value for col, value in self.primary_key_map().items()
+                    }
                     raise Exception(
-                        f"found conflicting values for {self.__tablename__}.{column.name} for {self.primary_key_values()}: {current}!={incoming}"
+                        f"found conflicting values for {self.__class__.__name__} {pks} for {column.name} : {current}!={incoming}"
                     )
 
     @classmethod

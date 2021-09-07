@@ -41,5 +41,5 @@ def test_metadata_model():
     assert other.baz == "baz"
 
     setattr(other, "bar", "bag")
-    with pytest.raises(Exception, match="found conflicting values for table.bar"):
+    with pytest.raises(Exception, match="found conflicting values for"):
         md.merge(other)

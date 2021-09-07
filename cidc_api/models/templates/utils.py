@@ -11,6 +11,13 @@ __all__ = [
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, OrderedDict, Set, Type
 
+from psycopg2.errors import (
+    CheckViolation,
+    ForeignKeyViolation,
+    InvalidTextRepresentation,
+    NotNullViolation,
+)
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
 from .file_metadata import Upload
@@ -97,6 +104,54 @@ def _get_global_insertion_order() -> List[MetadataModel]:
     return ordered_models
 
 
+def _handle_postgres_error(error: IntegrityError, model: Type) -> Exception:
+    orig = error.orig
+    pg_error: str = orig.pgerror
+    instance = {c.name: v for c, v in model(**error.params).primary_key_map().items()}
+
+    if isinstance(orig, ForeignKeyViolation):
+        # ERROR:  insert or update on table "<table>" violates foreign key constraint "<name>_fkey"\n
+        # DETAIL: Key (<column>)=(<value>) is not present in table "<foreign>".\n
+        foreign_name = pg_error.split('"')[-2].replace("_", " ").title()[:-1]
+        _, column_name, _, value, _ = pg_error.replace(")", "(").split("(")
+        instance = {
+            c.name: v for c, v in model(**error.params).primary_key_map().items()
+        }
+        return Exception(
+            f"Error inserting / updating {model.__name__}: no {foreign_name} with {column_name} = {value}\n{instance}"
+        )
+
+    elif isinstance(orig, NotNullViolation):
+        # ERROR: null value in column "<column>" violates not-null constraint
+        # DETAIL: Failing row contains (<value>, ...).
+        column_name = pg_error.split('"')[1]
+        return Exception(
+            f"Error inserting / updating {model.__name__}: must provide a value for {column_name}\n{instance}"
+        )
+
+    elif isinstance(orig, InvalidTextRepresentation):
+        # ERROR: invalid input value for enum <whatever>_enum: "<value>"
+        # DETAIL: LINE 1: ..., '<value>', ...
+        #                      ^
+        value = pg_error.split('"')[1]
+        column_name = {str(v): k for k, v in error.params.items()}[value]
+        return Exception(
+            f"Error inserting / updating {model.__name__}: invalid input value for {column_name} = {value}\n{instance}"
+        )
+
+    elif isinstance(orig, CheckViolation):
+        ## currently have to be manually added to the db itself as sqlalchemy doesn't handle these
+        # ERROR: new row for relation "<table>" violates check constraint "<name>"
+        # DETAIL: Failing row contains (<value>, ...).
+        constraint_name = pg_error.split('"')[3]
+        return Exception(
+            f"Error inserting / updating {model.__name__}: improper value checked by {constraint_name}\n{instance}"
+        )
+
+    else:
+        return error
+
+
 @with_default_session
 def insert_record_batch(
     ordered_records: OrderedDict[Type, List[MetadataModel]],
@@ -149,11 +204,16 @@ def insert_record_batch(
                 record = session.merge(record)
                 ordered_records[model][n] = record
             except Exception as e:
-                errors.append(e)
+                errors.append(_handle_postgres_error(e, model))
+                break
 
         # flush these records to generate db-derived values
         # in case they're needed for later fk's
-        session.flush()
+        try:
+            session.flush()
+        except (DataError, IntegrityError) as e:
+            errors.append(_handle_postgres_error(e, model=model))
+            break  # if it fails in a flush, it's done done
 
     if hold_commit:
         session.flush()
