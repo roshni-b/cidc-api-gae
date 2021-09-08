@@ -1,17 +1,23 @@
+from cidc_api.models.templates.trial_metadata import CollectionEvent
+from cidc_api.models.models import with_default_session
+from cidc_api.models.templates.utils import insert_record_batch
+from collections import OrderedDict
 from unittest.mock import MagicMock
 from datetime import datetime
 from typing import Tuple
 
 from cidc_api.resources.trial_metadata import trial_modifier_roles
 from cidc_api.models import (
-    Users,
-    TrialMetadata,
-    TrialMetadataSchema,
-    Permissions,
     CIDCRole,
+    ClinicalTrial,
     DownloadableFiles,
     ROLES,
+    Permissions,
+    TrialMetadata,
+    TrialMetadataSchema,
+    Users,
 )
+from cidc_api.models.templates.sync_schemas import syncall_from_blobs
 
 from ..utils import mock_current_user, make_role, mock_gcloud_client
 
@@ -48,13 +54,13 @@ def setup_trial_metadata(cidc_api, user_id=None) -> Tuple[int, int]:
                             "sample_location": "",
                             "type_of_primary_container": "Other",
                             "type_of_sample": "Other",
-                            "collection_event_name": "",
+                            "collection_event_name": "event",
                             "parent_sample_id": "",
                         }
                     ],
                 }
             ],
-            "allowed_collection_event_names": [""],
+            "allowed_collection_event_names": [] if n == 2 else ["event"],
             "allowed_cohort_names": [],
             "assays": {},
             "analysis": {},
@@ -62,6 +68,13 @@ def setup_trial_metadata(cidc_api, user_id=None) -> Tuple[int, int]:
         }
         trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata_json)
         trial.insert()
+
+        records = OrderedDict()
+        records[ClinicalTrial] = [ClinicalTrial(protocol_identifier=trial_id)]
+        records[CollectionEvent] = [CollectionEvent(event_name="event")]
+        errs = insert_record_batch(records)
+        assert len(errs) == 0, "\n".join(str(e) for e in errs)
+
         if grant_perm and user_id:
             Permissions(
                 granted_to_user=user_id,
@@ -304,6 +317,9 @@ def test_create_trial(cidc_api, clean_db, monkeypatch):
 
         # Clear created trial
         with cidc_api.app_context():
+            db_trial = ClinicalTrial.get_by_id(trial_id)
+            assert db_trial is not None
+
             trial = TrialMetadata.find_by_trial_id(trial_id)
             trial.delete()
 
@@ -368,7 +384,6 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
             **trial.metadata_json,
             "allowed_collection_event_names": [
                 *trial.metadata_json["allowed_collection_event_names"],
-                "bazz",
             ],
             "allowed_cohort_names": ["buzz"],
         }
@@ -384,6 +399,47 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
 
         with cidc_api.app_context():
             trial = TrialMetadata.find_by_id(trial.id)
+
+            db_trial = (
+                clean_db.query(ClinicalTrial)
+                .filter(ClinicalTrial.protocol_identifier == trial.trial_id)
+                .first()
+            )
+
+            assert db_trial is not None
+            assert set(db_trial.allowed_cohort_names) == set(
+                new_metadata_json["allowed_cohort_names"]
+            )
+            assert set(db_trial.allowed_collection_event_names) == set(
+                new_metadata_json["allowed_collection_event_names"]
+            )
+
+        # test delete by using different collection_event_names
+        new_metadata_json["allowed_collection_event_names"] = [
+            *trial.metadata_json["allowed_collection_event_names"],
+            "baz",
+        ]
+        res = client.patch(
+            f"/trial_metadata/{trial.trial_id}",
+            headers={"If-Match": trial._etag},
+            json={"metadata_json": new_metadata_json},
+        )
+        assert res.status_code == 200
+        assert res.json["id"] == trial.id
+        assert res.json["trial_id"] == trial.trial_id
+        assert res.json["metadata_json"] == new_metadata_json
+
+        with cidc_api.app_context():
+            trial = TrialMetadata.find_by_id(trial.id)
+
+            db_trial = ClinicalTrial.get_by_id(trial.trial_id)
+            assert db_trial is not None
+            assert set(db_trial.allowed_cohort_names) == set(
+                new_metadata_json["allowed_cohort_names"]
+            )
+            assert set(db_trial.allowed_collection_event_names) == set(
+                new_metadata_json["allowed_collection_event_names"]
+            )
 
 
 def test_get_trial_metadata_summaries(cidc_api, clean_db, monkeypatch):
