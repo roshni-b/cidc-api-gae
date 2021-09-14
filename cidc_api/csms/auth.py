@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from ..config.logging import get_logger
+from typing import Any, Dict, Iterator
 import requests
 
 from ..config.settings import (
@@ -10,7 +10,6 @@ from ..config.settings import (
 )
 
 
-logger = get_logger(__name__)
 _TOKEN, _TOKEN_EXPIRY = None, datetime.now()
 
 
@@ -40,7 +39,7 @@ def get_token():
     return _TOKEN
 
 
-def get_with_authorization(url: str, *args, **kwargs):
+def get_with_authorization(url: str, **kwargs) -> requests.Response:
     """url should be fully valid or begin with `/` to be prefixed with CSMS_BASE_URL"""
     token = get_token()
     headers = {
@@ -51,4 +50,43 @@ def get_with_authorization(url: str, *args, **kwargs):
     kwargs["headers"] = headers
     if not url.startswith(CSMS_BASE_URL):
         url = CSMS_BASE_URL + url
-    return requests.get(url, *args, **kwargs)
+    return requests.get(url, params=kwargs)
+
+
+def get_with_paging(
+    url: str, limit: int = None, offset: int = 0, **kwargs
+) -> Iterator[Dict[str, Any]]:
+    """
+    Return an iterator of entries via get_with_authorization with handling for CSMS paging
+    
+    Parameters
+    ----------
+    url: str
+        url should be fully valid or begin with `/` to be prefixed with CSMS_BASE_URL
+    limit: int = None
+        the number of records to return on each page
+        default: 5000 for samples, 50 for manifests
+    offset: int = 0
+        which page to return, 0-indexed
+        increments as needed to continue returning
+
+    Raises
+    ------
+    requests.exceptions.HTTPError
+        via res.raise_for_status()
+        https://docs.python-requests.org/en/master/user/quickstart/#response-status-codes
+    """
+    if not limit:
+        if "samples" in url:
+            limit = 5000
+        elif "manifests" in url:
+            limit = 50
+
+    res = get_with_authorization(url, limit=limit, offset=offset, **kwargs)
+    while res.status_code < 300 and len(res.json().get("data", [])) > 0:
+        # if there's not an error and we're still returning
+        yield from res.json()["data"]
+        offset += 1  # get the next page
+        res = get_with_authorization(url, limit=limit, offset=offset, **kwargs)
+    else:
+        res.raise_for_status()
