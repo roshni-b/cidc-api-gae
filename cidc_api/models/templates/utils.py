@@ -105,7 +105,7 @@ def _get_global_insertion_order() -> List[MetadataModel]:
 
 
 def _handle_postgres_error(error: IntegrityError, model: Type) -> Exception:
-    if not hasattr(error, "orig") or not hasattr(error, "pgerror"):
+    if not hasattr(error, "orig"):
         return error
 
     orig = error.orig
@@ -208,6 +208,7 @@ def insert_record_batch(
                 ordered_records[model][n] = record
             except Exception as e:
                 errors.append(_handle_postgres_error(e, model))
+                print("209", e)
                 break
 
         # flush these records to generate db-derived values
@@ -216,14 +217,21 @@ def insert_record_batch(
             session.flush()
         except (DataError, IntegrityError) as e:
             errors.append(_handle_postgres_error(e, model=model))
+            print("220", e)
             break  # if it fails in a flush, it's done done
+        except Exception as e:
+            print("223", e)
 
-    if hold_commit:
-        session.flush()
-    elif dry_run or len(errors):
-        session.rollback()
-    else:
-        session.commit()
+    try:
+        if hold_commit:
+            session.flush()
+        elif dry_run or len(errors):
+            session.rollback()
+        else:
+            session.commit()
+    except Exception as e:
+        print("233", e)
+        raise e
 
     return errors
 

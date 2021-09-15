@@ -290,6 +290,7 @@ class MetadataTemplate:
         try:
             records = self.read(filename)
         except Exception as e:
+            print("core", e)
             return [e]
         else:
             return insert_record_batch(records)

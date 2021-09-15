@@ -50,7 +50,7 @@ def get_with_authorization(url: str, **kwargs) -> requests.Response:
     kwargs["headers"] = headers
     if not url.startswith(CSMS_BASE_URL):
         url = CSMS_BASE_URL + url
-    return requests.get(url, params=kwargs)
+    return requests.get(url, **kwargs)
 
 
 def get_with_paging(
