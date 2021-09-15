@@ -208,7 +208,6 @@ def insert_record_batch(
                 ordered_records[model][n] = record
             except Exception as e:
                 errors.append(_handle_postgres_error(e, model))
-                print("209", e)
                 break
 
         # flush these records to generate db-derived values
@@ -217,21 +216,14 @@ def insert_record_batch(
             session.flush()
         except (DataError, IntegrityError) as e:
             errors.append(_handle_postgres_error(e, model=model))
-            print("220", e)
             break  # if it fails in a flush, it's done done
-        except Exception as e:
-            print("223", e)
 
-    try:
-        if hold_commit:
-            session.flush()
-        elif dry_run or len(errors):
-            session.rollback()
-        else:
-            session.commit()
-    except Exception as e:
-        print("233", e)
-        raise e
+    if hold_commit:
+        session.flush()
+    elif dry_run or len(errors):
+        session.rollback()
+    else:
+        session.commit()
 
     return errors
 
