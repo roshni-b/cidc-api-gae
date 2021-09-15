@@ -1,11 +1,13 @@
 __all__ = [
     "insert_manifest_from_json",
+    "insert_manifest_into_blob",
 ]
 
-from collections import OrderedDict
+from collections import defaultdict, OrderedDict
 from sqlalchemy.orm.session import Session
 from typing import Any, Callable, Dict, List, Tuple
 
+from ..models import TrialMetadata
 from .model_core import cimac_id_to_cimac_participant_id, with_default_session
 from .sync_schemas import _get_all_values
 from .trial_metadata import (
@@ -72,11 +74,78 @@ def _need_to_insert(obj: Any, existing: List[Any], key: str) -> bool:
 
 
 @with_default_session
+def insert_manifest_into_blob(manifest: Dict[str, Any], *, session: Session):
+    from cidc_schemas.prism.merger import merge_clinical_trial_metadata
+
+    manifest_id = _get_and_check(
+        obj=manifest, key="manifest_id", msg=f"No manifest_id in: {manifest}",
+    )
+    samples: List[Dict[str, Any]] = _get_and_check(
+        obj=manifest,
+        key="samples",
+        msg=f"Manifest {manifest_id} contains no samples: {manifest}",
+        default=[],
+        check=lambda v: len(v) != 0,
+    )
+
+    trial_id, existing_cimac_ids = _get_and_check_trial(
+        manifest.get("samples", []), session=session
+    )
+    trial_md = TrialMetadata.select_for_update_by_trial_id(trial_id)
+
+    sample_map: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for sample in samples:
+        cimac_id = _get_and_check(
+            obj=sample,
+            key="cimac_id",
+            msg=f"No cimac_id defined for samples[{n}] on manifest_id={manifest_id} for trial {trial_id}",
+        )
+        if not cimac_id_regex.match(cimac_id):
+            raise Exception(
+                f"Malformatted cimac_id={cimac_id} on manifest_id={manifest_id} for trial {trial_id}"
+            )
+        elif cimac_id in existing_cimac_ids:
+            raise Exception(
+                f"Sample with cimac_id={cimac_id} already exists for trial {trial_id}\nNew samples: {sample}"
+            )
+        else:
+            sample["trial_participant_id"] = sample.pop("participant_id", None)
+
+        sample_map[cimac_id_to_cimac_participant_id(cimac_id)].append(sample)
+
+    patch = {
+        "protocol_identifier": trial_id,
+        "shipments": [_get_all_values(target=Shipment, old=manifest)],
+        "participants": {},
+    }
+    for cimac_participant_id, samples in enumerate(sample_map.items()):
+        # just to make sure doesn't fail later
+        if not len(samples):
+            continue
+
+        partic = dict(
+            cimac_participant_id=cimac_participant_id
+            ** _get_all_values(target=Participant, old=samples[0])
+        )
+        partic["samples"] = [
+            _get_all_values(target=Sample, old=sample) for sample in samples
+        ]
+
+        patch["participants"].append(partic)
+
+    merged, errs = merge_clinical_trial_metadata(patch, trial_md.metadata_json)
+    if len(errs):
+        raise Exception({"prism errors": [str(e) for e in errs]})
+
+    trial_md.update(changes={"metadata_json": merged})
+
+
+@with_default_session
 def insert_manifest_from_json(
     manifest: Dict[str, Any], *, session: Session
 ) -> List[Exception]:
     """
-    For use in conjunction 
+    For use in conjunction with CSMS to create new samples from a given manifest.
     """
     manifest_id = _get_and_check(
         obj=manifest, key="manifest_id", msg=f"No manifest_id in: {manifest}",
