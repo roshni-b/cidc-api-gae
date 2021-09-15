@@ -110,9 +110,7 @@ def _handle_postgres_error(error: IntegrityError, model: Type) -> Exception:
 
     orig = error.orig
     pg_error: str = orig.pgerror
-    instance = {
-        c.name: v for c, v in model(**error.params).primary_key_map().items()
-    }
+    instance = {c.name: v for c, v in model(**error.params).primary_key_map().items()}
 
     if isinstance(orig, ForeignKeyViolation):
         # ERROR:  insert or update on table "<table>" violates foreign key constraint "<name>_fkey"\n
