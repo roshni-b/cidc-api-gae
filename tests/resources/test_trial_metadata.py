@@ -1,5 +1,4 @@
 from cidc_api.models.templates.trial_metadata import CollectionEvent
-from cidc_api.models.models import with_default_session
 from cidc_api.models.templates.utils import insert_record_batch
 from collections import OrderedDict
 from unittest.mock import MagicMock
@@ -19,7 +18,14 @@ from cidc_api.models import (
 )
 from cidc_api.models.templates.sync_schemas import syncall_from_blobs
 
+from cidc_api.models.templates.csms_api import (
+    insert_manifest_from_json,
+    insert_manifest_into_blob,
+)
+
 from ..utils import mock_current_user, make_role, mock_gcloud_client
+
+from tests.csms.data import samples, manifests
 
 
 def setup_user(cidc_api, monkeypatch) -> int:
@@ -147,7 +153,7 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
             [
                 ("cytof", "/cytof/spike_in.fcs"),
                 ("cytof", "/cytof/source_.fcs"),
-                ("cytof", "/cytof_analysis/combined_cell_counts_profiling.csv",),
+                ("cytof", "/cytof_analysis/combined_cell_counts_profiling.csv"),
                 ("wes", "/wes/r1_L.fastq.gz"),
             ]
         ):
@@ -383,7 +389,7 @@ def test_update_trial(cidc_api, clean_db, monkeypatch):
         new_metadata_json = {
             **trial.metadata_json,
             "allowed_collection_event_names": [
-                *trial.metadata_json["allowed_collection_event_names"],
+                *trial.metadata_json["allowed_collection_event_names"]
             ],
             "allowed_cohort_names": ["buzz"],
         }
@@ -461,3 +467,14 @@ def test_get_trial_metadata_summaries(cidc_api, clean_db, monkeypatch):
         res = client.get("/trial_metadata/summaries")
         assert res.status_code == 200
         assert res.json == result
+
+
+def test_add_new_manifest_from_json(cidc_api, clean_db, monkeypatch):
+    """Check that /trial_metadata/new_manifest endpoint behaves as expected"""
+    user_id = setup_user(cidc_api, monkeypatch)
+    trial_id, _ = set(setup_trial_metadata(cidc_api))
+
+    # check insert_manifest_from_json()
+    # check insert_manifest_into_blob()
+    # assert new manifests exists
+    # catch error if any
