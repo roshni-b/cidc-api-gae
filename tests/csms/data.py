@@ -1,3 +1,5 @@
+__all__ = ["manifests", "samples"]
+
 _samples_definitions = [
     [
         {
@@ -85,6 +87,8 @@ _samples_definitions = [
             "sample_key": f"test_trial,LOCAL 01,BIOBANK {n}",
             "standardized_collection_event_name": "Baseline",
             "status": "qc_complete",
+            "assay_priority": "1",
+            "assay_type": "mIF",
             "biobank_id": "biobank",
             "box_number": "X",
             "entry_number": n,
@@ -158,9 +162,11 @@ _samples_definitions = [
             "cohort_name": "Arm_A",
             "collection_event_name": "Pre_Day_1_Cycle_2",
             "manifest_id": "test_trial_normal_dna",
-            "participant_id": "LOCAL 01",
+            "participant_id": "LOCAL 02",
             "protocol_identifier": "test_trial",
             "status": "qc_complete",
+            "assay_priority": "1",
+            "assay_type": "WES",
             "biobank_id": "biobank",
             "box_number": "X",
             "entry_number": 1,
@@ -198,6 +204,8 @@ _samples_definitions = [
             "protocol_identifier": "test_trial",
             "standardized_collection_event_name": "Baseline",
             "status": "qc_complete",
+            "assay_priority": "1",
+            "assay_type": "RNAseq",
             "biobank_id": "biobank",
             "box_number": "X",
             "entry_number": 1,
@@ -384,12 +392,14 @@ _samples_definitions = [
             "barcode": f"CTTTP04A2.0{n}",
             "cimac_id": f"CTTTP04A2.0{n}",
             "cohort_name": "Arm_A",
-            "collection_event_name": "Treatment",
+            "collection_event_name": "On_Treatment",
             "manifest_id": "test_trial_tumor_dna",
             "participant_id": "LOCAL 04",
             "protocol_identifier": "test_trial",
             "standardized_collection_event_name": "Pre_Day_1_Cycle_2",
             "status": "qc_complete",
+            "assay_priority": "1",
+            "assay_type": "WES",
             "biobank_id": "biobank",
             "box_number": "X",
             "entry_number": 1,
@@ -428,6 +438,8 @@ _samples_definitions = [
             "protocol_identifier": "test_trial",
             "standardized_collection_event_name": "Baseline",
             "status": "qc_complete",
+            "assay_priority": "1",
+            "assay_type": "H&E",
             "biobank_id": "biobank",
             "box_number": "X",
             "entry_number": 1,
@@ -615,6 +627,7 @@ _samples_definitions = [
 
 samples = [entry for group in _samples_definitions for entry in group]
 
+_manifests_to_make = {s["manifest_id"] for s in samples}
 manifests = [
     {
         "biobank_id": "biobank",
@@ -633,7 +646,7 @@ manifests = [
         "manifest_id": manifest,
         "barcode": manifest,
     }
-    for manifest in [s["manifest_id"] for s in samples if "manifest_id" in s]
+    for manifest in _manifests_to_make
 ]
 
 for n in range(len(manifests)):
@@ -641,13 +654,13 @@ for n in range(len(manifests)):
         s for s in samples if s.get("manifest_id") == manifests[n]["manifest_id"]
     ]
 
-    if all(s.get("status") == "cimac_id_generated" for s in manifests[n]["sample"]):
+    if all(s.get("status") == "cimac_id_generated" for s in manifests[n]["samples"]):
         manifests[n]["status"] = "draft"
 
-    elif all(s.get("status") in [None, "qc_complete"] for s in manifests[n]["sample"]):
-        if manifests[n]["sample"].get("status") == "qc_complete":
+    elif all(s.get("status") in [None, "qc_complete"] for s in manifests[n]["samples"]):
+        if manifests[n]["samples"][0].get("status") == "qc_complete":
             manifests[n]["status"] = "qc_complete"
-        manifests[n]["account_number"] = manifests[n]["account_number"]
+        manifests[n]["account_number"] = "AccN"
 
     else:
         raise AssertionError(

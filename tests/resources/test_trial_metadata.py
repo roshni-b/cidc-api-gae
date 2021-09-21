@@ -1,9 +1,9 @@
-from cidc_api.models.templates.trial_metadata import CollectionEvent
+from cidc_api.models.templates.trial_metadata import Cohort, CollectionEvent
 from cidc_api.models.templates.utils import insert_record_batch
 from collections import OrderedDict
-from unittest.mock import MagicMock
 from datetime import datetime
 from typing import Tuple
+from unittest.mock import MagicMock
 
 from cidc_api.resources.trial_metadata import trial_modifier_roles
 from cidc_api.models import (
@@ -16,16 +16,11 @@ from cidc_api.models import (
     TrialMetadataSchema,
     Users,
 )
-from cidc_api.models.templates.sync_schemas import syncall_from_blobs
-
-from cidc_api.models.templates.csms_api import (
-    insert_manifest_from_json,
-    insert_manifest_into_blob,
-)
 
 from ..utils import mock_current_user, make_role, mock_gcloud_client
 
-from tests.csms.data import samples, manifests
+from ..csms.data import manifests
+from ..csms.utils import validate_json_blob, validate_relational
 
 
 def setup_user(cidc_api, monkeypatch) -> int:
@@ -472,9 +467,56 @@ def test_get_trial_metadata_summaries(cidc_api, clean_db, monkeypatch):
 def test_add_new_manifest_from_json(cidc_api, clean_db, monkeypatch):
     """Check that /trial_metadata/new_manifest endpoint behaves as expected"""
     user_id = setup_user(cidc_api, monkeypatch)
-    trial_id, _ = set(setup_trial_metadata(cidc_api))
+    make_role(user_id, CIDCRole.ADMIN.value, cidc_api)
 
-    # check insert_manifest_from_json()
-    # check insert_manifest_into_blob()
-    # assert new manifests exists
-    # catch error if any
+    metadata_json = {
+        "protocol_identifier": "test_trial",
+        "participants": [],
+        "shipments": [],
+        "allowed_cohort_names": ["Arm_A", "Arm_Z"],
+        "allowed_collection_event_names": ["Baseline", "Pre_Day_1_Cycle_2",],
+    }
+
+    ordered_records = OrderedDict()
+    ordered_records[ClinicalTrial] = [ClinicalTrial(protocol_identifier="test_trial")]
+    ordered_records[CollectionEvent] = [
+        CollectionEvent(trial_id="test_trial", event_name="Baseline"),
+        CollectionEvent(trial_id="test_trial", event_name="Pre_Day_1_Cycle_2"),
+        CollectionEvent(trial_id="test_trial", event_name="On_Treatment"),
+    ]
+    ordered_records[Cohort] = [
+        Cohort(trial_id="test_trial", cohort_name="Arm_A"),
+        Cohort(trial_id="test_trial", cohort_name="Arm_Z"),
+    ]
+    with cidc_api.app_context():
+        TrialMetadata(trial_id="test_trial", metadata_json=metadata_json).insert()
+        errs = insert_record_batch(ordered_records)
+        assert len(errs) == 0
+
+    client = cidc_api.test_client()
+
+    for manifest in manifests:
+        if manifest.get("status") not in [None, "qc_complete"]:
+            continue
+
+        res = client.post("/trial_metadata/new_manifest", json=manifest)
+        assert res.status_code == 200, res.json["error"]
+
+        with cidc_api.app_context():
+            md_json = TrialMetadata.select_for_update_by_trial_id(
+                "test_trial"
+            ).metadata_json
+            validate_json_blob(md_json)
+            validate_relational("test_trial")
+
+    # reusing one returns an error
+    manifest = [m for m in manifests if m.get("status") in [None, "qc_complete"]][0]
+    res = client.post("/trial_metadata/new_manifest", json=manifest)
+    assert res.status_code != 200
+    assert "already exists for trial" in res.json["error"]
+
+    # if not qc_complete, returns an error
+    manifest = [m for m in manifests if m.get("status") not in [None, "qc_complete"]][0]
+    res = client.post("/trial_metadata/new_manifest", json=manifest)
+    assert res.status_code != 200
+    assert "that is not qc_complete" in res.json["error"]

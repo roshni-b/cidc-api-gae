@@ -142,19 +142,20 @@ def update_trial_metadata_by_trial_id(trial, trial_updates):
 
 
 @trial_metadata_bp.route("/new_manifest", methods=["POST"])
-@requires_auth("new_manifest", [CIDCRole.ADMIN])
+@requires_auth("new_manifest", [CIDCRole.ADMIN.value])
 def add_new_manifest_from_json():
-    # relational hook
-    errors = insert_manifest_from_json(request.json)
+    try:
+        # relational hook
+        insert_manifest_from_json(request.json)
 
-    # schemas JSON blob hook
-    insert_manifest_into_blob(request.json)
+        # schemas JSON blob hook
+        insert_manifest_into_blob(request.json)
 
-    if len(errors):
-        res = jsonify(errors=errors)
+    except Exception as e:
+        res = jsonify(error=str(e))
         res.status_code = 500
-        return res
     else:
         res = jsonify(status="success")
         res.status_code = 200
+    finally:
         return res
