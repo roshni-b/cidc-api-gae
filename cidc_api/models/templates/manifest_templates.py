@@ -189,6 +189,11 @@ PbmcManifest = _BaseManifestTemplate(
         Entry(Sample.processed_sample_volume_units),
         Entry(Sample.processed_sample_concentration),
         Entry(Sample.processed_sample_concentration_units),
+        Entry(Sample.processed_sample_derivative),
+        Entry(Sample.sample_derivative_volume),
+        Entry(Sample.sample_derivative_volume_units),
+        Entry(Sample.sample_derivative_concentration),
+        Entry(Sample.sample_derivative_concentration_units),
     ],
     filled_by_cimac_lab=[
         Entry(Sample.pbmc_viability),

@@ -125,6 +125,14 @@ def assert_pbmc_worked(cidc_api, clean_db):
             assert sample.processed_sample_volume_units == "Other"
             assert sample.processed_sample_concentration == 0.3 if i in (1, 5) else 0.2
             assert sample.processed_sample_concentration_units == "Not Reported"
+            assert sample.processed_sample_derivative == "Tumor DNA"
+            assert sample.sample_derivative_volume in (0, 0.0)
+            assert sample.sample_derivative_volume_units == "Microliters"
+            assert sample.sample_derivative_concentration in (1, 1.0)
+            assert (
+                sample.sample_derivative_concentration_units
+                == "Nanogram per Microliter"
+            )
             assert sample.pbmc_viability in (1, 1.0)
             assert sample.pbmc_recovery in (1, 1.0)
             assert sample.material_used in (1, 1.0)
