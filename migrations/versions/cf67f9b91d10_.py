@@ -24,7 +24,7 @@ def upgrade():
     op.create_table('ngs_uploads',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('trial_id', sa.String(), nullable=False),
-    sa.Column('sequencer_platform', sa.Enum('Illumina - HiSeq 2500', 'Illumina - HiSeq 3000', 'Illumina - NextSeq 550', 'Illumina - HiSeq 4000', 'Illumina - NovaSeq 6000', 'MiSeq', name='sequencer_platform_enum'), nullable=True),
+    sa.Column('sequencer_platform', sa.Enum('Illumina - HiSeq 2500', 'Illumina - HiSeq 3000', 'Illumina - NextSeq 550', 'Illumina - HiSeq 4000', 'Illumina - NovaSeq 6000', 'MiSeq', 'TWIST', name='sequencer_platform_enum'), nullable=True),
     sa.Column('library_kit', sa.Enum('Hyper Prep ICE Exome Express: 1.0', 'KAPA HyperPrep', 'IDT duplex UMI adapters', 'TWIST', name='library_kit_enum'), nullable=True),
     sa.Column('paired_end_reads', sa.Enum('Paired', 'Single', name='paired_end_reads_enum'), nullable=True),
     sa.ForeignKeyConstraint(['id', 'trial_id'], ['uploads.id', 'uploads.trial_id'], ),
@@ -34,7 +34,7 @@ def upgrade():
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('trial_id', sa.String(), nullable=False),
     sa.Column('sequencing_protocol', sa.Enum('Express Somatic Human WES (Deep Coverage) v1.1', 'Somatic Human WES v6', name='sequencing_protocol_enum'), nullable=True),
-    sa.Column('bait_set', sa.Enum('whole_exome_illumina_coding_v1', 'broad_custom_exome_v1', 'TWIST Dana Farber Custom Panel', name='bait_set_enum'), nullable=False),
+    sa.Column('bait_set', sa.Enum('whole_exome_illumina_coding_v1', 'broad_custom_exome_v1', 'TWIST Dana Farber Custom Panel', 'TWIST Custom Panel PN 101042', name='bait_set_enum'), nullable=False),
     sa.Column('read_length', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['id', 'trial_id'], ['ngs_uploads.id', 'ngs_uploads.trial_id'], ),
     sa.PrimaryKeyConstraint('id', 'trial_id')
