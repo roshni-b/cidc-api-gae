@@ -380,6 +380,8 @@ assay_facets: Facets = {
     "TCR": {
         "Source": FacetConfig(
             [
+                "/tcr/reads.tsv",
+                "/tcr/controls/reads.tsv",
                 "/tcr/replicate_/r1.fastq.gz",
                 "/tcr/replicate_/r2.fastq.gz",
                 "/tcr/replicate_/i1.fastq.gz",
