@@ -210,17 +210,22 @@ def insert_record_batch(
                 errors.append(_handle_postgres_error(e, model))
                 break
 
-        # flush these records to generate db-derived values
-        # in case they're needed for later fk's
-        try:
-            session.flush()
-        except (DataError, IntegrityError) as e:
-            errors.append(_handle_postgres_error(e, model=model))
-            break  # if it fails in a flush, it's done done
+        if len(errors) != 0:  # if we've hit an error, we're done
+            break
+        else:
+            # flush these records to generate db-derived values
+            # in case they're needed for later fk's
+            try:
+                session.flush()
+            except (DataError, IntegrityError) as e:
+                errors.append(_handle_postgres_error(e, model=model))
+                break  # if it fails in a flush, it's done done
 
-    if hold_commit:
+    if len(errors):
+        session.rollback()
+    elif hold_commit:
         session.flush()
-    elif dry_run or len(errors):
+    elif dry_run:
         session.rollback()
     else:
         session.commit()

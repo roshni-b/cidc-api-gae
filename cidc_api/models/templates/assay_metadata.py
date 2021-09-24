@@ -119,6 +119,7 @@ class WESUpload(NGSUpload):
         Enum(
             "Express Somatic Human WES (Deep Coverage) v1.1",
             "Somatic Human WES v6",
+            "TWIST",
             name="sequencing_protocol_enum",
         ),
         doc="Protocol and version used for the sequencing.",
@@ -128,6 +129,7 @@ class WESUpload(NGSUpload):
             "whole_exome_illumina_coding_v1",
             "broad_custom_exome_v1",
             "TWIST Dana Farber Custom Panel",
+            "TWIST Custom Panel PN 101042",
             name="bait_set_enum",
         ),
         nullable=False,

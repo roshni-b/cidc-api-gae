@@ -18,7 +18,7 @@ def test_csms():
 def load_from_blobs():
     errors = syncall_from_blobs()
     if len(errors):
-        res = jsonify(errors=errors)
+        res = jsonify(errors=[str(e) for e in errors])
         res.status_code = 500
         return res
     else:

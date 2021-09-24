@@ -672,6 +672,8 @@ details_dict = {
         "source", "Unharmonized, one-off, or not-yet-supported data.", ""
     ),
     # TCR
+    "/tcr/reads.tsv": FileDetails("source", "", ""),
+    "/tcr/controls/reads.tsv": FileDetails("source", "", ""),
     "/tcr/replicate_/r1.fastq.gz": FileDetails("source", "", ""),
     "/tcr/replicate_/r2.fastq.gz": FileDetails("source", "", ""),
     "/tcr/replicate_/i1.fastq.gz": FileDetails("source", "", ""),
