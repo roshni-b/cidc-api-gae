@@ -33,8 +33,8 @@ def upgrade():
     op.create_table('wes_uploads',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('trial_id', sa.String(), nullable=False),
-    sa.Column('sequencing_protocol', sa.Enum('Express Somatic Human WES (Deep Coverage) v1.1', 'Somatic Human WES v6', name='sequencing_protocol_enum'), nullable=True),
-    sa.Column('bait_set', sa.Enum('whole_exome_illumina_coding_v1', 'broad_custom_exome_v1', 'TWIST Dana Farber Custom Panel', name='bait_set_enum'), nullable=False),
+    sa.Column('sequencing_protocol', sa.Enum('Express Somatic Human WES (Deep Coverage) v1.1', 'Somatic Human WES v6', 'TWIST', name='sequencing_protocol_enum'), nullable=True),
+    sa.Column('bait_set', sa.Enum('whole_exome_illumina_coding_v1', 'broad_custom_exome_v1', 'TWIST Dana Farber Custom Panel', 'TWIST Custom Panel PN 101042', name='bait_set_enum'), nullable=False),
     sa.Column('read_length', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['id', 'trial_id'], ['ngs_uploads.id', 'ngs_uploads.trial_id'], ),
     sa.PrimaryKeyConstraint('id', 'trial_id')
