@@ -28,7 +28,7 @@ def upgrade():
     sa.Column('gcs_file_map', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
     sa.Column('gcs_xlsx_uri', sa.String(), nullable=True),
     sa.Column('upload_type', sa.String(), nullable=False),
-    sa.Column('assay_creator', sa.Enum('DFCI', 'Mount Sinai', 'Stanford', 'MD Anderson', name='artifact_creator_enum'), nullable=False),
+    sa.Column('assay_creator', sa.Enum('DFCI', 'Mount Sinai', 'Stanford', 'MD Anderson', 'TWIST', name='assay_creator_enum'), nullable=False),
     sa.Column('uploader_email', sa.String(), nullable=False),
     sa.ForeignKeyConstraint(['trial_id'], ['clinical_trials.protocol_identifier'], ),
     sa.ForeignKeyConstraint(['uploader_email'], ['users.email'], ),

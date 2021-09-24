@@ -61,6 +61,9 @@ ArtifactCategory = Enum(
     "Manifest File",
     name="artifact_category_enum",
 )
+AssayCreator = Enum(
+    "DFCI", "Mount Sinai", "Stanford", "MD Anderson", "TWIST", name="assay_creator_enum"
+)
 UploadStatus = Enum(
     "started",
     "upload-completed",
@@ -121,7 +124,7 @@ class Upload(MetadataModel):
         doc="The type of upload (pbmc, wes, olink, wes_analysis, ...)",
     )
     assay_creator = Column(
-        ArtifactCreator, nullable=False, doc="Which CIMAC site created the data"
+        AssayCreator, nullable=False, doc="Which CIMAC site created the data"
     )
     uploader_email = Column(
         String,
