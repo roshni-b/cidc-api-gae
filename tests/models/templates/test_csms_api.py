@@ -25,9 +25,10 @@ def test_insert_manifest_into_blob(cidc_api, clean_db):
 
     with cidc_api.app_context():
         # blank db throws error
-        with pytest.raises(Exception, match="does not exist"):
+        with pytest.raises(Exception, match="No trial found with id"):
             insert_manifest_into_blob(manifest)
 
+        # also checks for trial existence in relational
         errs = insert_record_batch(
             {ClinicalTrial: [ClinicalTrial(protocol_identifier="test_trial",)]}
         )
@@ -94,13 +95,24 @@ def test_insert_manifest_from_json(cidc_api, clean_db):
 
     with cidc_api.app_context():
         # blank db throws error
-        with pytest.raises(Exception, match="does not exist"):
+
+        with pytest.raises(Exception, match="No trial found with id"):
             insert_manifest_from_json(manifest)
 
         errs = insert_record_batch(
             {ClinicalTrial: [ClinicalTrial(protocol_identifier="test_trial",)]}
         )
         assert len(errs) == 0
+
+        # also checks for trial existence in JSON blobs
+        metadata_json = {
+            "protocol_identifier": "test_trial",
+            "participants": [],
+            "shipments": [],
+            "allowed_cohort_names": [],
+            "allowed_collection_event_names": [],
+        }
+        TrialMetadata(trial_id="test_trial", metadata_json=metadata_json,).insert()
 
         with pytest.raises(
             Exception, match="No Collection event with trial_id, event_name"

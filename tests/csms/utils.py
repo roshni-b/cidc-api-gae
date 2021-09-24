@@ -11,7 +11,7 @@ from cidc_api.models.templates import (
     Sample,
     Shipment,
 )
-from cidc_api.models.templates.csms_api import _convert_sample
+from cidc_api.models.templates.csms_api import _convert_samples
 
 from .data import manifests, samples
 
@@ -208,9 +208,6 @@ def validate_json_blob(trial_md: dict):
             assert shipment["assay_type"] == inst_samples[0]["assay_type"]
 
         for k, v in manifest.items():
-            # if k in ["date_received", "date_shipped"]:
-            # v = _convert_to_date(v)
-
             if k in shipment:
                 assert shipment[k] == v, f"{shipment[k]} != {v}"
 
@@ -236,7 +233,11 @@ def validate_json_blob(trial_md: dict):
             assert (
                 len(this_sample) == 1
             ), f"Sample not uniquely defined: {sample['cimac_id']}"
-            this_sample = _convert_sample(this_sample[0])
+            _, this_sample = next(
+                _convert_samples(
+                    trial_md["protocol_identifier"], "manifest_id", this_sample, []
+                )
+            )
 
             if "standardized_collection_event_name" in sample:
                 assert (
