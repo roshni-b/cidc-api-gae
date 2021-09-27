@@ -1,5 +1,7 @@
+from cidc_api.models.templates.file_metadata import Upload
+from flask.globals import session
 from sqlalchemy.orm.session import Session
-from cidc_api.models.models import with_default_session
+from cidc_api.models.models import UploadJobs, with_default_session
 from typing import Any, Dict
 from datetime import date, datetime
 from unittest.mock import MagicMock
@@ -23,6 +25,7 @@ def _convert_to_date(date_str: str) -> date:
 
 
 def samples_history(cimac_id: str) -> Dict[str, Any]:
+    """Return the history for a sample with a given CIMAC ID"""
     sample = [s for s in samples if s.get("cimac_id") == cimac_id]
     assert len(sample) == 1, "Given CIMAC id is not unique"
     sample = sample[0]
@@ -58,6 +61,7 @@ def samples_history(cimac_id: str) -> Dict[str, Any]:
 
 
 def manifests_history(manifest_id: str) -> Dict[str, Any]:
+    """Return the history for a manifest with a given ID"""
     manifest = [m for m in manifests if m.get("manifest_id") == manifest_id]
     assert len(manifest) == 1, "Given manifest ID is not unique"
     manifest = manifest[0]
@@ -97,6 +101,10 @@ def manifests_history(manifest_id: str) -> Dict[str, Any]:
 
 @with_default_session
 def validate_relational(trial_id: str, *, session: Session):
+    """
+    Given a trial_id, validate that the data in the relational db tables match the test data provided by tests/csms/data.py
+    Checks Shipment, Participant, and Sample
+    """
     global manifests, samples
 
     shipments = session.query(Shipment).filter(Shipment.trial_id == trial_id).all()
@@ -181,8 +189,15 @@ def validate_relational(trial_id: str, *, session: Session):
             if hasattr(inst, k):
                 assert getattr(inst, k) == v
 
+    assert session.query(Upload).filter(Upload.trial_id == trial_id).count() != 0
+
 
 def validate_json_blob(trial_md: dict):
+    """
+    Given a trial metadata blob, validate that the data matches the test data provided by tests/csms/data.py
+    Checks /shipments, /participants, and /participants/*/samples
+    Also checks UploadJobs
+    """
     global manifests, samples
 
     for shipment in trial_md["shipments"]:
@@ -256,8 +271,19 @@ def validate_json_blob(trial_md: dict):
                         sample[k] == v
                     ), f"on {sample['cimac_id']}: {sample[k]} != {v}"
 
+    @with_default_session
+    def check_upload_job(session: Session):
+        for job in (
+            session.query(UploadJobs)
+            .filter(UploadJobs.trial_id == trial_md["protocol_identifier"])
+            .all()
+        ):
+            validate_json_blob(job.metadata_patch)
+
 
 def mock_get_with_authorization(monkeypatch):
+    """Mock return for calls to CSMS"""
+
     def mock_get(url: str, **kwargs) -> MagicMock:
         ret = MagicMock()
 

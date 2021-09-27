@@ -7,7 +7,8 @@ from collections import defaultdict, OrderedDict
 from sqlalchemy.orm.session import Session
 from typing import Any, Callable, Dict, Iterator, List, Tuple, Union
 
-from ..models import TrialMetadata
+from .file_metadata import Upload
+from ..models import TrialMetadata, UploadJobStatus, UploadJobs
 from .model_core import cimac_id_to_cimac_participant_id, with_default_session
 from .sync_schemas import _get_all_values
 from .trial_metadata import (
@@ -19,6 +20,60 @@ from .trial_metadata import (
     Shipment,
 )
 from .utils import insert_record_batch
+
+
+def _get_upload_type(samples: Dict[str, Any]) -> str:
+    upload_type = set()
+    for sample in samples:
+        processed_type = sample.get("processed_sample_type").lower()
+        if processed_type == "h&e-stained fixed tissue slide specimen":
+            processed_type = "h_and_e"
+
+        if processed_type in [
+            "pbmc",
+            "plasma",
+            "tissue_slide",
+            "normal_blood_dna",
+            "normal_tissue_dna",
+            "tumor_tissue_dna",
+            "tumor_tissue_rna",
+            "h_and_e",
+        ]:
+            upload_type.add(processed_type)
+        else:
+            sample_manifest_type = sample.get("sample_manifest_type")
+            processed_derivative = sample.get("processed_sample_derivative")
+            if sample_manifest_type is None:
+                # safety
+                print(sample)
+                continue
+
+            elif sample_manifest_type == "biofluid_cellular":
+                upload_type.add("pbmc")
+            elif sample_manifest_type == "tissue_slides":
+                upload_type.add("tissue_slide")
+
+            elif processed_derivative == "Germline DNA":
+                upload_type.add(f"normal_{sample_manifest_type.split('_')[0]}_dna")
+            elif processed_derivative == "Tumor DNA":
+                upload_type.add(f"tumor_{sample_manifest_type.split('_')[0]}_dna")
+            elif processed_derivative in ["DNA", "RNA"]:
+                unprocessed_type = sample.get("type_of_sample")
+                new_type = "tumor" if "tumor" in unprocessed_type.lower() else "normal"
+                new_type += (
+                    "_blood_"
+                    if sample_manifest_type.startswith("biofluid")
+                    else "_tissue_"
+                )
+                new_type += processed_derivative.lower()
+
+                upload_type.add(new_type)
+            else:
+                print(sample)
+
+    print(upload_type)
+    assert len(upload_type) == 1, f"Inconsistent value determined for upload_type"
+    return list(upload_type)[0]
 
 
 def _get_and_check(
@@ -220,6 +275,9 @@ def insert_manifest_into_blob(manifest: Dict[str, Any], *, session: Session):
     # schemas import here to keep JSON-blob code together
     from cidc_schemas.prism.merger import merge_clinical_trial_metadata
 
+    # also need to get current user for pseudo-UploadJobs
+    from ...shared.auth import get_current_user
+
     trial_id, manifest_id, samples = _extract_info_from_manifest(
         manifest, session=session
     )
@@ -290,6 +348,16 @@ def insert_manifest_into_blob(manifest: Dict[str, Any], *, session: Session):
 
     # save it
     trial_md.update(changes={"metadata_json": merged})
+
+    # create pseudo-UploadJobs
+    UploadJobs(
+        trial_id=trial_id,
+        _status=UploadJobStatus.MERGE_COMPLETED.value,
+        multifile=False,
+        metadata_patch=patch,
+        upload_type=_get_upload_type(samples),
+        uploader_email=get_current_user().email,
+    ).insert()
 
 
 @with_default_session
@@ -422,6 +490,17 @@ def insert_manifest_from_json(
                 **_get_all_values(target=Sample, old=sample),
             )
             ordered_records[Sample].append(new_sample)
+
+    # create pseudo-Upload
+    ordered_records[Upload] = [
+        Upload(
+            trial_id=trial_id,
+            status=UploadJobStatus.MERGE_COMPLETED.value,
+            multifile=False,
+            assay_creator="DFCI",
+            upload_type=_get_upload_type(samples),
+        )
+    ]
 
     # add and validate the data
     # the existence of the correct cohort names are checked here
