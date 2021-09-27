@@ -427,7 +427,7 @@ class Users(CommonColumns):
             query, columns=["email", "organization", "role", "trial_id", "permissions"]
         ).fillna("*")
 
-        with pd.ExcelWriter(io) as writer:
+        with pd.ExcelWriter(io) as writer: # https://github.com/PyCQA/pylint/issues/3060 pylint: disable=abstract-class-instantiated
             for trial_id in df["trial_id"].unique():
                 if trial_id == "*":
                     continue
