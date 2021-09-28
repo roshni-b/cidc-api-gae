@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from webargs import fields
 from werkzeug.exceptions import BadRequest
 
+from ..config.logging import get_logger
 from ..shared.auth import get_current_user, requires_auth
 from ..models import (
     CIDCRole,
@@ -26,6 +27,8 @@ from ..shared.rest_utils import (
     unmarshal_request,
     use_args_with_pagination,
 )
+
+logger = get_logger(__name__)
 
 trial_metadata_bp = Blueprint("trials", __name__)
 
@@ -124,6 +127,11 @@ def update_trial_metadata_by_trial_id(trial, trial_updates):
     # Block updates to protected metadata JSON fields
     metadata_updates = trial_updates.get("metadata_json")
     if trial.metadata_json or metadata_updates:
+        logger.info("Protected fields:" + str(TrialMetadata.PROTECTED_FIELDS))
+
+        logger.info("Current metadata:" + str(trial.metadata_json))
+        logger.info("Changes:" + str(metadata_updates))
+
         for field in TrialMetadata.PROTECTED_FIELDS:
             if trial.metadata_json.get(field) != metadata_updates.get(field):
                 raise BadRequest(

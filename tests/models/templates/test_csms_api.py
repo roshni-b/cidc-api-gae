@@ -7,7 +7,6 @@ from cidc_api.models import (
     CollectionEvent,
     insert_record_batch,
     TrialMetadata,
-    Users,
 )
 from cidc_api.models.templates.csms_api import (
     insert_manifest_from_json,
