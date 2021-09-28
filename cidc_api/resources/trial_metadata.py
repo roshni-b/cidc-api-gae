@@ -2,7 +2,6 @@ from flask import Blueprint, jsonify, request
 from webargs import fields
 from werkzeug.exceptions import BadRequest
 
-from ..config.logging import get_logger
 from ..shared.auth import get_current_user, requires_auth
 from ..models import (
     CIDCRole,
@@ -27,8 +26,6 @@ from ..shared.rest_utils import (
     unmarshal_request,
     use_args_with_pagination,
 )
-
-logger = get_logger(__name__)
 
 trial_metadata_bp = Blueprint("trials", __name__)
 

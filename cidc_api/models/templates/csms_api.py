@@ -45,7 +45,6 @@ def _get_upload_type(samples: Dict[str, Any]) -> str:
             processed_derivative = sample.get("processed_sample_derivative")
             if sample_manifest_type is None:
                 # safety
-                print(sample)
                 continue
 
             elif sample_manifest_type == "biofluid_cellular":
@@ -68,10 +67,7 @@ def _get_upload_type(samples: Dict[str, Any]) -> str:
                 new_type += processed_derivative.lower()
 
                 upload_type.add(new_type)
-            else:
-                print(sample)
 
-    print(upload_type)
     assert len(upload_type) == 1, f"Inconsistent value determined for upload_type"
     return list(upload_type)[0]
 
