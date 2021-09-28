@@ -127,11 +127,6 @@ def update_trial_metadata_by_trial_id(trial, trial_updates):
     # Block updates to protected metadata JSON fields
     metadata_updates = trial_updates.get("metadata_json")
     if trial.metadata_json or metadata_updates:
-        logger.info("Protected fields:" + str(TrialMetadata.PROTECTED_FIELDS))
-
-        logger.info("Current metadata:" + str(trial.metadata_json))
-        logger.info("Changes:" + str(metadata_updates))
-
         for field in TrialMetadata.PROTECTED_FIELDS:
             if trial.metadata_json.get(field) != metadata_updates.get(field):
                 raise BadRequest(
