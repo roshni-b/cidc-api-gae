@@ -59,6 +59,8 @@ def samples_history(cimac_id: str) -> Dict[str, Any]:
             }
         )
 
+    return ret
+
 
 def manifests_history(manifest_id: str) -> Dict[str, Any]:
     """Return the history for a manifest with a given ID"""
@@ -97,6 +99,8 @@ def manifests_history(manifest_id: str) -> Dict[str, Any]:
                 },
             }
         )
+
+    return ret
 
 
 @with_default_session
