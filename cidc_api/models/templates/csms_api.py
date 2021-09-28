@@ -189,6 +189,7 @@ def _extract_details_from_trial(
     assay_priority = _get_and_check(
         obj=samples,
         key="assay_priority",
+        msg=f"No assay_priority defined for manifest_id={manifest_id} for trial {trial_id}",
         default="Not Reported",
     )
     assay_type = _get_and_check(
