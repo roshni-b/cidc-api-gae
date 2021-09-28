@@ -649,7 +649,7 @@ manifests = [
     for manifest in _manifests_to_make
 ]
 
-for n in range(len(manifests)):
+for n in enumerate(manifests):
     manifests[n]["samples"] = [
         s for s in samples if s.get("manifest_id") == manifests[n]["manifest_id"]
     ]
