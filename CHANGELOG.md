@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.14` - this
+
+- `added` API endpoint to add a new manifest given JSON from CSMS
+
 ## Version `0.25.13` - 23 Sept 2021
 
 - `added` added TWIST enum values to WES in relational tables
