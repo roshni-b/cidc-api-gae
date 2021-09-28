@@ -71,8 +71,10 @@ def test_error_handling(cidc_api, clean_db):
         errors = PbmcManifest.read_and_insert(
             os.path.join(EXAMPLE_DIR, "broken", "pbmc_manifest.foreign_key.xlsx")
         )
-        assert len(errors) == 1
-        assert "no Clinical Trial with trial_id" in str(errors[0])
+        assert len(errors) == 1, "\n".join(str(e) for e in errors)
+        assert "no Clinical Trial with trial_id" in str(
+            errors[0]
+        ) or "no Cohort with trial_id, cohort_name" in str(errors[0])
 
         errors = PbmcManifest.read_and_insert(
             os.path.join(EXAMPLE_DIR, "broken", "pbmc_manifest.not_null.xlsx")

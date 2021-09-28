@@ -1,15 +1,30 @@
 __all__ = [
+    "detect_manifest_changes",
     "insert_manifest_from_json",
     "insert_manifest_into_blob",
 ]
 
 from collections import defaultdict, OrderedDict
 from sqlalchemy.orm.session import Session
-from typing import Any, Callable, Dict, Iterator, List, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    OrderedDict as OrderedDictType,
+    Tuple,
+    Type,
+    Union,
+)
 
 from .file_metadata import Upload
 from ..models import TrialMetadata, UploadJobStatus, UploadJobs
-from .model_core import cimac_id_to_cimac_participant_id, with_default_session
+from .model_core import (
+    cimac_id_to_cimac_participant_id,
+    MetadataModel,
+    with_default_session,
+)
 from .sync_schemas import _get_all_values
 from .trial_metadata import (
     cimac_id_regex,
@@ -155,11 +170,40 @@ def _extract_info_from_manifest(
     return trial_id, manifest_id, samples
 
 
+def _extract_details_from_trial(
+    trial_id: str, manifest_id: str, samples: List[Dict[str, Any]], *, session: Session
+):
+    """
+    Given a trial, do initial validation and return some key values
+    
+    Returns
+    -------
+    str : assay_priority
+    str : assay_type
+
+    Exceptions Raised
+    -----------------
+    - f"No assay_priority defined for manifest_id={manifest_id} for trial {trial_id}"
+    - f"No assay_type defined for manifest_id={manifest_id} for trial {trial_id}"
+    """
+    assay_priority = _get_and_check(
+        obj=samples,
+        key="assay_priority",
+        default="Not Reported",
+    )
+    assay_type = _get_and_check(
+        obj=samples,
+        key="assay_type",
+        msg=f"No assay_type defined for manifest_id={manifest_id} for trial {trial_id}",
+    )
+    return assay_priority, assay_type
+
+
 def _convert_samples(
     trial_id: str,
     manifest_id: str,
     samples: List[Dict[str, Any]],
-    existing_cimac_ids: List[str],
+    existing_cimac_ids: List[str] = [],
 ) -> Iterator[Tuple[str, Dict[str, Any]]]:
     """
     Convert a list of CSMS-style samples into an iterator returning CIMAC IDs and CIDC-style samples
@@ -289,16 +333,8 @@ def insert_manifest_into_blob(manifest: Dict[str, Any], *, session: Session):
         for p in trial_md.metadata_json["participants"]
         for s in p["samples"]
     ]
-    assay_priority = _get_and_check(
-        obj=samples,
-        key="assay_priority",
-        msg=f"No assay_priority defined for manifest_id={manifest_id} for trial {trial_id}",
-        default="Not Reported",
-    )
-    assay_type = _get_and_check(
-        obj=samples,
-        key="assay_type",
-        msg=f"No assay_type defined for manifest_id={manifest_id} for trial {trial_id}",
+    assay_priority, assay_type = _extract_details_from_trial(
+        trial_id, manifest_id, samples, session=session
     )
 
     # a patch is just the parts that are new, equivalent to the return of schemas.prismify
@@ -406,16 +442,8 @@ def insert_manifest_from_json(
     existing_cimac_ids = []
     for sample in session.query(Sample).filter(Sample.trial_id == trial_id).all():
         existing_cimac_ids.append(sample.cimac_id)
-    assay_priority = _get_and_check(
-        obj=samples,
-        key="assay_priority",
-        msg=f"No assay_priority defined for manifest_id={manifest_id} for trial {trial_id}",
-        default="Not Reported",
-    )
-    assay_type = _get_and_check(
-        obj=samples,
-        key="assay_type",
-        msg=f"No assay_type defined for manifest_id={manifest_id} for trial {trial_id}",
+    assay_priority, assay_type = _extract_details_from_trial(
+        trial_id, manifest_id, samples, session=session
     )
 
     # need to insert Shipment and Participants before Samples
@@ -503,3 +531,133 @@ def insert_manifest_from_json(
     errs = insert_record_batch(ordered_records, session=session)
     if len(errs):
         raise Exception("Multiple errors: [" + "\n".join(str(e) for e in errs) + "]")
+
+
+@with_default_session
+def detect_manifest_changes(
+    manifest: Dict[str, Any], *, session: Session
+) -> Tuple[
+    OrderedDictType[Type, List[MetadataModel]], List[Dict[str, Tuple[Any, Any]]]
+]:
+    """
+    Given a CSMS-style manifest, see if it has any differences from the current state of the relational db
+    If critical fields are different, throws an error to be handled later by a human
+    Updates any non-critical fields, returning the changes it made
+
+    Returns
+    -------
+    OrderedDict[Type, List[MetadataModel]]
+        instances to pass into insert_record_batch
+        contains the changes
+    List[Dict[str, Union[str, Tuple[Any, Any]]]]
+        the changes for each 
+        critical values are str
+        non-critical values are [old, new]
+            old or new is None if it was null OR the key was undefined
+    
+    Raises
+    ------
+    Exception
+        if the mapping between any critical fields is changed
+        namely trial_id, manifest_id, cimac_id
+    """
+    ret0, ret1 = OrderedDict(), []
+
+    def calc_diff(
+        a: dict,
+        b: dict,
+        ignore=["samples"],
+        add=["trial_id", "manifest_id", "cimac_id", "shipment_manifest_id"],
+    ) -> Dict[str, Tuple[Any, Any]]:
+        a1 = {k: v for k, v in a.items() if k not in ignore}
+        b1 = {k: v for k, v in b.items() if k not in ignore}
+        # take difference by using symmetric set difference on the items
+        # use set to not get same key multiple times if values differ
+        diff_keys = {k for k, _ in set(a1.items()) ^ set(b1.items())}
+        # then get both values once per key to return
+        ret = {k: (a.get(k), b.get(k)) for k in diff_keys}
+        print(ret)
+
+        # add back critical values as labels if there are changes
+        # use the new values so we can check them in the source
+        if ret:
+            for k in add:
+                if k in b:
+                    ret[k] = b[k]
+        return ret
+
+    trial_id, manifest_id, samples = _extract_info_from_manifest(
+        manifest, session=session
+    )
+
+    # Look for shipment-level differences
+    db_shipment = Shipment.get_by_id(trial_id, manifest_id)
+    diff = calc_diff({} if db_shipment is None else db_shipment.to_dict(), manifest)
+    if diff:
+        ret1.append(diff)
+
+        # since insert_record_batch is a merge, we can just generate a new object
+        assay_priority, assay_type = _extract_details_from_trial(
+            trial_id, manifest_id, samples, session=session
+        )
+        ret0[Shipment] = [
+            Shipment(
+                trial_id=trial_id,
+                assay_priority=assay_priority,
+                assay_type=assay_type,
+                **_get_all_values(target=Shipment, old=manifest),
+            )
+        ]
+
+    # Look for sample-level differences
+    db_samples = (
+        session.query(Sample)
+        .filter(Sample.shipment_manifest_id == manifest_id, Sample.trial_id == trial_id)
+        .all()
+    )
+    sample_map = {
+        cimac_id: sample
+        for cimac_id, sample in _convert_samples(trial_id, manifest_id, samples)
+    }
+    db_sample_map = {s.cimac_id: s for s in db_samples}
+    format_sample = lambda s: (s.trial_id, s.shipment_manifest_id, s.cimac_id)
+
+    for cimac_id in db_sample_map:
+        if cimac_id not in sample_map:
+            raise Exception(
+                f"Missing sample: {format_sample(db_sample_map[cimac_id])} on CSMS {(trial_id, manifest_id)}"
+            )
+
+    # add here and then just append; remove later if not needed
+    ret0[Sample] = []
+    for cimac_id, sample in sample_map.items():
+        # if db_sample_map is empty, this is True for all samples
+        # that means there are no samples
+        if cimac_id not in db_sample_map:
+            db_sample = (
+                session.query(Sample).filter(Sample.cimac_id == cimac_id).first()
+            )  # Sample.cimac_id is unique
+            raise Exception(
+                f"Change in critical field for: {format_sample(db_sample)} to CSMS {(trial_id, manifest_id, cimac_id)}"
+            )
+
+        else:
+            sample = _get_all_values(target=Sample, old=sample)
+            sample["cimac_participant_id"] = (
+                cimac_id_to_cimac_participant_id(cimac_id, {}),
+            )
+
+            db_sample = db_sample_map[cimac_id].to_dict()
+            diff = calc_diff(db_sample, sample)
+            if diff:
+                ret1.append(diff)
+
+                # since insert_record_batch is a merge, we can just generate a new object
+                new_sample = Sample(
+                    trial_id=trial_id, **_get_all_values(target=Sample, old=sample),
+                )
+                ret0[Sample].append(new_sample)
+
+    if len(ret0[Sample]) == 0:
+        ret0.pop(Sample)
+    return ret0, ret1
