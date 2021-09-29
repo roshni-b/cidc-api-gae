@@ -1,7 +1,4 @@
-__all__ = [
-    "insert_manifest_from_json",
-    "insert_manifest_into_blob",
-]
+__all__ = ["insert_manifest_from_json", "insert_manifest_into_blob"]
 
 from collections import defaultdict, OrderedDict
 from sqlalchemy.orm.session import Session
@@ -68,7 +65,7 @@ def _get_upload_type(samples: Dict[str, Any]) -> str:
 
                 upload_type.add(new_type)
 
-    assert len(upload_type) == 1, f"Inconsistent value determined for upload_type"
+    assert len(upload_type) == 1, "Inconsistent value determined for upload_type"
     return list(upload_type)[0]
 
 
@@ -120,12 +117,12 @@ def _extract_info_from_manifest(
         if trial is missing from TrialMetadata OR ClinicalTrial OR both
     """
     manifest_id = _get_and_check(
-        obj=manifest, key="manifest_id", msg=f"No manifest_id in: {manifest}",
+        obj=manifest, key="manifest_id", msg=f"No manifest_id in: {manifest}"
     )
     _ = _get_and_check(  # don't need to keep status
         obj=manifest,
         key="status",
-        msg=f"Cannot add a manifest that is not qc_complete",
+        msg="Cannot add a manifest that is not qc_complete",
         default="qc_complete",
         check=lambda v: v == "qc_complete",
     )

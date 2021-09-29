@@ -94,7 +94,7 @@ def manifests_history(manifest_id: str) -> Dict[str, Any]:
                 "metadata": {
                     "id": "123456789ABCDEFGHIJKL0",
                     "version": 1,
-                    "txTime": f"2021-01-03T00:00:00Z",
+                    "txTime": "2021-01-03T00:00:00Z",
                     "txId": "0KJLIHGFEDCBA987654321",
                 },
             }
