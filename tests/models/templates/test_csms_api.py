@@ -1,5 +1,6 @@
-from re import match
-from cidc_api.models.templates.trial_metadata import Sample, Shipment
+from cidc_api.models.templates.file_metadata import Upload
+from cidc_api.models.templates.trial_metadata import Participant
+from datetime import datetime
 from collections import OrderedDict
 import pytest
 from unittest.mock import MagicMock
@@ -9,6 +10,8 @@ from cidc_api.models import (
     Cohort,
     CollectionEvent,
     insert_record_batch,
+    Sample,
+    Shipment,
     TrialMetadata,
 )
 from cidc_api.models.templates.csms_api import (
@@ -37,8 +40,6 @@ def mock_get_current_user(cidc_api, monkeypatch):
 def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
     """test that detecting changes in a manifest work as expected"""
     # grab a completed manifest
-    manifest = [m for m in manifests if m.get("status") in [None, "qc_complete"]][0]
-
     with cidc_api.app_context():
         mock_get_current_user(cidc_api, monkeypatch)
 
@@ -73,125 +74,287 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
         metadata_json["protocol_identifier"] = "foo"
         TrialMetadata(trial_id="foo", metadata_json=metadata_json).insert()
 
-        # insert manifest before we check for changes
-        insert_manifest_from_json(manifest)
-        # should check out, but let's make sure
-        validate_relational("test_trial")
-
-        # Test critical changes throws Exception on samples
-        # Change trial_id or manifest_id is adding a new Shipment
-        ## but this means they'll conflict on the sample
-        # a bad ID raises a no trial found like insert_manifest_...
-        with pytest.raises(Exception, match="No trial found with id"):
-            new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
-            new_manifest["samples"] = [
-                {
-                    k: v if k != "protocol_identifier" else "bar"
-                    for k, v in sample.items()
-                }
-                for sample in manifest["samples"]
-            ]
-            detect_manifest_changes(new_manifest)
-        # this is why we needed a second valid trial to test this check
-        with pytest.raises(Exception, match="Change in critical field for"):
-            # CIDC trial_id = CSMS protocol_identifier
-            # stored on samples, not manifest
-            new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
-            new_manifest["samples"] = [
-                {
-                    k: v if k != "protocol_identifier" else "foo"
-                    for k, v in sample.items()
-                }
-                for sample in manifest["samples"]
-            ]
-            detect_manifest_changes(new_manifest)
-
-        # manifest_id has no such complication, but is also on the samples
-        with pytest.raises(Exception, match="Change in critical field for"):
-            new_manifest = {
-                k: v if k != "manifest_id" else "foo" for k, v in manifest.items()
-            }
-            new_manifest["samples"] = [
-                {k: v if k != "manifest_id" else "foo" for k, v in sample.items()}
-                for sample in new_manifest["samples"]
-            ]
-            detect_manifest_changes(new_manifest)
-
-        # Changing a cimac_id is adding/removing a Sample
-        ## so this is a different error
-        with pytest.raises(Exception, match="Malformatted cimac_id"):
-            new_manifest = {k: v for k, v in manifest.items()}
-            new_manifest["samples"] = [
-                {k: v if k != "cimac_id" else "foo" for k, v in sample.items()}
-                if n == 0
-                else sample
-                for n, sample in enumerate(manifest["samples"])
-            ]
-            detect_manifest_changes(new_manifest)
-        # need to use an actually valid cimac_id
-        with pytest.raises(Exception, match="Missing sample"):
-            new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
-            new_manifest["samples"] = [
-                {k: v if k != "cimac_id" else "CXXXP0555.00" for k, v in sample.items()}
-                if n == 0
-                else sample
-                for n, sample in enumerate(manifest["samples"])
-            ]
-            detect_manifest_changes(new_manifest)
-
-        # Test non-critical changes on the manifest itself
-        for key in manifest.keys():
-            # don't change these here
-            if key in ["manifest_id", "samples", "status", "trial_id"]:
+        for manifest in manifests:
+            if manifest.get("status") not in (None, "qc_complete"):
                 continue
 
-            new_manifest = {k: v if k != key else "foo" for k, v in manifest.items()}
-            print(new_manifest)
-            print()
-            records, changes = detect_manifest_changes(new_manifest)
-            print(records)
-            print(changes)
-            assert (
-                len(records) == 1
-                and Shipment in records
-                and len(records[Shipment]) == 1
-            )
-            assert getattr(records[Shipment][0], key) == "foo"
+            # insert manifest before we check for changes
+            insert_manifest_from_json(manifest)
+            # should check out, but let's make sure
+            validate_relational("test_trial")
 
-            assert changes == [
-                {
-                    "manifest_id": manifest["manifest_id"],
-                    "trial_id": manifest["trial_id"],
-                    key: (manifest[key], "foo"),
+            # Test critical changes throws Exception on samples
+            # Change trial_id or manifest_id is adding a new Shipment
+            ## but this means they'll conflict on the sample
+            # a bad ID raises a no trial found like insert_manifest_...
+            with pytest.raises(Exception, match="No trial found with id"):
+                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+                new_manifest["samples"] = [
+                    {
+                        k: v if k != "protocol_identifier" else "bar"
+                        for k, v in sample.items()
+                    }
+                    for sample in manifest["samples"]
+                ]
+                detect_manifest_changes(new_manifest)
+            # this is why we needed a second valid trial to test this check
+            with pytest.raises(Exception, match="Change in critical field for"):
+                # CIDC trial_id = CSMS protocol_identifier
+                # stored on samples, not manifest
+                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+                new_manifest["samples"] = [
+                    {
+                        k: v if k != "protocol_identifier" else "foo"
+                        for k, v in sample.items()
+                    }
+                    for sample in manifest["samples"]
+                ]
+                detect_manifest_changes(new_manifest)
+
+            # manifest_id has no such complication, but is also on the samples
+            with pytest.raises(Exception, match="Change in critical field for"):
+                new_manifest = {
+                    k: v if k != "manifest_id" else "foo" for k, v in manifest.items()
                 }
-            ]
+                new_manifest["samples"] = [
+                    {k: v if k != "manifest_id" else "foo" for k, v in sample.items()}
+                    for sample in new_manifest["samples"]
+                ]
+                detect_manifest_changes(new_manifest)
 
-        # Test non-critical changes on the samples
-        new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
-        for key in manifest["samples"][0].keys():
-            # don't change these here
-            if key in ["cimac_id", "manifest_id", "status", "trial_id"]:
-                continue
+            # Changing a cimac_id is adding/removing a Sample
+            ## so this is a different error
+            with pytest.raises(Exception, match="Malformatted cimac_id"):
+                new_manifest = {k: v for k, v in manifest.items()}
+                new_manifest["samples"] = [
+                    {k: v if k != "cimac_id" else "foo" for k, v in sample.items()}
+                    if n == 0
+                    else sample
+                    for n, sample in enumerate(manifest["samples"])
+                ]
+                detect_manifest_changes(new_manifest)
+            # need to use an actually valid cimac_id
+            with pytest.raises(Exception, match="Missing sample"):
+                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+                new_manifest["samples"] = [
+                    {
+                        k: v if k != "cimac_id" else "CXXXP0555.00"
+                        for k, v in sample.items()
+                    }
+                    if n == 0
+                    else sample
+                    for n, sample in enumerate(manifest["samples"])
+                ]
+                detect_manifest_changes(new_manifest)
 
-            new_manifest["samples"] = [
-                {k: v if k != key else "foo" for k, v in sample.items()}
-                if n == 0
-                else sample
-                for n, sample in enumerate(manifest["samples"])
-            ]
+            # Test non-critical changes on the manifest itself
+            for key in manifest.keys():
+                # ignore list from calc_diff + criticals
+                if key in [
+                    "barcode",
+                    "biobank_id",
+                    "manifest_id",
+                    "modified_time",
+                    "modified_timestamp",
+                    "protocol_identifier",
+                    "samples",
+                    "status",
+                    "submitter",
+                ]:
+                    continue
 
-            records, changes = detect_manifest_changes(new_manifest)
-            assert len(records) == 1 and Sample in records and len(records[Sample]) == 1
-            assert getattr(records[Sample][0], key) == "foo"
-
-            assert changes == [
-                {
-                    "cimac_id": manifest["samples"][0]["cimac_id"],
-                    "manifest_id": manifest["manifest_id"],
-                    "trial_id": manifest["trial_id"],
-                    key: (manifest[key], "foo"),
+                new_manifest = {
+                    k: v if k != key else "foo" for k, v in manifest.items()
                 }
-            ]
+                records, changes = detect_manifest_changes(new_manifest)
+                assert (
+                    len(records) == 1
+                    and Shipment in records
+                    and len(records[Shipment]) == 1
+                ), f"{records}\n{changes}"
+                assert getattr(records[Shipment][0], key) == "foo", (
+                    str(records) + "\n" + str(changes)
+                )
+
+                assert changes == [
+                    {
+                        "manifest_id": manifest["manifest_id"],
+                        "trial_id": manifest["protocol_identifier"],
+                        key: (
+                            datetime.strptime(manifest[key], "%Y-%m-%d %H:%M:%S").date()
+                            if key.startswith("date")
+                            else manifest[key],
+                            "foo",
+                        ),
+                    }
+                ], str(changes)
+
+            # Test non-critical changes for the manifest but stored on the samples
+            for key in [
+                "assay_priority",
+                "assay_type",
+                "sample_manifest_type",
+            ]:
+                # ignore list from calc_diff + criticals
+                if key in [
+                    "barcode",
+                    "biobank_id",
+                    "manifest_id",
+                    "modified_time",
+                    "modified_timestamp",
+                    "protocol_identifier",
+                    "samples",
+                    "status",
+                    "submitter",
+                ]:
+                    continue
+
+                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+
+                if key == "sample_manifest_type":
+                    new_manifest["samples"] = [
+                        {k: v for k, v in sample.items()}
+                        for sample in manifest["samples"]
+                    ]
+                    for n in range(len(new_manifest["samples"])):
+                        new_manifest["samples"][n].update(
+                            {
+                                "processed_sample_type": "foo",
+                                "sample_manifest_type": "Tissue Scroll",
+                                "processed_sample_derivative": "Germline DNA",
+                            }
+                        )
+                else:
+                    new_manifest["samples"] = [
+                        {k: v if k != key else "foo" for k, v in sample.items()}
+                        for sample in manifest["samples"]
+                    ]
+
+                records, changes = detect_manifest_changes(new_manifest)
+
+                if key == "sample_manifest_type":
+                    assert (
+                        len(records) == 2
+                        and Sample in records
+                        and Upload in records
+                        and len(records[Upload]) == 1
+                    ), f"{records}\n{changes}"
+                else:
+                    assert (
+                        len(records) == 1
+                        and Shipment in records
+                        and len(records[Shipment]) == 1
+                    ), f"{records}\n{changes}"
+                    assert getattr(records[Shipment][0], key) == "foo", (
+                        str(records) + "\n" + str(changes)
+                    )
+                    assert changes == [
+                        {
+                            "manifest_id": manifest["manifest_id"],
+                            "trial_id": manifest["protocol_identifier"],
+                            key: (manifest["samples"][0][key], "foo"),
+                        }
+                    ], str(changes)
+
+            # Test non-critical changes on the samples
+            for key in manifest["samples"][0].keys():
+                # ignore list from calc_diff + criticals
+                if key in [
+                    "assay_priority",
+                    "assay_type",
+                    "barcode",
+                    "biobank_id",
+                    "cimac_id",
+                    "collection_event_name",
+                    "entry_number",
+                    "manifest_id",
+                    "modified_time",
+                    "modified_timestamp",
+                    "processed_sample_derivative",
+                    "processed_sample_type",
+                    "protocol_identifier",
+                    "qc_comments",
+                    "recorded_collection_event_name",
+                    "sample_approved",
+                    "sample_key",
+                    "sample_manifest_type",
+                    "samples",
+                    "status",
+                    "submitter",
+                    "trial_participant_id",
+                    "type_of_sample",
+                ]:
+                    continue
+                else:
+                    print(key)
+
+                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+
+                if key in ["sample_derivative_concentration"]:
+                    new_manifest["samples"] = [
+                        {k: v if k != key else 10 for k, v in sample.items()}
+                        if n == 0
+                        else sample
+                        for n, sample in enumerate(manifest["samples"])
+                    ]
+                else:
+                    new_manifest["samples"] = [
+                        {k: v if k != key else "foo" for k, v in sample.items()}
+                        if n == 0
+                        else sample
+                        for n, sample in enumerate(manifest["samples"])
+                    ]
+
+                records, changes = detect_manifest_changes(new_manifest)
+
+                # name change for when we're looking below
+                if key == "standardized_collection_event_name":
+                    key = "collection_event_name"
+
+                if key not in ["cohort_name", "participant_id"]:
+                    assert (
+                        len(records) == 1
+                        and Sample in records
+                        and len(records[Sample]) == 1
+                    ), f"{records}\n{changes}"
+                    assert (
+                        getattr(records[Sample][0], key)
+                        == new_manifest["samples"][0][key]
+                    ), f"{records}\n{changes}"
+
+                elif key == "cohort_name":
+                    assert (
+                        len(records) == 1
+                        and Participant in records
+                        and len(records[Participant]) == 1
+                    ), f"{records}\n{changes}"
+                    assert (
+                        getattr(records[Participant][0], key)
+                        == new_manifest["samples"][0][key]
+                    ), f"{records}\n{changes}"
+
+                else:  # key == "participant_id":
+                    assert (
+                        len(records) == 1
+                        and Participant in records
+                        and len(records[Participant]) == 1
+                    ), f"{records}\n{changes}"
+                    assert (
+                        getattr(records[Participant][0], "trial_participant_id")
+                        == new_manifest["samples"][0][key]
+                    ), f"{records}\n{changes}"
+
+                assert changes == [
+                    {
+                        "cimac_id": manifest["samples"][0]["cimac_id"],
+                        "shipment_manifest_id": manifest["manifest_id"],
+                        "trial_id": manifest["protocol_identifier"],
+                        key: (
+                            manifest["samples"][0][key],
+                            new_manifest["samples"][0][key],
+                        ),
+                    }
+                ], str(changes)
 
 
 def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):

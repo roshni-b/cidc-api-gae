@@ -5,6 +5,8 @@ __all__ = [
 ]
 
 from collections import defaultdict, OrderedDict
+from datetime import date, datetime, time
+from re import U
 from sqlalchemy.orm.session import Session
 from typing import (
     Any,
@@ -37,7 +39,7 @@ from .trial_metadata import (
 from .utils import insert_record_batch
 
 
-def _get_upload_type(samples: Dict[str, Any]) -> str:
+def _get_upload_type(samples: List[Dict[str, Any]]) -> str:
     upload_type = set()
     for sample in samples:
         processed_type = sample.get("processed_sample_type").lower()
@@ -68,9 +70,9 @@ def _get_upload_type(samples: Dict[str, Any]) -> str:
                 upload_type.add("tissue_slide")
 
             elif processed_derivative == "Germline DNA":
-                upload_type.add(f"normal_{sample_manifest_type.split('_')[0]}_dna")
+                upload_type.add(f"normal_{sample_manifest_type.split()[0].lower()}_dna")
             elif processed_derivative == "Tumor DNA":
-                upload_type.add(f"tumor_{sample_manifest_type.split('_')[0]}_dna")
+                upload_type.add(f"tumor_{sample_manifest_type.split()[0]}_dna")
             elif processed_derivative in ["DNA", "RNA"]:
                 unprocessed_type = sample.get("type_of_sample")
                 new_type = "tumor" if "tumor" in unprocessed_type.lower() else "normal"
@@ -82,8 +84,12 @@ def _get_upload_type(samples: Dict[str, Any]) -> str:
                 new_type += processed_derivative.lower()
 
                 upload_type.add(new_type)
+            else:
+                print(sample)
 
-    assert len(upload_type) == 1, f"Inconsistent value determined for upload_type"
+    assert (
+        len(upload_type) == 1
+    ), f"Inconsistent value determined for upload_type:{upload_type}"
     return list(upload_type)[0]
 
 
@@ -246,6 +252,12 @@ def _convert_samples(
                 sample["processed_sample_type"]
             ]
 
+        # differences in keys
+        if "fixation_or_stabilization_type" in sample:
+            sample["fixation_stabilization_type"] = sample.pop(
+                "fixation_or_stabilization_type"
+            )
+
         # typing
         if "sample_derivative_concentration" in sample:
             sample["sample_derivative_concentration"] = float(
@@ -359,16 +371,16 @@ def insert_manifest_into_blob(manifest: Dict[str, Any], *, session: Session):
         sample_map[cimac_id_to_cimac_participant_id(cimac_id, {})].append(sample)
 
     # each participant has a list of samples
-    for cimac_participant_id, samples in sample_map.items():
+    for cimac_participant_id, partic_samples in sample_map.items():
         partic = dict(
             cimac_participant_id=cimac_participant_id,
-            participant_id=samples[0]["participant_id"],
+            participant_id=partic_samples[0]["participant_id"],
             **_get_all_values(
-                target=Participant, old=samples[0], drop=["trial_participant_id"]
+                target=Participant, old=partic_samples[0], drop=["trial_participant_id"]
             ),
         )
         partic["samples"] = [
-            _get_all_values(target=Sample, old=sample) for sample in samples
+            _get_all_values(target=Sample, old=sample) for sample in partic_samples
         ]
 
         patch["participants"].append(partic)
@@ -468,7 +480,7 @@ def insert_manifest_from_json(
     # each participant has a list of samples
     ordered_records[Participant] = []
     ordered_records[Sample] = []
-    for cimac_participant_id, samples in sample_map.items():
+    for cimac_participant_id, partic_samples in sample_map.items():
         # add the participant if they don't already exist
         partic = Participant.get_by_id(trial_id, cimac_participant_id)
         if partic is None and not any(
@@ -481,7 +493,7 @@ def insert_manifest_from_json(
             new_partic = Participant(
                 trial_id=trial_id,
                 cimac_participant_id=cimac_participant_id,
-                **_get_all_values(target=Participant, old=sample),
+                **_get_all_values(target=Participant, old=partic_samples[0]),
             )
             ordered_records[Participant].append(new_partic)
         elif partic is None:
@@ -492,7 +504,7 @@ def insert_manifest_from_json(
                 if partic.cimac_participant_id == cimac_participant_id
             ][0]
 
-        for sample in samples:
+        for sample in partic_samples:
             # explicitly make sure the CollectionEvent exists
             # as the foreign key is nullable, but should be defined
             event_name = sample["collection_event_name"]
@@ -524,6 +536,7 @@ def insert_manifest_from_json(
             multifile=False,
             assay_creator="DFCI",
             upload_type=_get_upload_type(samples),
+            shipment_manifest_id=manifest_id,
         )
     ]
 
@@ -536,7 +549,7 @@ def insert_manifest_from_json(
 
 @with_default_session
 def detect_manifest_changes(
-    manifest: Dict[str, Any], *, session: Session
+    csms_manifest: Dict[str, Any], *, session: Session
 ) -> Tuple[
     OrderedDictType[Type, List[MetadataModel]], List[Dict[str, Tuple[Any, Any]]]
 ]:
@@ -563,102 +576,211 @@ def detect_manifest_changes(
         namely trial_id, manifest_id, cimac_id
     """
     ret0, ret1 = OrderedDict(), []
+    csms_manifest["trial_id"] = csms_manifest.pop("protocol_identifier")
 
     def calc_diff(
-        a: dict,
-        b: dict,
-        ignore=["samples"],
-        add=["trial_id", "manifest_id", "cimac_id", "shipment_manifest_id"],
+        cidc: dict,
+        csms: dict,
+        ignore=[
+            "barcode",
+            "biobank_id",
+            "entry_number",
+            "modified_time",
+            "modified_timestamp",
+            "qc_comments",
+            "sample_approved",
+            "samples",
+            "status",
+            "submitter",
+        ],
     ) -> Dict[str, Tuple[Any, Any]]:
-        a1 = {k: v for k, v in a.items() if k not in ignore}
-        b1 = {k: v for k, v in b.items() if k not in ignore}
+        """
+        The actual comparison function that handles comparing values
+
+        Handles formatting for date/time/datetime in CIDC
+        Do not perform a comparison for ignored keys
+        Add critical fields back to anything that changes
+        """
+        # handle formatting and ignore
+        cidc1 = {
+            k: datetime.strftime(v, "%Y-%m-%d %H:%M:%S")
+            if isinstance(v, (date, time, datetime))
+            else v
+            for k, v in cidc.items()
+            if k not in ignore
+        }
+        csms1 = {
+            "trial_id" if k == "protocol_identifier" else k: v
+            for k, v in csms.items()
+            if k not in ignore
+        }
+
         # take difference by using symmetric set difference on the items
         # use set to not get same key multiple times if values differ
-        diff_keys = {k for k, _ in set(a1.items()) ^ set(b1.items())}
+        diff_keys = {k for k, _ in set(cidc1.items()) ^ set(csms1.items())}
         # then get both values once per key to return
-        ret = {k: (a.get(k), b.get(k)) for k in diff_keys}
-        print(ret)
+        ret = {k: (cidc.get(k), csms.get(k)) for k in diff_keys}
 
         # add back critical values as labels if there are changes
         # use the new values so we can check them in the source
         if ret:
-            for k in add:
-                if k in b:
-                    ret[k] = b[k]
+            for k in ["cimac_id", "manifest_id", "shipment_manifest_id", "trial_id"]:
+                if k in csms and k not in ret:
+                    ret[k] = csms[k]
         return ret
 
-    trial_id, manifest_id, samples = _extract_info_from_manifest(
-        manifest, session=session
+    trial_id, manifest_id, csms_samples = _extract_info_from_manifest(
+        csms_manifest, session=session
     )
+    csms_assay_priority, csms_assay_type = _extract_details_from_trial(
+        trial_id, manifest_id, csms_samples, session=session
+    )
+    csms_manifest["assay_priority"] = csms_assay_priority
+    csms_manifest["assay_type"] = csms_assay_type
 
     # Look for shipment-level differences
-    db_shipment = Shipment.get_by_id(trial_id, manifest_id)
-    diff = calc_diff({} if db_shipment is None else db_shipment.to_dict(), manifest)
+    cidc_shipment = Shipment.get_by_id(trial_id, manifest_id)
+    diff = calc_diff(
+        {} if cidc_shipment is None else cidc_shipment.to_dict(), csms_manifest
+    )
     if diff:
         ret1.append(diff)
 
         # since insert_record_batch is a merge, we can just generate a new object
-        assay_priority, assay_type = _extract_details_from_trial(
-            trial_id, manifest_id, samples, session=session
-        )
+
         ret0[Shipment] = [
-            Shipment(
-                trial_id=trial_id,
-                assay_priority=assay_priority,
-                assay_type=assay_type,
-                **_get_all_values(target=Shipment, old=manifest),
-            )
+            Shipment(**_get_all_values(target=Shipment, old=csms_manifest),)
         ]
 
     # Look for sample-level differences
-    db_samples = (
+    ## need to look at some participant level things
+    cidc_partic = (
+        session.query(Participant).filter(Participant.trial_id == trial_id).all()
+    )
+    cidc_partic_map = {p.cimac_participant_id: p for p in cidc_partic}
+    cidc_samples = (
         session.query(Sample)
         .filter(Sample.shipment_manifest_id == manifest_id, Sample.trial_id == trial_id)
         .all()
     )
-    sample_map = {
-        cimac_id: sample
-        for cimac_id, sample in _convert_samples(trial_id, manifest_id, samples)
-    }
-    db_sample_map = {s.cimac_id: s for s in db_samples}
-    format_sample = lambda s: (s.trial_id, s.shipment_manifest_id, s.cimac_id)
+    ## make maps from cimac_id to a full dict
+    cidc_sample_map = {s.cimac_id: s.to_dict() for s in cidc_samples}
+    ### need to add cohort_name from participant
+    for cidc_cimac_id in cidc_sample_map.keys():
+        cimac_participant_id = cimac_id_to_cimac_participant_id(cidc_cimac_id, {})
+        cidc_sample_map[cidc_cimac_id]["cohort_name"] = cidc_partic_map[
+            cimac_participant_id
+        ].cohort_name
+        cidc_sample_map[cidc_cimac_id]["participant_id"] = cidc_partic_map[
+            cimac_participant_id
+        ].trial_participant_id
 
-    for cimac_id in db_sample_map:
-        if cimac_id not in sample_map:
+    csms_sample_map = {
+        csms_cimac_id: dict(
+            # participant-level critical field
+            cohort_name=csms_sample["cohort_name"],
+            # name changes
+            shipment_manifest_id=csms_sample["manifest_id"],
+            trial_id=csms_sample["protocol_identifier"],
+            participant_id=csms_sample["participant_id"],
+            # not in CSMS
+            cimac_participant_id=cimac_id_to_cimac_participant_id(csms_cimac_id, {}),
+            # the rest of the values
+            **_get_all_values(target=Sample, old=csms_sample),
+        )
+        for csms_cimac_id, csms_sample in _convert_samples(
+            trial_id, manifest_id, csms_samples
+        )
+    }
+
+    for cimac_id, cidc_sample in cidc_sample_map.items():
+        if cimac_id not in csms_sample_map:
+            formatted = (
+                cidc_sample["trial_id"],
+                cidc_sample["shipment_manifest_id"],
+                cidc_sample["cimac_id"],
+            )
             raise Exception(
-                f"Missing sample: {format_sample(db_sample_map[cimac_id])} on CSMS {(trial_id, manifest_id)}"
+                f"Missing sample: {formatted} on CSMS {(trial_id, manifest_id)}"
             )
 
     # add here and then just append; remove later if not needed
+    ret0[Participant] = []
     ret0[Sample] = []
-    for cimac_id, sample in sample_map.items():
-        # if db_sample_map is empty, this is True for all samples
+    for cimac_id, csms_sample in csms_sample_map.items():
+        # if cidc_sample_map is empty, this is True for all samples
         # that means there are no samples
-        if cimac_id not in db_sample_map:
+        if cimac_id not in cidc_sample_map:
             db_sample = (
                 session.query(Sample).filter(Sample.cimac_id == cimac_id).first()
             )  # Sample.cimac_id is unique
+
+            formatted = (
+                db_sample.trial_id,
+                db_sample.shipment_manifest_id,
+                db_sample.cimac_id,
+            )
             raise Exception(
-                f"Change in critical field for: {format_sample(db_sample)} to CSMS {(trial_id, manifest_id, cimac_id)}"
+                f"Change in critical field for: {formatted} to CSMS {(trial_id, manifest_id, cimac_id)}"
             )
 
         else:
-            sample = _get_all_values(target=Sample, old=sample)
-            sample["cimac_participant_id"] = (
-                cimac_id_to_cimac_participant_id(cimac_id, {}),
-            )
-
-            db_sample = db_sample_map[cimac_id].to_dict()
-            diff = calc_diff(db_sample, sample)
+            diff = calc_diff(cidc_sample_map[cimac_id], csms_sample)
             if diff:
                 ret1.append(diff)
 
-                # since insert_record_batch is a merge, we can just generate a new object
-                new_sample = Sample(
-                    trial_id=trial_id, **_get_all_values(target=Sample, old=sample),
-                )
-                ret0[Sample].append(new_sample)
+                if any(
+                    i in diff
+                    for i in ["cohort_name", "participant_id", "trial_participant_id"]
+                ):
+                    new_partic = Participant(
+                        trial_participant_id=csms_sample["participant_id"],
+                        **_get_all_values(target=Participant, old=csms_sample),
+                    )
+                    ret0[Participant].append(new_partic)
 
+                # if there's a cohort_name or trial_participant_id, the critical fields come too
+                if any(
+                    k
+                    not in [
+                        "cimac_id",
+                        "cohort_name",
+                        "participant_id",
+                        "shipment_manifest_id",
+                        "trial_id",
+                        "trial_participant_id",
+                    ]
+                    for k in diff.keys()
+                ):
+                    # since insert_record_batch is a merge, we can just generate a new object
+                    new_sample = Sample(
+                        **_get_all_values(target=Sample, old=csms_sample)
+                    )
+                    ret0[Sample].append(new_sample)
+
+    # Look for differences in the Upload
+    cidc_upload = (
+        session.query(Upload).filter(Upload.shipment_manifest_id == manifest_id).first()
+    )
+    new_upload = Upload(
+        trial_id=trial_id,
+        status=UploadJobStatus.MERGE_COMPLETED.value,
+        multifile=False,
+        assay_creator="DFCI",
+        upload_type=_get_upload_type(csms_samples),
+        shipment_manifest_id=manifest_id,
+    )
+    diff = calc_diff(
+        {} if cidc_upload is None else cidc_upload.to_dict(),
+        new_upload.to_dict(),
+        ignore=["id", "token"],
+    )
+    if diff:
+        ret1.append(diff)
+        ret0[Upload] = [new_upload]
+
+    if len(ret0[Participant]) == 0:
+        ret0.pop(Participant)
     if len(ret0[Sample]) == 0:
         ret0.pop(Sample)
     return ret0, ret1

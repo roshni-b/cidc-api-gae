@@ -45,11 +45,12 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql.expression import case
 
 from ..models import Users, with_default_session
 
 from .model_core import MetadataModel
-from .trial_metadata import ClinicalTrial, Sample
+from .trial_metadata import ClinicalTrial, Sample, Shipment
 
 
 ArtifactCreator = Enum(
@@ -132,6 +133,9 @@ class Upload(MetadataModel):
         nullable=False,
         doc="Link to the user who created this upload.",
     )
+    shipment_manifest_id = Column(
+        String, nullable=True, doc="Only for manifest uploads",
+    )
 
     # Create a GIN index on the GCS object names
     _gcs_objects_idx = Index(
@@ -139,7 +143,17 @@ class Upload(MetadataModel):
     )
     CheckConstraint("multifile or (gcs_file_map is not null)")
 
-    __mapper_args__ = {"polymorphic_on": upload_type, "polymorphic_identity": "base"}
+    __mapper_args__ = {
+        "polymorphic_on": case(
+            [(upload_type.in_(["hande", "wes_uploads"]), upload_type)], else_="base"
+        ),
+        "polymorphic_identity": "base",
+    }
+    __table_args__ = (
+        ForeignKeyConstraint(
+            [trial_id, shipment_manifest_id], [Shipment.trial_id, Shipment.manifest_id]
+        ),
+    )
 
     def __init__(self, **kwargs):
         from ...shared.auth import get_current_user
