@@ -141,12 +141,12 @@ def _extract_info_from_manifest(
         if trial is missing from TrialMetadata OR ClinicalTrial OR both
     """
     manifest_id = _get_and_check(
-        obj=manifest, key="manifest_id", msg=f"No manifest_id in: {manifest}",
+        obj=manifest, key="manifest_id", msg=f"No manifest_id in: {manifest}"
     )
     _ = _get_and_check(  # don't need to keep status
         obj=manifest,
         key="status",
-        msg=f"Cannot add a manifest that is not qc_complete",
+        msg="Cannot add a manifest that is not qc_complete",
         default="qc_complete",
         check=lambda v: v == "qc_complete",
     )
