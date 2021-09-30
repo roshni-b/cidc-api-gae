@@ -13,6 +13,7 @@ __all__ = [
     "VolumeUnits",
 ]
 
+from enum import unique
 import re
 from sqlalchemy.orm.session import Session
 from sqlalchemy import (
@@ -238,6 +239,7 @@ class Shipment(MetadataModel):
     manifest_id = Column(
         String,
         primary_key=True,  # both True allows for use as multi Foreign Key
+        unique=True,
         doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
     )
 

@@ -1,5 +1,3 @@
-from cidc_api.models.templates.file_metadata import Upload
-from cidc_api.models.templates.trial_metadata import Participant
 from datetime import datetime
 from collections import OrderedDict
 import pytest
@@ -14,11 +12,10 @@ from cidc_api.models import (
     Shipment,
     TrialMetadata,
 )
-from cidc_api.models.templates.csms_api import (
-    detect_manifest_changes,
-    insert_manifest_from_json,
-    insert_manifest_into_blob,
-)
+from cidc_api.models.models import UploadJobStatus, UploadJobs
+from cidc_api.models.templates.csms_api import *
+from cidc_api.models.templates.file_metadata import Upload
+from cidc_api.models.templates.trial_metadata import Participant
 from cidc_api.shared import auth
 
 from tests.csms.data import manifests
@@ -176,18 +173,22 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                     str(records) + "\n" + str(changes)
                 )
 
-                assert changes == [
-                    {
-                        "manifest_id": manifest["manifest_id"],
-                        "trial_id": manifest["protocol_identifier"],
-                        key: (
-                            datetime.strptime(manifest[key], "%Y-%m-%d %H:%M:%S").date()
-                            if key.startswith("date")
-                            else manifest[key],
-                            "foo",
-                        ),
-                    }
-                ], str(changes)
+                assert changes == {
+                    "shipment": [
+                        {
+                            "manifest_id": manifest["manifest_id"],
+                            "trial_id": manifest["protocol_identifier"],
+                            key: (
+                                datetime.strptime(
+                                    manifest[key], "%Y-%m-%d %H:%M:%S"
+                                ).date()
+                                if key.startswith("date")
+                                else manifest[key],
+                                "foo",
+                            ),
+                        }
+                    ]
+                }, str(changes)
 
             # Test non-critical changes for the manifest but stored on the samples
             for key in [
@@ -248,13 +249,15 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                     assert getattr(records[Shipment][0], key) == "foo", (
                         str(records) + "\n" + str(changes)
                     )
-                    assert changes == [
-                        {
-                            "manifest_id": manifest["manifest_id"],
-                            "trial_id": manifest["protocol_identifier"],
-                            key: (manifest["samples"][0][key], "foo"),
-                        }
-                    ], str(changes)
+                    assert changes == {
+                        "shipment": [
+                            {
+                                "manifest_id": manifest["manifest_id"],
+                                "trial_id": manifest["protocol_identifier"],
+                                key: (manifest["samples"][0][key], "foo"),
+                            }
+                        ]
+                    }, str(changes)
 
             # Test non-critical changes on the samples
             for key in manifest["samples"][0].keys():
@@ -344,17 +347,19 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                         == new_manifest["samples"][0][key]
                     ), f"{records}\n{changes}"
 
-                assert changes == [
-                    {
-                        "cimac_id": manifest["samples"][0]["cimac_id"],
-                        "shipment_manifest_id": manifest["manifest_id"],
-                        "trial_id": manifest["protocol_identifier"],
-                        key: (
-                            manifest["samples"][0][key],
-                            new_manifest["samples"][0][key],
-                        ),
-                    }
-                ], str(changes)
+                assert changes == {
+                    "samples": [
+                        {
+                            "cimac_id": manifest["samples"][0]["cimac_id"],
+                            "shipment_manifest_id": manifest["manifest_id"],
+                            "trial_id": manifest["protocol_identifier"],
+                            key: (
+                                manifest["samples"][0][key],
+                                new_manifest["samples"][0][key],
+                            ),
+                        }
+                    ]
+                }, str(changes)
 
 
 def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
@@ -500,3 +505,115 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
 
         with pytest.raises(Exception, match="already exists for trial"):
             insert_manifest_from_json(manifest)
+
+
+def test_update_json_with_changes(cidc_api, clean_db, monkeypatch):
+    """test that updates get into the blobs as expected"""
+    with cidc_api.app_context():
+        mock_get_current_user(
+            cidc_api, monkeypatch
+        )  # also checks for trial existence in JSON blobs
+        metadata_json = {
+            "allowed_cohort_names": ["Arm_A"],
+            "allowed_collection_event_names": ["Baseline"],
+            "protocol_identifier": "test_trial",
+            "participants": [
+                {
+                    "cimac_participant_id": "CTTTPPP",
+                    "cohort_name": "Arm_A",
+                    "participant_id": "local",
+                    "samples": [
+                        {
+                            "cimac_id": "CTTTPPP00.01",
+                            "collection_event_name": "Baseline",
+                            "parent_sample_id": "foo",
+                            "sample_location": "X",
+                            "type_of_sample": "Other",
+                        }
+                    ],
+                }
+            ],
+            "shipments": [
+                {
+                    "account_number": "AccN",
+                    "assay_priority": "1",
+                    "assay_type": "Olink",
+                    "courier": "Inter-Site Delivery",
+                    "date_received": "2021-01-05 00:00:00",
+                    "date_shipped": "2021-01-01 00:00:00",
+                    "manifest_id": "test_manifest",
+                    "quality_of_shipment": "Not Reported",
+                    "ship_from": "from",
+                    "ship_to": "to",
+                    "shipping_condition": "Not Reported",
+                    "tracking_number": "foo",
+                    "receiving_party": "MDA_Wistuba",
+                }
+            ],
+        }
+        trial_md = TrialMetadata(trial_id="test_trial", metadata_json=metadata_json)
+        trial_md.insert()
+
+        upload = UploadJobs(
+            trial_id="test_trial",
+            _status=UploadJobStatus.MERGE_COMPLETED.value,
+            multifile=False,
+            metadata_patch=metadata_json,
+            uploader_email="test@email.com",
+            upload_type="foo",
+        )
+        upload.insert()
+
+        # shipment change
+        changes = {
+            "shipment": [
+                {
+                    "trial_id": "test_trial",
+                    "shipment_manifest_id": "test_manifest",
+                    "assay_priority": ("1", "2"),
+                }
+            ]
+        }
+        errors = update_json_with_changes("test_trial", changes)
+        assert len(errors) == 0, "\n".join(str(e) for e in errors)
+        trial_md = TrialMetadata.select_for_update_by_trial_id(
+            "test_trial"
+        ).metadata_json
+        print(trial_md["shipments"])
+        # assert trial_md["shipments"][0]["assay_priority"] == "2"
+
+        # participant change
+        changes = {
+            "samples": [
+                {
+                    "trial_id": "test_trial",
+                    "shipment_manifest_id": "test_manifest",
+                    "cimac_id": "CTTTPPP00.01",
+                    "participant_id": ("local", "foo"),
+                }
+            ]
+        }
+        errors = update_json_with_changes("test_trial", changes)
+        assert len(errors) == 0, "\n".join(str(e) for e in errors)
+        trial_md = TrialMetadata.select_for_update_by_trial_id(
+            "test_trial"
+        ).metadata_json
+        assert trial_md["participants"][0]["participant_id"] == "foo"
+
+        # sample change
+        changes = {
+            "samples": [
+                {
+                    "trial_id": "test_trial",
+                    "shipment_manifest_id": "test_manifest",
+                    "cimac_id": "CTTTPPP00.01",
+                    "sample_location": ("X", "Y"),
+                }
+            ]
+        }
+        errors = update_json_with_changes("test_trial", changes)
+        assert len(errors) == 0, "\n".join(str(e) for e in errors)
+        trial_md = TrialMetadata.select_for_update_by_trial_id(
+            "test_trial"
+        ).metadata_json
+        assert trial_md["participants"][0]["samples"][0]["sample_location"] == "Y"
