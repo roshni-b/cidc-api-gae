@@ -16,7 +16,6 @@ from cidc_api.models.models import UploadJobStatus, UploadJobs
 from cidc_api.models.templates.csms_api import *
 from cidc_api.models.templates.file_metadata import Upload
 from cidc_api.models.templates.trial_metadata import Participant
-from cidc_api.shared import auth
 
 from tests.csms.data import manifests
 from tests.csms.utils import validate_json_blob, validate_relational
@@ -25,20 +24,13 @@ from tests.csms.utils import validate_json_blob, validate_relational
 from ...resources.test_trial_metadata import setup_user
 
 
-def mock_get_current_user(cidc_api, monkeypatch):
-    setup_user(cidc_api, monkeypatch)
-
-    get_current_user = MagicMock()
-    get_current_user.return_value = MagicMock()
-    get_current_user.return_value.email = "test@email.com"
-    monkeypatch.setattr(auth, "get_current_user", get_current_user)
-
-
 def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
     """test that detecting changes in a manifest work as expected"""
     # grab a completed manifest
     with cidc_api.app_context():
-        mock_get_current_user(cidc_api, monkeypatch)
+        setup_user(cidc_api, monkeypatch)
+        user = MagicMock()
+        user.email = "test@email.com"
 
         # prepare relational db
         ordered_records = OrderedDict()
@@ -76,7 +68,7 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                 continue
 
             # insert manifest before we check for changes
-            insert_manifest_from_json(manifest)
+            insert_manifest_from_json(manifest, user=user)
             # should check out, but let's make sure
             validate_relational("test_trial")
 
@@ -93,7 +85,7 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                     }
                     for sample in manifest["samples"]
                 ]
-                detect_manifest_changes(new_manifest)
+                detect_manifest_changes(new_manifest, user=user)
             # this is why we needed a second valid trial to test this check
             with pytest.raises(Exception, match="Change in critical field for"):
                 # CIDC trial_id = CSMS protocol_identifier
@@ -106,10 +98,11 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                     }
                     for sample in manifest["samples"]
                 ]
-                detect_manifest_changes(new_manifest)
+                detect_manifest_changes(new_manifest, user=user)
 
             # manifest_id has no such complication, but is also on the samples
-            with pytest.raises(Exception, match="Change in critical field for"):
+            # changing the manifest_id makes it new
+            with pytest.raises(NewManifestError):
                 new_manifest = {
                     k: v if k != "manifest_id" else "foo" for k, v in manifest.items()
                 }
@@ -117,7 +110,7 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                     {k: v if k != "manifest_id" else "foo" for k, v in sample.items()}
                     for sample in new_manifest["samples"]
                 ]
-                detect_manifest_changes(new_manifest)
+                detect_manifest_changes(new_manifest, user=user)
 
             # Changing a cimac_id is adding/removing a Sample
             ## so this is a different error
@@ -129,7 +122,7 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                     else sample
                     for n, sample in enumerate(manifest["samples"])
                 ]
-                detect_manifest_changes(new_manifest)
+                detect_manifest_changes(new_manifest, user=user)
             # need to use an actually valid cimac_id
             with pytest.raises(Exception, match="Missing sample"):
                 new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
@@ -142,7 +135,7 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                     else sample
                     for n, sample in enumerate(manifest["samples"])
                 ]
-                detect_manifest_changes(new_manifest)
+                detect_manifest_changes(new_manifest, user=user)
 
             # Test non-critical changes on the manifest itself
             for key in manifest.keys():
@@ -163,7 +156,7 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                 new_manifest = {
                     k: v if k != key else "foo" for k, v in manifest.items()
                 }
-                records, changes = detect_manifest_changes(new_manifest)
+                records, changes = detect_manifest_changes(new_manifest, user=user)
                 assert (
                     len(records) == 1
                     and Shipment in records
@@ -231,7 +224,7 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                         for sample in manifest["samples"]
                     ]
 
-                records, changes = detect_manifest_changes(new_manifest)
+                records, changes = detect_manifest_changes(new_manifest, user=user)
 
                 if key == "sample_manifest_type":
                     assert (
@@ -308,7 +301,7 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                         for n, sample in enumerate(manifest["samples"])
                     ]
 
-                records, changes = detect_manifest_changes(new_manifest)
+                records, changes = detect_manifest_changes(new_manifest, user=user)
 
                 # name change for when we're looking below
                 if key == "standardized_collection_event_name":
@@ -368,11 +361,13 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
     manifest = [m for m in manifests if m.get("status") in [None, "qc_complete"]][0]
 
     with cidc_api.app_context():
-        mock_get_current_user(cidc_api, monkeypatch)
+        setup_user(cidc_api, monkeypatch)
+        user = MagicMock()
+        user.email = "test@email.com"
 
         # blank db throws error
         with pytest.raises(Exception, match="No trial found with id"):
-            insert_manifest_into_blob(manifest)
+            insert_manifest_into_blob(manifest, user=user)
 
         # also checks for trial existence in relational
         errs = insert_record_batch(
@@ -390,7 +385,7 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
         TrialMetadata(trial_id="test_trial", metadata_json=metadata_json,).insert()
 
         with pytest.raises(Exception, match="not found within '/allowed_cohort_names/"):
-            insert_manifest_into_blob(manifest)
+            insert_manifest_into_blob(manifest, user=user)
 
         metadata_json["allowed_cohort_names"] = ["Arm_A", "Arm_Z"]
         TrialMetadata.select_for_update_by_trial_id("test_trial").update(
@@ -400,7 +395,7 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
         with pytest.raises(
             Exception, match="not found within '/allowed_collection_event_names/"
         ):
-            insert_manifest_into_blob(manifest)
+            insert_manifest_into_blob(manifest, user=user)
 
         metadata_json["allowed_collection_event_names"] = [
             "Baseline",
@@ -410,7 +405,7 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
             changes={"metadata_json": metadata_json}
         )
 
-        insert_manifest_into_blob(manifest)
+        insert_manifest_into_blob(manifest, user=user)
 
         md_json = TrialMetadata.select_for_update_by_trial_id(
             "test_trial"
@@ -423,7 +418,7 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
             if m.get("status") in [None, "qc_complete"]
             if m != manifest
         ]:
-            insert_manifest_into_blob(other_manifest)
+            insert_manifest_into_blob(other_manifest, user=user)
 
             md_json = TrialMetadata.select_for_update_by_trial_id(
                 "test_trial"
@@ -431,7 +426,7 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
             validate_json_blob(md_json)
 
         with pytest.raises(Exception, match="already exists for trial"):
-            insert_manifest_into_blob(manifest)
+            insert_manifest_into_blob(manifest, user=user)
 
 
 def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
@@ -440,11 +435,13 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
     manifest = [m for m in manifests if m.get("status") in [None, "qc_complete"]][0]
 
     with cidc_api.app_context():
-        mock_get_current_user(cidc_api, monkeypatch)
+        setup_user(cidc_api, monkeypatch)
+        user = MagicMock()
+        user.email = "test@email.com"
 
         # blank db throws error
         with pytest.raises(Exception, match="No trial found with id"):
-            insert_manifest_from_json(manifest)
+            insert_manifest_from_json(manifest, user=user)
 
         errs = insert_record_batch(
             {ClinicalTrial: [ClinicalTrial(protocol_identifier="test_trial",)]}
@@ -464,7 +461,7 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         with pytest.raises(
             Exception, match="No Collection event with trial_id, event_name"
         ):
-            insert_manifest_from_json(manifest)
+            insert_manifest_from_json(manifest, user=user)
 
         errs = insert_record_batch(
             {
@@ -480,7 +477,7 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         assert len(errs) == 0, errs
 
         with pytest.raises(Exception, match="no Cohort with trial_id, cohort_name"):
-            insert_manifest_from_json(manifest)
+            insert_manifest_from_json(manifest, user=user)
 
         errs = insert_record_batch(
             {
@@ -492,7 +489,7 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         )
         assert len(errs) == 0
 
-        insert_manifest_from_json(manifest)
+        insert_manifest_from_json(manifest, user=user)
         validate_relational("test_trial")
 
         for other_manifest in [
@@ -500,19 +497,24 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
             for m in manifests
             if m.get("status") in [None, "qc_complete"] and m != manifest
         ]:
-            insert_manifest_from_json(other_manifest)
+            insert_manifest_from_json(other_manifest, user=user)
             validate_relational("test_trial")
 
         with pytest.raises(Exception, match="already exists for trial"):
-            insert_manifest_from_json(manifest)
+            insert_manifest_from_json(manifest, user=user)
 
 
 def test_update_json_with_changes(cidc_api, clean_db, monkeypatch):
-    """test that updates get into the blobs as expected"""
+    """
+    test that updates get into the blobs as expected
+    not testing relational entries as that is only passed directly to insert_record_batch
+    """
     with cidc_api.app_context():
-        mock_get_current_user(
-            cidc_api, monkeypatch
-        )  # also checks for trial existence in JSON blobs
+        setup_user(cidc_api, monkeypatch)
+        user = MagicMock()
+        user.email = "test@email.com"
+
+        # also checks for trial existence in JSON blobs
         metadata_json = {
             "allowed_cohort_names": ["Arm_A"],
             "allowed_collection_event_names": ["Baseline"],
@@ -574,7 +576,7 @@ def test_update_json_with_changes(cidc_api, clean_db, monkeypatch):
                 }
             ]
         }
-        errors = update_json_with_changes("test_trial", changes)
+        errors = update_with_changes("test_trial", {}, changes, user=user)
         assert len(errors) == 0, "\n".join(str(e) for e in errors)
         trial_md = TrialMetadata.select_for_update_by_trial_id(
             "test_trial"
@@ -593,7 +595,7 @@ def test_update_json_with_changes(cidc_api, clean_db, monkeypatch):
                 }
             ]
         }
-        errors = update_json_with_changes("test_trial", changes)
+        errors = update_with_changes("test_trial", {}, changes, user=user)
         assert len(errors) == 0, "\n".join(str(e) for e in errors)
         trial_md = TrialMetadata.select_for_update_by_trial_id(
             "test_trial"
@@ -611,7 +613,7 @@ def test_update_json_with_changes(cidc_api, clean_db, monkeypatch):
                 }
             ]
         }
-        errors = update_json_with_changes("test_trial", changes)
+        errors = update_with_changes("test_trial", {}, changes, user=user)
         assert len(errors) == 0, "\n".join(str(e) for e in errors)
         trial_md = TrialMetadata.select_for_update_by_trial_id(
             "test_trial"

@@ -156,9 +156,10 @@ class Upload(MetadataModel):
     )
 
     def __init__(self, **kwargs):
-        from ...shared.auth import get_current_user
+        if "uploader_email" not in kwargs:
+            from ...shared.auth import get_current_user
 
-        kwargs["uploader_email"] = get_current_user().email
+            kwargs["uploader_email"] = get_current_user().email
 
         super().__init__(**kwargs)
 

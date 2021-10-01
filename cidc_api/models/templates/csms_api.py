@@ -2,12 +2,12 @@ __all__ = [
     "detect_manifest_changes",
     "insert_manifest_from_json",
     "insert_manifest_into_blob",
-    "update_json_with_changes",
+    "NewManifestError",
+    "update_with_changes",
 ]
 
 from collections import defaultdict, OrderedDict
 from datetime import date, datetime, time
-from re import U
 from sqlalchemy.orm.session import Session
 from typing import (
     Any,
@@ -22,7 +22,7 @@ from typing import (
 )
 
 from .file_metadata import Upload
-from ..models import TrialMetadata, UploadJobStatus, UploadJobs
+from ..models import TrialMetadata, UploadJobStatus, UploadJobs, Users
 from .model_core import (
     cimac_id_to_cimac_participant_id,
     MetadataModel,
@@ -303,7 +303,9 @@ def _convert_samples(
 
 
 @with_default_session
-def insert_manifest_into_blob(manifest: Dict[str, Any], *, session: Session):
+def insert_manifest_into_blob(
+    manifest: Dict[str, Any], user: Users, *, session: Session
+):
     """
     Given a CSMS-style manifest, add it into the JSON metadata blob
     
@@ -402,13 +404,13 @@ def insert_manifest_into_blob(manifest: Dict[str, Any], *, session: Session):
         multifile=False,
         metadata_patch=patch,
         upload_type=_get_upload_type(samples),
-        uploader_email=get_current_user().email,
+        uploader_email=user.email,
     ).insert()
 
 
 @with_default_session
 def insert_manifest_from_json(
-    manifest: Dict[str, Any], *, session: Session
+    manifest: Dict[str, Any], user: Users, *, session: Session
 ) -> List[Exception]:
     """
     Given a CSMS-style manifest, validate and add it into the relational tables.
@@ -529,12 +531,6 @@ def insert_manifest_from_json(
             )
             ordered_records[Sample].append(new_sample)
 
-    # add and validate the data
-    # the existence of the correct cohort names are checked here
-    errs = insert_record_batch(ordered_records, session=session)
-    if len(errs):
-        raise Exception("Multiple errors: [" + "\n".join(str(e) for e in errs) + "]")
-
     # create pseudo-Upload
     ordered_records[Upload] = [
         Upload(
@@ -544,9 +540,15 @@ def insert_manifest_from_json(
             assay_creator="DFCI",
             upload_type=_get_upload_type(samples),
             shipment_manifest_id=manifest_id,
-            uploader_email=get_current_user().email,
+            uploader_email=user.email,
         )
     ]
+
+    # add and validate the data
+    # the existence of the correct cohort names are checked here
+    errs = insert_record_batch(ordered_records, session=session)
+    if len(errs):
+        raise Exception("Multiple errors: [" + "\n".join(str(e) for e in errs) + "]")
 
 
 def _calc_difference(
@@ -652,7 +654,7 @@ def _get_csms_sample_map(
 
 @with_default_session
 def detect_manifest_changes(
-    csms_manifest: Dict[str, Any], *, session: Session
+    csms_manifest: Dict[str, Any], user: Users, *, session: Session
 ) -> Tuple[
     OrderedDictType[Type, List[MetadataModel]],
     Dict[str, List[Dict[str, Union[str, Tuple[Any, Any]]]]],
@@ -738,7 +740,7 @@ def detect_manifest_changes(
         # remove this to allow for adding new manifests via this function
         # also need to uncomment new Sample code below
         raise NewManifestError()
-    elif cidc_shipment is not None and Shipment.trial_id != trial_id:
+    elif cidc_shipment is not None and cidc_shipment.trial_id != trial_id:
         raise Exception(
             f"Change in critical field for: {(cidc_shipment.trial_id, cidc_shipment.manifest_id)} to CSMS {(trial_id, manifest_id)}"
         )
@@ -841,7 +843,7 @@ def detect_manifest_changes(
         assay_creator="DFCI",
         upload_type=_get_upload_type(csms_samples),
         shipment_manifest_id=manifest_id,
-        uploader_email=get_current_user().email,
+        uploader_email=user.email,
     )
     diff = _calc_difference(
         {} if cidc_upload is None else cidc_upload.to_dict(),
@@ -865,22 +867,18 @@ def detect_manifest_changes(
 
 
 @with_default_session
-def update_json_with_changes(
+def update_with_changes(
     trial_id: str,
+    records_to_insert: OrderedDictType[Type, List[MetadataModel]],
     all_changes: Dict[str, List[Dict[str, Union[str, Tuple[Any, Any]]]]],
+    user: Users,
     *,
     session: Session,
 ) -> List[Exception]:
     """
-    Update the trial metadata blobs given a set of changes as returned by detect_manifest_changes
-    The form of each input entry is set by the return of _calc_difference
-    Uses schemas imports to handle merging
+    Update the trial metadata blobs, upload_jobs, and relational records given a set of changes
+    @records_to_insert and @all_changes are in the format of the outputs from detect_manifest_changes()
     """
-    # schemas import here to keep JSON-blob code together
-    from cidc_schemas.prism.merger import PRISM_MERGE_STRATEGIES
-    from cidc_schemas.json_validation import load_and_validate_schema
-    from jsonmerge import Merger
-
     errors = []
     changed_sample_map = defaultdict(list)
     shipment_changes, new_upload_type = {}, None
@@ -1028,9 +1026,6 @@ def update_json_with_changes(
                 # merge the new changes into the existing metadata patch
                 # and then update the db record
                 try:
-
-                    ct_schema = load_and_validate_schema("clinical_trial.json")
-
                     upload.update(
                         changes={
                             # this is not truly a patch, as it contains all of the trial md
@@ -1042,7 +1037,9 @@ def update_json_with_changes(
                     )
                 except Exception as e:
                     errors.append(e)
-                finally:  # either way we're done
+                else:
+                    errors.extend(insert_record_batch(records_to_insert))
+                finally:  # any which way we're done
                     break
 
     return errors

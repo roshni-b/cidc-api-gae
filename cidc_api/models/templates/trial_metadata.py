@@ -13,7 +13,6 @@ __all__ = [
     "VolumeUnits",
 ]
 
-from enum import unique
 import re
 from sqlalchemy.orm.session import Session
 from sqlalchemy import (
