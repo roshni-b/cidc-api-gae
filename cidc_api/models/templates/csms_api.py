@@ -1,4 +1,5 @@
 __all__ = [
+    "Change",
     "detect_manifest_changes",
     "insert_manifest_from_json",
     "insert_manifest_into_blob",
@@ -22,7 +23,7 @@ from typing import (
 )
 
 from .file_metadata import Upload
-from ..models import TrialMetadata, UploadJobStatus, UploadJobs, Users
+from ..models import TrialMetadata, UploadJobStatus, UploadJobs
 from .model_core import (
     cimac_id_to_cimac_participant_id,
     MetadataModel,
@@ -304,7 +305,7 @@ def _convert_samples(
 
 @with_default_session
 def insert_manifest_into_blob(
-    manifest: Dict[str, Any], user: Users, *, session: Session
+    manifest: Dict[str, Any], uploader_email: str, *, session: Session
 ):
     """
     Given a CSMS-style manifest, add it into the JSON metadata blob
@@ -404,13 +405,13 @@ def insert_manifest_into_blob(
         multifile=False,
         metadata_patch=patch,
         upload_type=_get_upload_type(samples),
-        uploader_email=user.email,
+        uploader_email=uploader_email,
     ).insert()
 
 
 @with_default_session
 def insert_manifest_from_json(
-    manifest: Dict[str, Any], user: Users, *, session: Session
+    manifest: Dict[str, Any], uploader_email: str, *, session: Session
 ) -> List[Exception]:
     """
     Given a CSMS-style manifest, validate and add it into the relational tables.
@@ -540,7 +541,7 @@ def insert_manifest_from_json(
             assay_creator="DFCI",
             upload_type=_get_upload_type(samples),
             shipment_manifest_id=manifest_id,
-            uploader_email=user.email,
+            uploader_email=uploader_email,
         )
     ]
 
@@ -551,7 +552,45 @@ def insert_manifest_from_json(
         raise Exception("Multiple errors: [" + "\n".join(str(e) for e in errs) + "]")
 
 
+class Change:
+    def __init__(
+        self,
+        entity_type: str,
+        trial_id: str,
+        manifest_id: str,
+        cimac_id: str = None,
+        changes: Dict[str, Tuple[Any, Any]] = [],
+    ):
+        if entity_type not in ["sample", "shipment", "upload"]:
+            raise ValueError(
+                f"entity_type must be in: sample, shipment, upload\nnot: {entity_type}"
+            )
+        else:
+            self.entity_type = entity_type
+
+        self.trial_id = trial_id
+        self.manifest_id = manifest_id
+        self.cimac_id = cimac_id
+        self.changes = changes
+
+    def __bool__(self):
+        return bool(len(self.changes))
+
+    def __repr__(self):
+        return f"{self.entity_type.title()} changes for {self.trial_id}, {self.manifest_id}, {self.cimac_id}:\n{self.changes}"
+
+    def __eq__(self, other):
+        return (
+            self.entity_type == other.entity_type
+            and self.trial_id == other.trial_id
+            and self.manifest_id == other.manifest_id
+            and self.cimac_id == other.cimac_id
+            and self.changes == other.changes
+        )
+
+
 def _calc_difference(
+    entity_type: str,
     cidc: dict,
     csms: dict,
     ignore=[
@@ -592,15 +631,23 @@ def _calc_difference(
     # use set to not get same key multiple times if values differ
     diff_keys = {k for k, _ in set(cidc1.items()) ^ set(csms1.items())}
     # then get both values once per key to return
-    ret = {k: (cidc.get(k), csms.get(k)) for k in diff_keys}
+    changes = {k: (cidc.get(k), csms.get(k)) for k in diff_keys}
+    print(
+        csms["trial_id"],
+        csms.get("shipment_manifest_id"),
+        csms.get("cimac_id"),
+        changes,
+    )
 
-    # add back critical values as labels if there are changes
-    # use the new values so we can check them in the source
-    if ret:
-        for k in ["cimac_id", "manifest_id", "shipment_manifest_id", "trial_id"]:
-            if k in csms and k not in ret:
-                ret[k] = csms[k]
-    return ret
+    return Change(
+        entity_type,
+        trial_id=csms["trial_id"],
+        manifest_id=csms["manifest_id"]
+        if "manifest_id" in csms
+        else csms["shipment_manifest_id"],
+        cimac_id=csms["cimac_id"] if entity_type == "sample" else None,
+        changes=changes,
+    )
 
 
 def _get_cidc_sample_map(trial_id, manifest_id, session) -> Dict[str, Dict[str, Any]]:
@@ -654,7 +701,7 @@ def _get_csms_sample_map(
 
 @with_default_session
 def detect_manifest_changes(
-    csms_manifest: Dict[str, Any], user: Users, *, session: Session
+    csms_manifest: Dict[str, Any], uploader_email: str, *, session: Session
 ) -> Tuple[
     OrderedDictType[Type, List[MetadataModel]],
     Dict[str, List[Dict[str, Union[str, Tuple[Any, Any]]]]],
@@ -670,16 +717,9 @@ def detect_manifest_changes(
     OrderedDict[Type, List[MetadataModel]]
         instances to pass into insert_record_batch
         contains the changes
-    Dict[str, List[Dict[str, Union[str, Tuple[Any, Any]]]]]
+    List[Change]
         the changes that were detected
         used as input for update_json_with_changes, and aims to be human-readable as well
-        ...
-        the keys are in ["samples", "shipment", "upload"]
-        values are themselves a list of change dicts
-            where keys is the field,
-            critical values are str, and
-            non-critical values are [old, new]
-                old or new is None if it was null OR the key was undefined
     
     Raises
     ------
@@ -689,37 +729,7 @@ def detect_manifest_changes(
         if the connections between any critical fields is changed
         namely trial_id, manifest_id, cimac_id
     """
-    # Example simple successful returns:
-    # {
-    #    "upload": [
-    #        {
-    #            "trial_id": "test_trial",
-    #            "manifest_id": "test_manifest",
-    #            "upload_type": ("old_type", "new_type")
-    #        }
-    #    ]
-    # }
-    # {
-    #    "shipment": [
-    #        {
-    #            "trial_id": "test_trial",
-    #            "manifest_id": "test_manifest",
-    #            "receiving_party": ("old_party", "new_party")
-    #        }
-    #    ]
-    # }
-    # {
-    #    "samples": [
-    #        {
-    #            "trial_id": "test_trial",
-    #            "manifest_id": "test_manifest",
-    #            "cimac_id": "CTTTPPP00.01",
-    #            "participant_id": ("old", "new"), <-- participant level
-    #            "sample_location": ( old, new ) <-- sample level
-    #        }
-    #    ]
-    # }
-    ret0, ret1 = OrderedDict(), defaultdict(list)
+    ret0, ret1 = OrderedDict(), []
 
     # ----- Get all our information together -----
     csms_manifest["trial_id"] = csms_manifest.pop("protocol_identifier")
@@ -745,15 +755,17 @@ def detect_manifest_changes(
             f"Change in critical field for: {(cidc_shipment.trial_id, cidc_shipment.manifest_id)} to CSMS {(trial_id, manifest_id)}"
         )
 
-    diff = _calc_difference(
-        {} if cidc_shipment is None else cidc_shipment.to_dict(), csms_manifest
+    change: Change = _calc_difference(
+        "shipment",
+        {} if cidc_shipment is None else cidc_shipment.to_dict(),
+        csms_manifest,
     )
-    if diff:
+    if change:
         # since insert_record_batch is a merge, we can just generate a new object
         ret0[Shipment] = [
             Shipment(**_get_all_values(target=Shipment, old=csms_manifest))
         ]
-        ret1["shipment"].append(diff)
+        ret1.append(change)
 
     # ----- Look for sample-level differences -----
     cidc_sample_map = _get_cidc_sample_map(trial_id, manifest_id, session=session)
@@ -802,18 +814,15 @@ def detect_manifest_changes(
     ret0[Participant] = []
     ret0[Sample] = []
     for cimac_id, csms_sample in csms_sample_map.items():
-        diff = _calc_difference(cidc_sample_map[cimac_id], csms_sample)
-        if diff:
-            ret1["samples"].append(diff)
-
-            # pull out just the changes for ease
-            changes = set(diff.keys())
-            for i in ["cimac_id", "shipment_manifest_id", "trial_id"]:
-                changes.remove(i)
+        change: Change = _calc_difference(
+            "sample", cidc_sample_map[cimac_id], csms_sample
+        )
+        if change:
+            ret1.append(change)
 
             # Participant-level fields
             if any(
-                i in changes
+                i in change.changes
                 for i in ["cohort_name", "participant_id", "trial_participant_id"]
             ):
                 # since insert_record_batch is a merge, we can just generate a new object
@@ -822,12 +831,12 @@ def detect_manifest_changes(
                     **_get_all_values(target=Participant, old=csms_sample),
                 )
                 ret0[Participant].append(new_partic)
-            for i in ["cohort_name", "participant_id", "trial_participant_id"]:
-                if i in changes:
-                    changes.remove(i)
 
-            # if there's only cohort_name or trial_participant_id, there's nothing left
-            if len(changes):
+            # if there's only cohort_name or trial_participant_id, there's no sample-level stuff
+            if any(
+                k not in ["cohort_name", "participant_id", "trial_participant_id"]
+                for k in change.changes
+            ):
                 # since insert_record_batch is a merge, we can just generate a new object
                 new_sample = Sample(**_get_all_values(target=Sample, old=csms_sample))
                 ret0[Sample].append(new_sample)
@@ -843,17 +852,18 @@ def detect_manifest_changes(
         assay_creator="DFCI",
         upload_type=_get_upload_type(csms_samples),
         shipment_manifest_id=manifest_id,
-        uploader_email=user.email,
+        uploader_email=uploader_email,
     )
-    diff = _calc_difference(
+    change: Change = _calc_difference(
+        "upload",
         {} if cidc_upload is None else cidc_upload.to_dict(),
         new_upload.to_dict(),
         ignore=["id", "token", "uploader_email"],
     )
-    if diff:
+    if change:
         # since insert_record_batch is a merge, we can just generate a new object
         ret0[Upload] = [new_upload]
-        ret1["upload"].append(diff)
+        ret1.append(change)
 
     # ----- Finish up and return -----
     # drop unneeded keys
@@ -862,16 +872,14 @@ def detect_manifest_changes(
     if len(ret0[Sample]) == 0:
         ret0.pop(Sample)
 
-    # convert away from defaultdict
-    return ret0, dict(ret1)
+    return ret0, ret1
 
 
 @with_default_session
 def update_with_changes(
     trial_id: str,
     records_to_insert: OrderedDictType[Type, List[MetadataModel]],
-    all_changes: Dict[str, List[Dict[str, Union[str, Tuple[Any, Any]]]]],
-    user: Users,
+    all_changes: List[Change],
     *,
     session: Session,
 ) -> List[Exception]:
@@ -881,67 +889,58 @@ def update_with_changes(
     """
     errors = []
     changed_sample_map = defaultdict(list)
-    shipment_changes, new_upload_type = {}, None
+    shipment_change, new_upload_type = {}, None
 
     # Sort through the changes and handle those for manifest itself
     ## just pull out the participant / sample changes for now
     ## upload changes are handled below
-    for change_type, change_list in all_changes.items():
-        for change in change_list:
-            # change = {k: (cidc.get(k), csms.get(k)) for k in <keys with changes>}
-            # as well as str values for keys: trial_id, [shipment_]manifest_id, and cimac_id
-            change_trial_id, cimac_id = (
-                change.pop("trial_id"),
-                change.get("cimac_id"),
-            )
-            manifest_id = (
-                change.pop("manifest_id")
-                if "manifest_id" in change
-                else change.pop("shipment_manifest_id")
-            )
-            assert (
-                change_trial_id == trial_id
-            ), f"Tried to use changes for {change_trial_id} to update {trial_id}"
+    for change in all_changes:
+        # change = {k: (cidc.get(k), csms.get(k)) for k in <keys with changes>}
+        # as well as str values for keys: trial_id, [shipment_]manifest_id, and cimac_id
+        assert (
+            change.trial_id == trial_id
+        ), f"Tried to use changes for {change.trial_id} to update {trial_id}"
 
-            # these need to be manually updated after merging
-            # as shipments
-            if change_type == "shipment":
-                # only ever one of these
-                shipment_changes = {key: new for key, (_, new) in change.items()}
+        # these need to be manually updated after merging
+        # as shipments
+        if change.entity_type == "shipment":
+            # only ever one of these
+            shipment_change = {key: new for key, (_, new) in change.changes.items()}
 
-            # this is in a different table than the trial metadata itself, see below
-            elif change_type == "upload":
-                if "upload_type" in change:
-                    new_upload_type = change["upload_type"][1]  # [0] is old value
-                continue
-            # pull these out to handle separately
-            else:  # change_type == "sample"
-                cimac_paricipant_id = cimac_id_to_cimac_participant_id(cimac_id, {})
-                changed_sample_map[cimac_paricipant_id].append(change)
+        # this is in a different table than the trial metadata itself, see below
+        elif change.entity_type == "upload":
+            if "upload_type" in change:
+                new_upload_type = change["upload_type"][1]  # [0] is old value
+            continue
+        # pull these out to handle separately
+        else:  # change_type == "sample"
+            cimac_paricipant_id = cimac_id_to_cimac_participant_id(change.cimac_id, {})
+            changed_sample_map[cimac_paricipant_id].append(change)
 
     # Sort out changes to the participants / samples
     participant_changes = {}  # cimac_participant_id: changes
-    for partic_id, sample_list in changed_sample_map.items():
-        for sample in sample_list:
+    for partic_id, sample_changes in changed_sample_map.items():
+        for change in sample_changes:
             # these are participant-level not sample
             participant_changes[partic_id] = {
-                i: sample.pop(i)[1]
+                i: change.changes.pop(i)[1]
                 for i in ["cohort_name", "participant_id"]
-                if i in sample
+                if i in change.changes
             }  # [0] is old value
 
-            cimac_id = sample.pop("cimac_id")
             # if there's only cohort_name or trial_participant_id, there's nothing left
-            if len(sample):
+            if change:
                 participant_changes[partic_id]["samples"] = {
-                    cimac_id: {key: new for key, (_, new) in sample.items()}
+                    change.cimac_id: {
+                        key: new for key, (_, new) in change.changes.items()
+                    }
                 }
-                participant_changes[partic_id]["samples"][cimac_id][
+                participant_changes[partic_id]["samples"][change.cimac_id][
                     "cimac_id"
-                ] = cimac_id
-                participant_changes[partic_id]["samples"][cimac_id][
+                ] = change.cimac_id
+                participant_changes[partic_id]["samples"][change.cimac_id][
                     "shipment_manifest_id"
-                ] = manifest_id
+                ] = change.manifest_id
 
     # merge new patch into trial and update the db record
     # have to do by hand as using merge_clinical_trial_metadata leads to conflict errors
@@ -994,10 +993,10 @@ def update_with_changes(
             ]
 
     # handle shipment changes
-    if shipment_changes:
+    if shipment_change:
         for n, shipment in enumerate(new_md["shipments"]):
-            if shipment["manifest_id"] == manifest_id:
-                new_md["shipments"][n].update(shipment_changes)
+            if shipment["manifest_id"] == all_changes[0].manifest_id:
+                new_md["shipments"][n].update(shipment_change)
                 break
 
     # Update the trial
@@ -1022,7 +1021,10 @@ def update_with_changes(
         )
         for upload in uploads:
             shipments = upload.metadata_patch.get("shipments", [])
-            if len(shipments) and shipments[0].get("manifest_id") == manifest_id:
+            if (
+                len(shipments)
+                and shipments[0].get("manifest_id") == all_changes[0].manifest_id
+            ):
                 # merge the new changes into the existing metadata patch
                 # and then update the db record
                 try:
