@@ -9,12 +9,16 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.15` - this
+## Version `0.25.16` - this
 
 - `added` function for finding CSMS changes and getting updates for relational db
 - `added` function to execute corresponding updates to JSON blob from CSMS changes
 
-## Version `0.25.14` - 24 Sept 2021
+## Version `0.25.15` - 04 Oct 2021
+
+- `added` grant_lister_access and revoke_lister_access for custom role CIDC Lister that is required for all downloads
+
+## Version `0.25.14` - 24  Sept 2021
 
 - `added` API endpoint to add a new manifest given JSON from CSMS
 

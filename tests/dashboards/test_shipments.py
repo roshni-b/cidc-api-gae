@@ -1,4 +1,5 @@
 from datetime import datetime
+import pytest
 
 from dash.testing.composite import DashComposite
 from selenium.webdriver.common.by import By
@@ -99,6 +100,7 @@ def setup_data(cidc_api, clean_db):
     return user, upload_job, trial
 
 
+@pytest.mark.skip()
 def test_shipments_dashboard(cidc_api, clean_db, monkeypatch, dash_duo: DashComposite):
     """
     Check that the shipments dashboard behaves as expected.

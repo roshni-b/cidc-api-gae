@@ -14,8 +14,10 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     Iterator,
     List,
+    Optional,
     OrderedDict as OrderedDictType,
     Tuple,
     Type,
@@ -29,7 +31,6 @@ from .model_core import (
     MetadataModel,
     with_default_session,
 )
-from ...shared.auth import get_current_user
 from .sync_schemas import _get_all_values
 from .trial_metadata import (
     cimac_id_regex,
@@ -46,7 +47,7 @@ class NewManifestError(Exception):
     pass
 
 
-def _get_upload_type(samples: List[Dict[str, Any]]) -> str:
+def _get_upload_type(samples: Iterable[Dict[str, Any]]) -> str:
     upload_type = set()
     for sample in samples:
         processed_type = sample.get("processed_sample_type").lower()
@@ -632,12 +633,6 @@ def _calc_difference(
     diff_keys = {k for k, _ in set(cidc1.items()) ^ set(csms1.items())}
     # then get both values once per key to return
     changes = {k: (cidc.get(k), csms.get(k)) for k in diff_keys}
-    print(
-        csms["trial_id"],
-        csms.get("shipment_manifest_id"),
-        csms.get("cimac_id"),
-        changes,
-    )
 
     return Change(
         entity_type,
@@ -699,50 +694,45 @@ def _get_csms_sample_map(
     }
 
 
-@with_default_session
-def detect_manifest_changes(
-    csms_manifest: Dict[str, Any], uploader_email: str, *, session: Session
-) -> Tuple[
-    OrderedDictType[Type, List[MetadataModel]],
-    Dict[str, List[Dict[str, Union[str, Tuple[Any, Any]]]]],
-]:
+def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Session):
     """
-    Given a CSMS-style manifest, see if it has any differences from the current state of the relational db
-    If a new manifest, throws a NewManifestError
-    If critical fields are different, throws an error to be handled later by a human
-    Returns a list of model instances with changes to any non-critical fields, and the changes themselves
+    Gather all of the things we'll need while performing validation of the manifest
 
     Returns
     -------
-    OrderedDict[Type, List[MetadataModel]]
-        instances to pass into insert_record_batch
-        contains the changes
-    List[Change]
-        the changes that were detected
-        used as input for update_json_with_changes, and aims to be human-readable as well
-    
-    Raises
-    ------
-    NewManifestError
-        if the manifest_id doesn't correspond to anything in CIDC
-    Exception
-        if the connections between any critical fields is changed
-        namely trial_id, manifest_id, cimac_id
-    """
-    ret0, ret1 = OrderedDict(), []
+    str : trial_id
+    str : manifest_id
+    Dict[str, Dict[str, Any]] : csms_sample_map
+    Dict[str, Dict[str, Any]] : cidc_sample_map
+        both map cimac_id's to a sample definition dict
+    Shipment : cidc_shipment
 
+    
+    Exceptions Raised
+    -----------------
+    - "Cannot add a manifest that is not qc_complete"
+        if manifest's status is not qc_complete (or null)
+    - f"Manifest {manifest_id} contains no samples: {manifest}"
+    - f"No consistent protocol_identifier defined for samples on manifest {manifest_id}"
+    - f"Clinical trial with protocol identifier={trial_id} does not exist"
+        if trial is missing from TrialMetadata OR ClinicalTrial OR both
+    - NewManifestError
+        if there is no Shipment with the given manifest_id
+    - f"Change in critical field for: {(cidc.trial_id, cidc.manifest_id)} to CSMS {(trial_id, manifest_id)}"
+        if the Shipment in CIDC has a different trial_id than in CSMS
+    - f"Missing sample: {(cidc.trial_id, cidc.manifest_id, cidc.cimac_id)} on CSMS {(trial_id, manifest_id)}"
+        if an sample in CIDC is not reflected in CSMS
+    - f"Change in critical field for: {(cidc.trial_id, cidc.manifest_id, cidc.cimac_id)} to CSMS {(trial_id, manifest_id, cimac_id)}"
+        if a sample in CSMS is not correctly reflected in the current state of CIDC
+    - f"No assay_priority defined for manifest_id={manifest_id} for trial {trial_id}"
+    - f"No assay_type defined for manifest_id={manifest_id} for trial {trial_id}"
+    """
     # ----- Get all our information together -----
     csms_manifest["trial_id"] = csms_manifest.pop("protocol_identifier")
     trial_id, manifest_id, csms_samples = _extract_info_from_manifest(
         csms_manifest, session=session
     )
-    csms_assay_priority, csms_assay_type = _extract_details_from_trial(
-        trial_id, manifest_id, csms_samples, session=session
-    )
-    csms_manifest["assay_priority"] = csms_assay_priority
-    csms_manifest["assay_type"] = csms_assay_type
 
-    # ----- Look for shipment-level differences -----
     cidc_shipment = (
         session.query(Shipment).filter(Shipment.manifest_id == manifest_id).first()
     )  # Shipment.manifest_id is unique
@@ -755,19 +745,6 @@ def detect_manifest_changes(
             f"Change in critical field for: {(cidc_shipment.trial_id, cidc_shipment.manifest_id)} to CSMS {(trial_id, manifest_id)}"
         )
 
-    change: Change = _calc_difference(
-        "shipment",
-        {} if cidc_shipment is None else cidc_shipment.to_dict(),
-        csms_manifest,
-    )
-    if change:
-        # since insert_record_batch is a merge, we can just generate a new object
-        ret0[Shipment] = [
-            Shipment(**_get_all_values(target=Shipment, old=csms_manifest))
-        ]
-        ret1.append(change)
-
-    # ----- Look for sample-level differences -----
     cidc_sample_map = _get_cidc_sample_map(trial_id, manifest_id, session=session)
     csms_sample_map = _get_csms_sample_map(trial_id, manifest_id, csms_samples)
 
@@ -810,6 +787,73 @@ def detect_manifest_changes(
                 f"Change in critical field for: {formatted} to CSMS {(trial_id, manifest_id, cimac_id)}"
             )
 
+    csms_assay_priority, csms_assay_type = _extract_details_from_trial(
+        trial_id, manifest_id, csms_samples, session=session
+    )
+    csms_manifest["assay_priority"] = csms_assay_priority
+    csms_manifest["assay_type"] = csms_assay_type
+
+    return trial_id, manifest_id, csms_sample_map, cidc_sample_map, cidc_shipment
+
+
+def _handle_shipment_differences(csms_manifest, cidc_shipment) -> Tuple[Optional[Shipment], Optional[dict]]:
+    change: Change = _calc_difference(
+        "shipment",
+        {} if cidc_shipment is None else cidc_shipment.to_dict(),
+        csms_manifest,
+    )
+    if change:
+        # since insert_record_batch is a merge, we can just generate a new object
+            Shipment(**_get_all_values(target=Shipment, old=csms_manifest))
+
+
+@with_default_session
+def detect_manifest_changes(
+    csms_manifest: Dict[str, Any], uploader_email: str, *, session: Session
+) -> Tuple[
+    OrderedDictType[Type, List[MetadataModel]],
+    Dict[str, List[Dict[str, Union[str, Tuple[Any, Any]]]]],
+]:
+    """
+    Given a CSMS-style manifest, see if it has any differences from the current state of the relational db
+    If a new manifest, throws a NewManifestError
+    If critical fields are different, throws an error to be handled later by a human
+    Returns a list of model instances with changes to any non-critical fields, and the changes themselves
+
+    Returns
+    -------
+    OrderedDict[Type, List[MetadataModel]]
+        instances to pass into insert_record_batch
+        contains the changes
+    List[Change]
+        the changes that were detected
+        used as input for update_json_with_changes, and aims to be human-readable as well
+    
+    Raises
+    ------
+    NewManifestError
+        if the manifest_id doesn't correspond to anything in CIDC
+    Exception
+        if the connections between any critical fields is changed
+        namely trial_id, manifest_id, cimac_id
+    """
+    ret0, ret1 = OrderedDict(), []
+    (
+        trial_id,
+        manifest_id,
+        csms_sample_map,
+        cidc_sample_map,
+        cidc_shipment,
+    ) = _initial_manifest_validation(csms_manifest, session=session)
+
+    # ----- Look for shipment-level differences -----
+    new_ship, change = _handle_shipment_differences(csms_manifest, cidc_shipment)
+    if new_ship:
+        ret0[Shipment] = [new_ship]
+        ret1.append(change)
+
+    # ----- Look for sample-level differences -----
+
     # add here for ordering and then just append; remove later if not needed
     ret0[Participant] = []
     ret0[Sample] = []
@@ -850,7 +894,7 @@ def detect_manifest_changes(
         status=UploadJobStatus.MERGE_COMPLETED.value,
         multifile=False,
         assay_creator="DFCI",
-        upload_type=_get_upload_type(csms_samples),
+        upload_type=_get_upload_type(csms_sample_map.values()),
         shipment_manifest_id=manifest_id,
         uploader_email=uploader_email,
     )
