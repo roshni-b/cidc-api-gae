@@ -91,8 +91,10 @@ from ..shared import emails
 from ..shared.gcloud_client import (
     publish_artifact_upload,
     grant_download_access,
+    grant_lister_access,
     refresh_intake_access,
     revoke_download_access,
+    revoke_lister_access,
 )
 from ..config.logging import get_logger
 
@@ -594,6 +596,8 @@ class Permissions(CommonColumns):
             return
 
         try:
+            # if they have any download permissions, they need the CIDC Lister role
+            grant_lister_access(grantee.email)
             # Grant IAM permission in GCS only if db insert worked
             grant_download_access(grantee.email, self.trial_id, self.upload_type)
             # Remove permissions staged for deletion, if any
@@ -633,6 +637,13 @@ class Permissions(CommonColumns):
             try:
                 # Revoke IAM permission in GCS
                 revoke_download_access(grantee.email, self.trial_id, self.upload_type)
+
+                # If the permission to delete is the last one, also revoke Lister access
+                filter_ = lambda q: q.filter(Permissions.granted_to_user == grantee.id)
+                if Permissions.count(session=session, filter_=filter_) <= 1:
+                    # this one hasn't been deleted yet, so 1 means this is the last one
+                    revoke_lister_access(grantee.email)
+
             except Exception as e:
                 raise IAMException(
                     "IAM revoke failed, and permission db record not removed."
@@ -696,10 +707,16 @@ class Permissions(CommonColumns):
             filter_=filter_for_user,
             session=session,
         )
+        # if they have any download permissions, they need the CIDC Lister role
+        if len(perms):
+            grant_lister_access(user.email)
         for perm in perms:
             # Regrant each permission to reset the TTL for this permission to
             # `settings.INACTIVE_USER_DAYS` from today.
             grant_download_access(user.email, perm.trial_id, perm.upload_type)
+
+        # If this user has a CIDCRole that requires GCS objects.list
+        # add the custom IAM role: CIDC Object Lister
 
         # Regrant all of the user's intake bucket upload permissions, if they have any
         refresh_intake_access(user.email)
@@ -722,10 +739,20 @@ class Permissions(CommonColumns):
             user = Users.find_by_id(perm.granted_to_user)
             if user.is_admin() or user.is_nci_user() or user.disabled:
                 continue
+
             if grant:
+                grant_lister_access(user.email)
                 grant_download_access(user.email, perm.trial_id, perm.upload_type)
             else:
                 revoke_download_access(user.email, perm.trial_id, perm.upload_type)
+
+        # if un-granting things, revoke_lister_access as needed
+        if not grant:
+            for user in session.query(Users).all():
+                if user.is_admin() or user.is_nci_user() or user.disabled:
+                    continue
+                else:
+                    revoke_lister_access(user.email)
 
 
 class ValidationMultiError(Exception):

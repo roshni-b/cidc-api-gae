@@ -19,6 +19,7 @@ from ..config.settings import (
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_UPLOAD_TOPIC,
     GOOGLE_DATA_BUCKET,
+    GOOGLE_LISTER_ROLE,
     GOOGLE_CLOUD_PROJECT,
     GOOGLE_EMAILS_TOPIC,
     GOOGLE_PATIENT_SAMPLE_TOPIC,
@@ -101,6 +102,36 @@ def upload_xlsx_to_gcs(
     final_object = upload_bucket.copy_blob(blob, data_bucket)
 
     return final_object
+
+
+def grant_lister_access(user_email: str):
+    """
+    Grant a user list access to the GOOGLE_DATA_BUCKET. List access is
+    required for the user to download or read objects from this bucket.
+    """
+    logger.info(f"granting list to {user_email}")
+    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+
+    # Update the bucket IAM policy to include the user as a lister.
+    policy = bucket.get_iam_policy()
+    policy[GOOGLE_LISTER_ROLE] = {*policy[GOOGLE_LISTER_ROLE], f"user:{user_email}"}
+    logger.info(f"{GOOGLE_LISTER_ROLE} binding updated to {policy[GOOGLE_LISTER_ROLE]}")
+    bucket.set_iam_policy(policy)
+
+
+def revoke_lister_access(user_email: str):
+    """
+    Revoke a user's list access to the GOOGLE_DATA_BUCKET. List access is
+    required for the user to download or read objects from this bucket.
+    """
+    logger.info(f"revoking list to {user_email}")
+    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+
+    # Update the bucket IAM policy to include the user as a lister.
+    policy = bucket.get_iam_policy()
+    policy[GOOGLE_LISTER_ROLE].discard(f"user:{user_email}")
+    logger.info(f"{GOOGLE_LISTER_ROLE} binding updated to {policy[GOOGLE_LISTER_ROLE]}")
+    bucket.set_iam_policy(policy)
 
 
 def grant_upload_access(user_email: str):
