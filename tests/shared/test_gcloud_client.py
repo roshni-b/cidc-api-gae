@@ -15,7 +15,9 @@ from cidc_api.shared.gcloud_client import (
     grant_upload_access,
     refresh_intake_access,
     revoke_upload_access,
+    grant_lister_access,
     grant_download_access,
+    revoke_lister_access,
     revoke_download_access,
     revoke_all_download_access,
     _xlsx_gcs_uri_format,
@@ -27,6 +29,7 @@ from cidc_api.shared.gcloud_client import (
 from cidc_api.config.settings import (
     GOOGLE_INTAKE_ROLE,
     GOOGLE_INTAKE_BUCKET,
+    GOOGLE_LISTER_ROLE,
     GOOGLE_UPLOAD_ROLE,
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_DATA_BUCKET,
@@ -53,6 +56,38 @@ def _mock_gcloud_storage(bindings, set_iam_policy_fn, monkeypatch):
     monkeypatch.setattr(
         "google.cloud.client.ClientWithProject.__init__", lambda *a, **kw: None
     )
+
+
+def test_grant_lister_access(monkeypatch):
+    """Check that grant_lister_access adds policy bindings as expected"""
+
+    def set_iam_policy(policy):
+        assert f"user:rando" in policy[GOOGLE_LISTER_ROLE]
+        assert f"user:{EMAIL}" in policy[GOOGLE_LISTER_ROLE]
+
+    _mock_gcloud_storage(
+        [{"role": GOOGLE_LISTER_ROLE, "members": ["user:rando", f"user:{EMAIL}"]}],
+        set_iam_policy,
+        monkeypatch,
+    )
+
+    grant_lister_access(EMAIL)
+
+
+def test_revoke_lister_access(monkeypatch):
+    """Check that grant_lister_access adds policy bindings as expected"""
+
+    def set_iam_policy(policy):
+        assert f"user:rando" in policy[GOOGLE_LISTER_ROLE]
+        assert f"user:{EMAIL}" not in policy[GOOGLE_LISTER_ROLE]
+
+    _mock_gcloud_storage(
+        [{"role": GOOGLE_LISTER_ROLE, "members": ["user:rando", f"user:{EMAIL}"]}],
+        set_iam_policy,
+        monkeypatch,
+    )
+
+    revoke_lister_access(EMAIL)
 
 
 def test_grant_upload_access(monkeypatch):
