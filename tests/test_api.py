@@ -450,6 +450,7 @@ def test_endpoint_urls(cidc_api):
         "/permissions/",
         "/permissions/<int:permission>",
         "/trial_metadata/",
+        "/trial_metadata/new_manifest",
         "/trial_metadata/summaries",
         "/trial_metadata/<string:trial>",
         "/upload_jobs/",

@@ -43,13 +43,9 @@ def test_get_with_authorization(monkeypatch):
     get_mock = MagicMock()
     monkeypatch.setattr(auth.requests, "get", get_mock)
 
-    auth.get_with_authorization(
-        "foobar", "b", "c", headers={"beep": "boop"}, test="baz"
-    )
+    auth.get_with_authorization("/foobar", headers={"beep": "boop"}, test="baz")
     get_mock.assert_called_with(
-        f"{auth.CSMS_BASE_URL}foobar",
-        "b",
-        "c",
+        f"{auth.CSMS_BASE_URL}/foobar",
         test="baz",
         headers={
             "Authorization": "Bearer fake-token",
