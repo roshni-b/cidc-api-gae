@@ -23,51 +23,56 @@ from tests.csms.utils import validate_json_blob, validate_relational
 from ...resources.test_trial_metadata import setup_user
 
 
-def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
-    """test that detecting changes in a manifest work as expected"""
-    # grab a completed manifest
+def manifest_change_setup(cidc_api, monkeypatch):
+    setup_user(cidc_api, monkeypatch)
+
+    # prepare relational db
+    ordered_records = OrderedDict()
+    ordered_records[ClinicalTrial] = [
+        ClinicalTrial(protocol_identifier="test_trial"),
+        ClinicalTrial(protocol_identifier="foo"),  # need a second valid trial
+    ]
+    ordered_records[CollectionEvent] = [
+        CollectionEvent(trial_id="test_trial", event_name="Baseline"),
+        CollectionEvent(trial_id="test_trial", event_name="Pre_Day_1_Cycle_2"),
+        CollectionEvent(trial_id="test_trial", event_name="On_Treatment"),
+    ]
+    ordered_records[Cohort] = [
+        Cohort(trial_id="test_trial", cohort_name="Arm_A"),
+        Cohort(trial_id="test_trial", cohort_name="Arm_Z"),
+    ]
+    errs = insert_record_batch(ordered_records)
+    assert len(errs) == 0
+
+    # also checks for trial existence in JSON blobs
+    metadata_json = {
+        "protocol_identifier": "test_trial",
+        "participants": [],
+        "shipments": [],
+        "allowed_cohort_names": [],
+        "allowed_collection_event_names": [],
+    }
+    TrialMetadata(trial_id="test_trial", metadata_json=metadata_json).insert()
+    # need a second valid trial
+    metadata_json["protocol_identifier"] = "foo"
+    TrialMetadata(trial_id="foo", metadata_json=metadata_json).insert()
+
+    for manifest in manifests:
+        if manifest.get("status") not in (None, "qc_complete"):
+            continue
+
+        # insert manifest before we check for changes
+        insert_manifest_from_json(manifest, uploader_email="test@email.com")
+        # should check out, but let's make sure
+        validate_relational("test_trial")
+
+
+def test_change_protocol_identifier_error(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
-        setup_user(cidc_api, monkeypatch)
-
-        # prepare relational db
-        ordered_records = OrderedDict()
-        ordered_records[ClinicalTrial] = [
-            ClinicalTrial(protocol_identifier="test_trial"),
-            ClinicalTrial(protocol_identifier="foo"),  # need a second valid trial
-        ]
-        ordered_records[CollectionEvent] = [
-            CollectionEvent(trial_id="test_trial", event_name="Baseline"),
-            CollectionEvent(trial_id="test_trial", event_name="Pre_Day_1_Cycle_2"),
-            CollectionEvent(trial_id="test_trial", event_name="On_Treatment"),
-        ]
-        ordered_records[Cohort] = [
-            Cohort(trial_id="test_trial", cohort_name="Arm_A"),
-            Cohort(trial_id="test_trial", cohort_name="Arm_Z"),
-        ]
-        errs = insert_record_batch(ordered_records)
-        assert len(errs) == 0
-
-        # also checks for trial existence in JSON blobs
-        metadata_json = {
-            "protocol_identifier": "test_trial",
-            "participants": [],
-            "shipments": [],
-            "allowed_cohort_names": [],
-            "allowed_collection_event_names": [],
-        }
-        TrialMetadata(trial_id="test_trial", metadata_json=metadata_json).insert()
-        # need a second valid trial
-        metadata_json["protocol_identifier"] = "foo"
-        TrialMetadata(trial_id="foo", metadata_json=metadata_json).insert()
-
+        manifest_change_setup(cidc_api, monkeypatch)
         for manifest in manifests:
             if manifest.get("status") not in (None, "qc_complete"):
                 continue
-
-            # insert manifest before we check for changes
-            insert_manifest_from_json(manifest, uploader_email="test@email.com")
-            # should check out, but let's make sure
-            validate_relational("test_trial")
 
             # Test critical changes throws Exception on samples
             # Change trial_id or manifest_id is adding a new Shipment
@@ -97,6 +102,14 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                 ]
                 detect_manifest_changes(new_manifest, uploader_email="test@email.com")
 
+
+def test_change_manifest_id_error(cidc_api, clean_db, monkeypatch):
+    with cidc_api.app_context():
+        manifest_change_setup(cidc_api, monkeypatch)
+        for manifest in manifests:
+            if manifest.get("status") not in (None, "qc_complete"):
+                continue
+
             # manifest_id has no such complication, but is also on the samples
             # changing the manifest_id makes it new
             with pytest.raises(NewManifestError):
@@ -108,6 +121,14 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                     for sample in new_manifest["samples"]
                 ]
                 detect_manifest_changes(new_manifest, uploader_email="test@email.com")
+
+
+def test_change_cimac_id_error(cidc_api, clean_db, monkeypatch):
+    with cidc_api.app_context():
+        manifest_change_setup(cidc_api, monkeypatch)
+        for manifest in manifests:
+            if manifest.get("status") not in (None, "qc_complete"):
+                continue
 
             # Changing a cimac_id is adding/removing a Sample
             ## so this is a different error
@@ -134,6 +155,14 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                 ]
                 detect_manifest_changes(new_manifest, uploader_email="test@email.com")
 
+
+def test_manifest_non_critical_changes(cidc_api, clean_db, monkeypatch):
+    with cidc_api.app_context():
+        manifest_change_setup(cidc_api, monkeypatch)
+        # grab a completed manifest
+        for manifest in manifests:
+            if manifest.get("status") not in (None, "qc_complete"):
+                continue
             # Test non-critical changes on the manifest itself
             for key in manifest.keys():
                 # ignore list from calc_diff + criticals
@@ -179,6 +208,14 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                     },
                 ), str(changes)
 
+
+def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatch):
+    with cidc_api.app_context():
+        manifest_change_setup(cidc_api, monkeypatch)
+        # grab a completed manifest
+        for manifest in manifests:
+            if manifest.get("status") not in (None, "qc_complete"):
+                continue
             # Test non-critical changes for the manifest but stored on the samples
             for key in [
                 "assay_priority",
@@ -247,6 +284,14 @@ def test_detect_manifest_changes(cidc_api, clean_db, monkeypatch):
                         changes={key: (manifest["samples"][0][key], "foo"),},
                     ), str(changes)
 
+
+def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
+    with cidc_api.app_context():
+        manifest_change_setup(cidc_api, monkeypatch)
+        # grab a completed manifest
+        for manifest in manifests:
+            if manifest.get("status") not in (None, "qc_complete"):
+                continue
             # Test non-critical changes on the samples
             for key in manifest["samples"][0].keys():
                 # ignore list from calc_diff + criticals

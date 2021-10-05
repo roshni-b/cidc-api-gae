@@ -49,6 +49,7 @@ class NewManifestError(Exception):
 
 def _get_upload_type(samples: Iterable[Dict[str, Any]]) -> str:
     upload_type = set()
+
     for sample in samples:
         processed_type = sample.get("processed_sample_type").lower()
         if processed_type == "h&e-stained fixed tissue slide specimen":
@@ -602,6 +603,7 @@ def _calc_difference(
         "modified_timestamp",
         "qc_comments",
         "sample_approved",
+        "sample_manifest_type",
         "samples",
         "status",
         "submitter",
@@ -685,6 +687,7 @@ def _get_csms_sample_map(
             participant_id=csms_sample["participant_id"],
             # not in CSMS
             cimac_participant_id=cimac_id_to_cimac_participant_id(csms_cimac_id, {}),
+            sample_manifest_type=csms_sample.get("sample_manifest_type"),
             # the rest of the values
             **_get_all_values(target=Sample, old=csms_sample),
         )
@@ -796,7 +799,10 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
     return trial_id, manifest_id, csms_sample_map, cidc_sample_map, cidc_shipment
 
 
-def _handle_shipment_differences(csms_manifest, cidc_shipment) -> Tuple[Optional[Shipment], Optional[dict]]:
+def _handle_shipment_differences(
+    csms_manifest: Dict[str, Any], cidc_shipment: Shipment
+) -> Tuple[Optional[Shipment], Optional[Change]]:
+    """Compare the given CSMS and CIDC shipments, returning None's if no changes or the new entity along with the changes"""
     change: Change = _calc_difference(
         "shipment",
         {} if cidc_shipment is None else cidc_shipment.to_dict(),
@@ -804,15 +810,97 @@ def _handle_shipment_differences(csms_manifest, cidc_shipment) -> Tuple[Optional
     )
     if change:
         # since insert_record_batch is a merge, we can just generate a new object
-            Shipment(**_get_all_values(target=Shipment, old=csms_manifest))
+        return Shipment(**_get_all_values(target=Shipment, old=csms_manifest)), change
+    else:
+        return None, None
+
+
+def _handle_sample_differences(
+    csms_sample_map: Dict[str, Dict[str, Any]],
+    cidc_sample_map: Dict[str, Dict[str, Any]],
+    ret0: OrderedDictType[Type, List[MetadataModel]],
+    ret1: List[Change],
+) -> Tuple[OrderedDictType[Type, List[MetadataModel]], List[Change]]:
+    """
+    Compare the given CSMS and CIDC participants and samples
+    
+    Unlike _handle_shipment_differences and _handle_upload_differences,
+    directly takes the returns for detect_manifest_changes() and updates them
+    before giving them back.
+    No changes are made if no differences are found.
+    """
+    # add here for ordering and then just append; remove later if not needed
+    ret0[Participant] = []
+    ret0[Sample] = []
+    for cimac_id, csms_sample in csms_sample_map.items():
+        change: Change = _calc_difference(
+            "sample", cidc_sample_map[cimac_id], csms_sample
+        )
+        if change:
+            ret1.append(change)
+
+            # Participant-level fields
+            if any(
+                i in change.changes
+                for i in ["cohort_name", "participant_id", "trial_participant_id"]
+            ):
+                # since insert_record_batch is a merge, we can just generate a new object
+                new_partic = Participant(
+                    trial_participant_id=csms_sample["participant_id"],
+                    **_get_all_values(target=Participant, old=csms_sample),
+                )
+                ret0[Participant].append(new_partic)
+
+            # if there's only cohort_name or trial_participant_id, there's no sample-level stuff
+            if any(
+                k not in ["cohort_name", "participant_id", "trial_participant_id"]
+                for k in change.changes
+            ):
+                # since insert_record_batch is a merge, we can just generate a new object
+                new_sample = Sample(**_get_all_values(target=Sample, old=csms_sample))
+                ret0[Sample].append(new_sample)
+
+    # drop unneeded keys
+    if len(ret0[Participant]) == 0:
+        ret0.pop(Participant)
+    if len(ret0[Sample]) == 0:
+        ret0.pop(Sample)
+    return ret0, ret1
+
+
+def _handle_upload_differences(
+    trial_id, manifest_id, csms_sample_map, uploader_email, session
+) -> Tuple[Optional[Upload], Optional[Change]]:
+    """Look for the CIDC upload for the given manifest for changes, returning None's if no changes or the new entity along with the changes"""
+    cidc_upload = (
+        session.query(Upload).filter(Upload.shipment_manifest_id == manifest_id).first()
+    )
+    new_upload = Upload(
+        trial_id=trial_id,
+        status=UploadJobStatus.MERGE_COMPLETED.value,
+        multifile=False,
+        assay_creator="DFCI",
+        upload_type=_get_upload_type(csms_sample_map.values()),
+        shipment_manifest_id=manifest_id,
+        uploader_email=uploader_email,
+    )
+    change: Change = _calc_difference(
+        "upload",
+        {} if cidc_upload is None else cidc_upload.to_dict(),
+        new_upload.to_dict(),
+        ignore=["id", "token", "uploader_email"],
+    )
+    if change:
+        return new_upload, change
+    else:
+        return None, None
 
 
 @with_default_session
 def detect_manifest_changes(
     csms_manifest: Dict[str, Any], uploader_email: str, *, session: Session
 ) -> Tuple[
-    OrderedDictType[Type, List[MetadataModel]],
-    Dict[str, List[Dict[str, Union[str, Tuple[Any, Any]]]]],
+    OrderedDictType[Type, List[MetadataModel]], List[Change],
 ]:
     """
     Given a CSMS-style manifest, see if it has any differences from the current state of the relational db
@@ -853,69 +941,20 @@ def detect_manifest_changes(
         ret1.append(change)
 
     # ----- Look for sample-level differences -----
-
-    # add here for ordering and then just append; remove later if not needed
-    ret0[Participant] = []
-    ret0[Sample] = []
-    for cimac_id, csms_sample in csms_sample_map.items():
-        change: Change = _calc_difference(
-            "sample", cidc_sample_map[cimac_id], csms_sample
-        )
-        if change:
-            ret1.append(change)
-
-            # Participant-level fields
-            if any(
-                i in change.changes
-                for i in ["cohort_name", "participant_id", "trial_participant_id"]
-            ):
-                # since insert_record_batch is a merge, we can just generate a new object
-                new_partic = Participant(
-                    trial_participant_id=csms_sample["participant_id"],
-                    **_get_all_values(target=Participant, old=csms_sample),
-                )
-                ret0[Participant].append(new_partic)
-
-            # if there's only cohort_name or trial_participant_id, there's no sample-level stuff
-            if any(
-                k not in ["cohort_name", "participant_id", "trial_participant_id"]
-                for k in change.changes
-            ):
-                # since insert_record_batch is a merge, we can just generate a new object
-                new_sample = Sample(**_get_all_values(target=Sample, old=csms_sample))
-                ret0[Sample].append(new_sample)
+    ret0, ret1 = _handle_sample_differences(
+        csms_sample_map, cidc_sample_map, ret0, ret1
+    )
 
     # ----- Look for differences in the Upload -----
-    cidc_upload = (
-        session.query(Upload).filter(Upload.shipment_manifest_id == manifest_id).first()
+    new_upload, change = _handle_upload_differences(
+        trial_id, manifest_id, csms_sample_map, uploader_email, session=session
     )
-    new_upload = Upload(
-        trial_id=trial_id,
-        status=UploadJobStatus.MERGE_COMPLETED.value,
-        multifile=False,
-        assay_creator="DFCI",
-        upload_type=_get_upload_type(csms_sample_map.values()),
-        shipment_manifest_id=manifest_id,
-        uploader_email=uploader_email,
-    )
-    change: Change = _calc_difference(
-        "upload",
-        {} if cidc_upload is None else cidc_upload.to_dict(),
-        new_upload.to_dict(),
-        ignore=["id", "token", "uploader_email"],
-    )
-    if change:
+    if new_upload:
         # since insert_record_batch is a merge, we can just generate a new object
         ret0[Upload] = [new_upload]
         ret1.append(change)
 
     # ----- Finish up and return -----
-    # drop unneeded keys
-    if len(ret0[Participant]) == 0:
-        ret0.pop(Participant)
-    if len(ret0[Sample]) == 0:
-        ret0.pop(Sample)
-
     return ret0, ret1
 
 
