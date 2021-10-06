@@ -925,6 +925,7 @@ def detect_manifest_changes(
         if the connections between any critical fields is changed
         namely trial_id, manifest_id, cimac_id
     """
+    # ----- Initial validation, raises Exception if issues -----
     ret0, ret1 = OrderedDict(), []
     (
         trial_id,
@@ -932,6 +933,7 @@ def detect_manifest_changes(
         csms_sample_map,
         cidc_sample_map,
         cidc_shipment,
+        # will raise NewManifestError if manifest_id not in Shipment table
     ) = _initial_manifest_validation(csms_manifest, session=session)
 
     # ----- Look for shipment-level differences -----
