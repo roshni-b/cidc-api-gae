@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from webargs import fields
 from werkzeug.exceptions import BadRequest
 
@@ -11,6 +11,10 @@ from ..models import (
     TrialMetadata,
     TrialMetadataSchema,
     TrialMetadataListSchema,
+)
+from ..models.templates.csms_api import (
+    insert_manifest_from_json,
+    insert_manifest_into_blob,
 )
 from ..models.templates.sync_schemas import (
     update_trial_from_metadata_json,
@@ -135,3 +139,23 @@ def update_trial_metadata_by_trial_id(trial, trial_updates):
         )
 
     return trial
+
+
+@trial_metadata_bp.route("/new_manifest", methods=["POST"])
+@requires_auth("new_manifest", [CIDCRole.ADMIN.value])
+def add_new_manifest_from_json():
+    try:
+        # relational hook
+        insert_manifest_from_json(request.json, uploader_email=get_current_user().email)
+
+        # schemas JSON blob hook
+        insert_manifest_into_blob(request.json, uploader_email=get_current_user().email)
+
+    except Exception as e:
+        res = jsonify(error=str(e))
+        res.status_code = 500
+    else:
+        res = jsonify(status="success")
+        res.status_code = 200
+    finally:
+        return res

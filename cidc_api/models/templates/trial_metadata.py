@@ -13,9 +13,8 @@ __all__ = [
     "VolumeUnits",
 ]
 
-from typing import List
+import re
 from sqlalchemy.orm.session import Session
-from cidc_api.models.models import with_default_session
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -29,8 +28,12 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
+from typing import List
 
-from .model_core import MetadataModel
+from .model_core import MetadataModel, with_default_session
+
+cimac_id_regex_pattern = "^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$"
+cimac_id_regex = re.compile(cimac_id_regex_pattern)
 
 AssaysEnum = Enum(
     "ATACseq",
@@ -235,6 +238,7 @@ class Shipment(MetadataModel):
     manifest_id = Column(
         String,
         primary_key=True,  # both True allows for use as multi Foreign Key
+        unique=True,
         doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
     )
 
