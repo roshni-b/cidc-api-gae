@@ -96,6 +96,17 @@ GOOGLE_ARTIFACT_UPLOAD_TOPIC = environ["GOOGLE_ARTIFACT_UPLOAD_TOPIC"]
 # conditional bindings for a single member-role combo.
 # See: https://cloud.google.com/iam/docs/conditions-overview
 GOOGLE_MAX_DOWNLOAD_PERMISSIONS = 20
+# This is a limit set by GCP - there can never be more than this many
+# conditional operators in a single binding.
+# See: https://cloud.google.com/iam/docs/conditions-overview#cel
+GOOGLE_MAX_CONDITIONAL_OPERATORS = 12
+# As 1 permission is used for the expiring Lister permission, there can
+# never be more than this many total conditions assigned to a user.
+GOOGLE_MAX_DOWNLOAD_CONDITIONS = (GOOGLE_MAX_CONDITIONAL_OPERATORS + 1) * (
+    GOOGLE_MAX_DOWNLOAD_PERMISSIONS - 1
+)
+GOOGLE_AND_OPERATOR = "&&"
+GOOGLE_OR_OPERATOR = "||"
 
 ### File paths ###
 this_directory = path.dirname(path.abspath(__file__))
