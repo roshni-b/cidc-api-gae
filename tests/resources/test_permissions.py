@@ -203,7 +203,7 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
         clean_db.query(Permissions).delete()
         clean_db.commit()
 
-    # # ----- This subtest has become unwieldy as GOOGLE_MAX_DOWNLOAD_PERMISSIONS is  -----
+    # # ----- This subtest has become unwieldy as GOOGLE_MAX_DOWNLOAD_PERMISSIONS is so large -----
     # # The permission grantee must have <= GOOGLE_MAX_DOWNLOAD_PERMISSIONS
     # perm["granted_to_user"] = current_user_id
     # inserts_fail_eventually = False

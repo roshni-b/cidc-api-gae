@@ -342,7 +342,7 @@ def revoke_nonexpiring_gcs_access(
 def revoke_expiring_gcs_access(
     bucket: storage.Bucket, role: str, user_email: str, prefix: Optional[str] = None
 ):
-    """Revoke a bucket IAM policy change made by calling `grant_gcs_access` with (default) expiring=True."""
+    """Revoke a bucket IAM policy made by calling `grant_gcs_access` with (default) expiring=True."""
     # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.version = 3
@@ -401,14 +401,14 @@ user_member = lambda email: f"user:{email}"
 
 def _build_bindings_without_expiry(
     bucket: str,
-    prefixs: Optional[List[str]],
+    prefixes: Optional[List[str]],
     role: str,
     user_email: str,
-    other_conditions: Optional[List[str]] = [],
+    other_conditions: List[str] = [],
 ) -> List[dict]:
     """
     Grant the user associated with `user_email` the provided IAM `role` when acting on objects
-    in `bucket` whose URIs start with any value in `prefixs`. These permissions remains active
+    in `bucket` whose URIs start with any value in `prefixes`. These permissions remains active
     indefinitely, as the required Lister role is applied with an expiry.
 
     GCP IAM only allows up to 12 conditional operators ie combine 13 conditions
@@ -416,49 +416,70 @@ def _build_bindings_without_expiry(
     As you can only have 20 permissions total ie 19 plus Lister, errors out beyond that.
 
     See GCP common expression language syntax overview: https://cloud.google.com/iam/docs/conditions-overview
+
+    Parameters
+    ----------
+    bucket: str
+        the name of the bucket to build the binding for
+    prefixes: Optional[List[str]]
+        a list of prefixes used to build resource.name.startsWith conditions
+        can't have more than GOOGLE_MAX_DOWNLOAD_CONDITIONS entries
+    role: str
+        the role name to build the binding for
+    user_email: str
+        the email of the user to build the binding for
+    other_conditions: List[str] = []
+        any already formatted conditions, such as returned from _find_and_pop_binding
+
+    Returns
+    -------
+    List[dict]
+        the bindings to be put onto policy.bindings
     """
-    if len(prefixs) > GOOGLE_MAX_DOWNLOAD_CONDITIONS:
+    if len(prefixes) > GOOGLE_MAX_DOWNLOAD_CONDITIONS:
         raise Exception(
             f"A single user cannot have more than {GOOGLE_MAX_DOWNLOAD_CONDITIONS} download conditions"
         )
 
     timestamp = datetime.datetime.now()
-
-    print(prefixs, other_conditions)
-
-    # Add an object URL prefix to the condition if a prefix was specified
     return [
         {
             "role": role,
-            "members": {user_member(user_email)},
+            "members": {user_member(user_email)},  # convert format
             "condition": {
-                "title": f"{role} access on {prefixs or 'bucket'}",
+                "title": f"{role} access on {prefixes or 'bucket'}",
                 "description": f"Auto-updated by the CIDC API on {timestamp}",
+                # since this is non-expiring, all operators are OR and no brackets are needed
                 "expression": GOOGLE_OR_OPERATOR.join(
                     [
+                        # put the other conditions in directly
                         other_conditions.pop(0)
+                        # since we're using pop, have to stop at the end
                         if len(other_conditions)
-                        else f'resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefixs.pop(0)}")'
-                        for _ in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS)
-                        if len(other_conditions) or len(prefixs)
+                        # format object URL prefixes to the condition if specified
+                        else f'resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefixes.pop(0)}")'
+                        # can only have a certain number of operators, plus one for entries
+                        for _ in range(GOOGLE_MAX_CONDITIONAL_OPERATORS + 1)
+                        # since we're using pop, have to stop at the end
+                        if len(other_conditions) or (prefixes and len(prefixes))
                     ]
                 ),
             },
         }
-        for _ in range(
-            GOOGLE_MAX_DOWNLOAD_CONDITIONS // GOOGLE_MAX_DOWNLOAD_PERMISSIONS + 1
-        )
-        if len(other_conditions) or len(prefixs)
+        # they can only have a certain number of permissions
+        for _ in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS)
+        # since we're using pop above, have to stop at the end
+        if len(other_conditions) or (prefixes and len(prefixes))
     ]
 
 
 def _build_bindings_with_expiry(
     bucket: str,
-    prefixs: Optional[List[str]],
+    prefixes: Optional[List[str]],
     role: str,
     user_email: str,
     ttl_days: int = INACTIVE_USER_DAYS,
-    other_conditions: Optional[List[str]] = [],
+    other_conditions: List[str] = [],
 ) -> dict:
     """
     Grant the user associated with `user_email` the provided IAM `role` when acting
@@ -466,41 +487,73 @@ def _build_bindings_with_expiry(
     for `ttl_days` days.
 
     See GCP common expression language syntax overview: https://cloud.google.com/iam/docs/conditions-overview
+    
+    Parameters
+    ----------
+    bucket: str
+        the name of the bucket to build the binding for
+    prefixes: Optional[List[str]]
+        a list of prefixes used to build resource.name.startsWith conditions
+        can't have more than GOOGLE_MAX_DOWNLOAD_CONDITIONS entries
+    role: str
+        the role name to build the binding for
+    user_email: str
+        the email of the user to build the binding for
+    ttl_days: int = INACTIVE_USER_DAYS
+        the number of days until this permission should expire
+    other_conditions: List[str] = []
+        any already formatted conditions, such as returned from _find_and_pop_binding
+
+    Returns
+    -------
+    List[dict]
+        the bindings to be put onto policy.bindings
     """
     timestamp = datetime.datetime.now()
     expiry_date = (timestamp + datetime.timedelta(ttl_days)).date()
 
+    # going to add the expiration after, so don't return directly
     ret = [
         {
             "role": role,
-            "members": {user_member(user_email)},
+            "members": {user_member(user_email)},  # convert format
             "condition": {
-                "title": f"{role} access on {prefixs or 'bucket'}",
+                "title": f"{role} access on {prefixes or 'bucket'}",
                 "description": f"Auto-updated by the CIDC API on {timestamp}",
+                # since this is expiring, all operators are OR
+                # if there are no entries here, we don't need brackets; so we'll deal with it later
                 "expression": GOOGLE_OR_OPERATOR.join(
                     [
+                        # put the other conditions in directly
                         other_conditions.pop(0)
+                        # since we're using pop, have to stop at the end
                         if len(other_conditions)
-                        else f'resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefixs.pop(0)}")'
-                        for _ in range(GOOGLE_MAX_CONDITIONAL_OPERATORS - 1)
-                        if len(other_conditions) or (prefixs and len(prefixs))
+                        # format object URL prefixes to the condition if specified
+                        else f'resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefixes.pop(0)}")'
+                        # can only have a certain number of operators, plus one for entries but minus one for the AND
+                        # the -1 here is why this differs from the _build_bindings_without_expiry
+                        for _ in range(GOOGLE_MAX_CONDITIONAL_OPERATORS)
+                        # since we're using pop, have to stop at the end
+                        if len(other_conditions) or (prefixes and len(prefixes))
                     ]
                 ),
             },
         }
-        for _ in range(
-            GOOGLE_MAX_DOWNLOAD_CONDITIONS // (GOOGLE_MAX_CONDITIONAL_OPERATORS - 1) + 1
-        )
-        if len(other_conditions) or (prefixs and len(prefixs))
+        # they can only have a certain number of permissions
+        for _ in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS)
+        # since we're using pop, have to stop at the end
+        if len(other_conditions) or (prefixes and len(prefixes))
     ]
 
-    # Add a TTL clause
+    # Add the TTL clause
     new_condition = f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")'
-    for i in range(len(ret)):
+    for i in range(len(ret)):  # for each binding
         if len(ret[i]["condition"]["expression"]):
+            # if it has OR conditions, it need brackets
             ret[i]["condition"]["expression"] = (
                 "(" + ret[i]["condition"]["expression"] + ")" + GOOGLE_AND_OPERATOR
             )
+        # add the expiration
         ret[i]["condition"]["expression"] += new_condition
 
     return ret
