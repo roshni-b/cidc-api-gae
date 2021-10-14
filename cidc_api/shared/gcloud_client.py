@@ -307,6 +307,7 @@ def grant_gcs_access(
     an object URL `prefix` to restrict this permission grant to only a portion of the objects 
     in the given bucket.
     """
+    print(prefixes)
     # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.version = 3
@@ -319,7 +320,6 @@ def grant_gcs_access(
             policy, role, user_email, prefix=prefix, return_next=True
         )
         all_other_conditions.extend(other_conditions)
-    print(prefixes, all_other_conditions)
 
     # will return a set of additional conditions to extend if available
     if expiring:
@@ -559,6 +559,7 @@ def _build_bindings_with_expiry(
         [c.split("/objects/")[-1].strip('")') for c in other_conditions]
     )
 
+    print(prefixes, other_conditions)
     # going to add the expiration after, so don't return directly
     ret = [
         {
@@ -673,7 +674,6 @@ def _find_and_pop_binding(
             else None
         )
     )
-    print(binding)
 
     # if it's an expiring permission, it'll be in the form (prefix or prefix2) and time
     prefix_conditions = (
@@ -687,7 +687,6 @@ def _find_and_pop_binding(
         for condition in prefix_conditions.split(GOOGLE_OR_OPERATOR)
         if prefix and prefix not in condition and len(condition)
     ]
-    print(remaining_conditions)
 
     return binding, remaining_conditions
 

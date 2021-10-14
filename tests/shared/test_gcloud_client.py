@@ -100,7 +100,6 @@ def test_revoke_lister_access(monkeypatch):
     """Check that grant_lister_access adds policy bindings as expected"""
 
     def set_iam_policy(policy):
-        print(policy.bindings)
         assert len(policy.bindings) == 1
         assert all(b["role"] == GOOGLE_LISTER_ROLE for b in policy.bindings)
         assert any("user:rando" in b["members"] for b in policy.bindings)
@@ -159,7 +158,20 @@ def test_create_intake_bucket(monkeypatch):
         "cidc_api.shared.gcloud_client._get_storage_client", lambda: storage_client
     )
 
+    def set_iam_policy(policy):
+        assert len(policy.bindings) == 1, str(policy.bindings)
+        assert policy.bindings[0]["role"] == GOOGLE_INTAKE_ROLE
+        assert policy.bindings[0]["members"] == {f"user:{EMAIL}"}
+
     create_intake_bucket(EMAIL)
+    _mock_gcloud_storage(
+        [
+            {"role": GOOGLE_LISTER_ROLE, "members": ["user:rando"]},
+            {"role": GOOGLE_LISTER_ROLE, "members": [f"user:{EMAIL}"]},
+        ],
+        set_iam_policy,
+        monkeypatch,
+    )
 
     # Bucket name should have structure:
     # <intake bucket prefix>-<10 character email hash>
@@ -171,9 +183,6 @@ def test_create_intake_bucket(monkeypatch):
     storage_client.create_bucket.assert_called_once_with(bucket)
     bucket.get_iam_policy.assert_called_once()
     bucket.set_iam_policy.assert_called_once_with(policy)
-    assert len(policy.bindings) == 1, str(policy.bindings)
-    assert policy.bindings[0]["role"] == GOOGLE_INTAKE_ROLE
-    assert policy.bindings[0]["members"] == {f"user:{EMAIL}"}
 
     # If the bucket already exists, it doesn't get re-created
     storage_client.create_bucket.reset_mock()
