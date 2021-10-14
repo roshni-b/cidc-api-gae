@@ -12,28 +12,29 @@ from cidc_api.config import settings
 from cidc_api.shared.gcloud_client import (
     create_intake_bucket,
     grant_upload_access,
-    refresh_intake_access,
-    revoke_upload_access,
     grant_lister_access,
     grant_download_access,
+    refresh_intake_access,
+    revoke_upload_access,
     revoke_lister_access,
     revoke_download_access,
     revoke_all_download_access,
-    _xlsx_gcs_uri_format,
     upload_xlsx_to_gcs,
-    _pseudo_blob,
+    upload_xlsx_to_intake_bucket,
     _build_bindings_with_expiry,
     _build_bindings_without_expiry,
-    upload_xlsx_to_intake_bucket,
+    _build_trial_upload_prefixes,
+    _pseudo_blob,
+    _xlsx_gcs_uri_format,
 )
 from cidc_api.config.settings import (
-    GOOGLE_INTAKE_ROLE,
-    GOOGLE_INTAKE_BUCKET,
-    GOOGLE_LISTER_ROLE,
-    GOOGLE_UPLOAD_ROLE,
-    GOOGLE_UPLOAD_BUCKET,
     GOOGLE_DATA_BUCKET,
     GOOGLE_DOWNLOAD_ROLE,
+    GOOGLE_INTAKE_BUCKET,
+    GOOGLE_INTAKE_ROLE,
+    GOOGLE_LISTER_ROLE,
+    GOOGLE_UPLOAD_BUCKET,
+    GOOGLE_UPLOAD_ROLE,
 )
 
 ID = 123
@@ -56,6 +57,22 @@ def _mock_gcloud_storage(bindings, set_iam_policy_fn, monkeypatch):
     monkeypatch.setattr(
         "google.cloud.client.ClientWithProject.__init__", lambda *a, **kw: None
     )
+
+
+def test_build_trial_upload_prefixes(monkeypatch):
+    fake_trial_ids = ["foo", "bar", "baz"]
+
+    from cidc_api.models.models import TrialMetadata
+
+    mock_list = MagicMock()
+    mock_list.return_value = [MagicMock(trial_id=t) for t in fake_trial_ids]
+    monkeypatch.setattr(TrialMetadata, "list", mock_list)
+
+    assert set(_build_trial_upload_prefixes(None, "rna_bam")) == set(
+        f"{t}/rna" for t in fake_trial_ids
+    )
+    assert _build_trial_upload_prefixes("foo", None) == ["foo"]
+    assert _build_trial_upload_prefixes("foo", "rna_bam") == ["foo/rna"]
 
 
 def test_grant_lister_access(monkeypatch):
@@ -141,7 +158,20 @@ def test_create_intake_bucket(monkeypatch):
         "cidc_api.shared.gcloud_client._get_storage_client", lambda: storage_client
     )
 
+    def set_iam_policy(policy):
+        assert len(policy.bindings) == 1, str(policy.bindings)
+        assert policy.bindings[0]["role"] == GOOGLE_INTAKE_ROLE
+        assert policy.bindings[0]["members"] == {f"user:{EMAIL}"}
+
     create_intake_bucket(EMAIL)
+    _mock_gcloud_storage(
+        [
+            {"role": GOOGLE_LISTER_ROLE, "members": ["user:rando"]},
+            {"role": GOOGLE_LISTER_ROLE, "members": [f"user:{EMAIL}"]},
+        ],
+        set_iam_policy,
+        monkeypatch,
+    )
 
     # Bucket name should have structure:
     # <intake bucket prefix>-<10 character email hash>
@@ -153,9 +183,6 @@ def test_create_intake_bucket(monkeypatch):
     storage_client.create_bucket.assert_called_once_with(bucket)
     bucket.get_iam_policy.assert_called_once()
     bucket.set_iam_policy.assert_called_once_with(policy)
-    assert len(policy.bindings) == 1, str(policy.bindings)
-    assert policy.bindings[0]["role"] == GOOGLE_INTAKE_ROLE
-    assert policy.bindings[0]["members"] == {f"user:{EMAIL}"}
 
     # If the bucket already exists, it doesn't get re-created
     storage_client.create_bucket.reset_mock()
@@ -166,9 +193,7 @@ def test_create_intake_bucket(monkeypatch):
 
 def test_refresh_intake_access(monkeypatch):
     _mock_gcloud_storage(
-        _build_bindings_with_expiry(
-            GOOGLE_INTAKE_BUCKET, [None], GOOGLE_INTAKE_ROLE, EMAIL
-        ),
+        _build_bindings_with_expiry(GOOGLE_INTAKE_BUCKET, GOOGLE_INTAKE_ROLE, EMAIL),
         lambda i: i,
         monkeypatch,
     )
@@ -210,7 +235,7 @@ def test_grant_download_access(monkeypatch):
 
     matching_prefix = "10021/wes"
     matching_binding = _build_bindings_without_expiry(
-        GOOGLE_DATA_BUCKET, [matching_prefix], GOOGLE_DOWNLOAD_ROLE, EMAIL
+        GOOGLE_DATA_BUCKET, GOOGLE_DOWNLOAD_ROLE, EMAIL, prefixes=[matching_prefix]
     )[0]
 
     # Check adding a second binding
@@ -238,7 +263,10 @@ def test_grant_download_access(monkeypatch):
 
 def test_revoke_download_access(monkeypatch):
     bindings = _build_bindings_with_expiry(
-        GOOGLE_DATA_BUCKET, ["10021/wes", "10021/cytof"], GOOGLE_DOWNLOAD_ROLE, EMAIL
+        GOOGLE_DATA_BUCKET,
+        GOOGLE_DOWNLOAD_ROLE,
+        EMAIL,
+        prefixes=["10021/wes", "10021/cytof"],
     )
     bindings.append({"role": "some-other-role", "members": {f"user:JohnDoe"}},)
 
@@ -261,9 +289,9 @@ def test_revoke_download_access(monkeypatch):
     # revocation when target binding is duplicated
     bindings = _build_bindings_with_expiry(
         GOOGLE_DATA_BUCKET,
-        ["10021/wes", "10021/wes", "10021/cytof"],
         GOOGLE_DOWNLOAD_ROLE,
         EMAIL,
+        prefixes=["10021/wes", "10021/wes", "10021/cytof"],
     )
     bindings.append({"role": "some-other-role", "members": {f"user:JohnDoe"}},)
     _mock_gcloud_storage(bindings, set_iam_policy, monkeypatch)

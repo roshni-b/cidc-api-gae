@@ -9,7 +9,11 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.17` - this
+## Version `0.25.18` - this
+
+- `fixed` changed prefix generator to correctly handle prefixes without regex support
+
+## Version `0.25.17` - 13 Oct 2021
 
 - `changed` GCP permissions from single conditions to multi-conditions using || and && operators
 - `changed` expiring permission to be on the general CIDC Lister role instead of every startsWith condition separately
