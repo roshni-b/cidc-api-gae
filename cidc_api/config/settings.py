@@ -113,13 +113,15 @@ this_directory = path.dirname(path.abspath(__file__))
 MIGRATIONS_PATH = path.join(this_directory, "..", "..", "migrations")
 
 # CSMS Integration Values
-CSMS_BASE_URL = environ.get("CSMS_BASE_URL")
-CSMS_TOKEN_URL = environ.get("CSMS_TOKEN_URL")
 if not TESTING:
     secret_manager = get_secrets_manager()
+    CSMS_BASE_URL = secret_manager.get("CSMS_BASE_URL")
+    CSMS_TOKEN_URL = secret_manager.get("CSMS_TOKEN_URL")
     CSMS_CLIENT_SECRET = secret_manager.get("CSMS_CLIENT_SECRET")
     CSMS_CLIENT_ID = secret_manager.get("CSMS_CLIENT_ID")
 else:
+    CSMS_BASE_URL = environ.get("CSMS_BASE_URL")
+    CSMS_TOKEN_URL = environ.get("CSMS_TOKEN_URL")
     CSMS_CLIENT_SECRET = environ.get("CSMS_CLIENT_SECRET")
     CSMS_CLIENT_ID = environ.get("CSMS_CLIENT_ID")
 
