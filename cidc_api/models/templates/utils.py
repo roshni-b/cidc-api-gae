@@ -167,6 +167,7 @@ def insert_record_batch(
     Try to insert the given list of models into the database in a single transaction,
     rolling back and returning a list of errors if any are encountered. If `dry_run` is `True`,
     rollback the transaction regardless of whether any errors are encountered.
+    Uses session.merge, so not a "true" insert.
     If `hold_commit` is passed, all rollback / commit are ignored.
     """
     errors = []

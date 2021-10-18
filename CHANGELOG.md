@@ -9,6 +9,20 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.18` - this
+
+- `fixed` changed prefix generator to correctly handle prefixes without regex support
+
+## Version `0.25.17` - 13 Oct 2021
+
+- `changed` GCP permissions from single conditions to multi-conditions using || and && operators
+- `changed` expiring permission to be on the general CIDC Lister role instead of every startsWith condition separately
+
+## Version `0.25.16` - 07 Oct 2021
+
+- `added` function for finding CSMS changes and getting updates for relational db
+- `added` function to execute corresponding updates to JSON blob from CSMS changes
+
 ## Version `0.25.15` - 04 Oct 2021
 
 - `added` grant_lister_access and revoke_lister_access for custom role CIDC Lister that is required for all downloads

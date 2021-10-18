@@ -13,12 +13,13 @@ setup(
     license="MIT license",
     packages=[
         "cidc_api.config",
+        "cidc_api.csms",
         "cidc_api.models",
         "cidc_api.shared",
         "cidc_api.models.files",
         "cidc_api.models.templates",
     ],
     url="https://github.com/CIMAC-CIDC/cidc_api-gae",
-    version="0.25.15",
+    version="0.25.18",
     zip_safe=False,
 )

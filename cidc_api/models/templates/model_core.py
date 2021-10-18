@@ -133,6 +133,24 @@ class MetadataModel(BaseModel):
                         f"found conflicting values for {self.__class__.__name__} {pks} for {column.name} : {current}!={incoming}"
                     )
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Returns a dict of all non-null columns (by name) and their values"""
+        # avoid circular imports
+        from .utils import _all_bases
+
+        columns_to_check = [c for c in type(self).__table__.columns]
+        for b in _all_bases(type(self)):
+            if hasattr(b, "__table__"):
+                columns_to_check.extend(b.__table__.columns)
+
+        ret = {
+            c.name: getattr(self, c.name)
+            for c in columns_to_check
+            if hasattr(self, c.name)
+        }
+        ret = {k: v for k, v in ret.items() if v is not None}
+        return ret
+
     @classmethod
     @with_default_session
     def get_by_id(cls, *id, session: Session):

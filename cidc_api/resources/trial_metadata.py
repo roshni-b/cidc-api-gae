@@ -146,10 +146,10 @@ def update_trial_metadata_by_trial_id(trial, trial_updates):
 def add_new_manifest_from_json():
     try:
         # relational hook
-        insert_manifest_from_json(request.json)
+        insert_manifest_from_json(request.json, uploader_email=get_current_user().email)
 
         # schemas JSON blob hook
-        insert_manifest_into_blob(request.json)
+        insert_manifest_into_blob(request.json, uploader_email=get_current_user().email)
 
     except Exception as e:
         res = jsonify(error=str(e))

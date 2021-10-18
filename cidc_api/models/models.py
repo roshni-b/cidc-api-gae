@@ -85,7 +85,7 @@ from ..config.settings import (
     MAX_PAGINATION_PAGE_SIZE,
     TESTING,
     INACTIVE_USER_DAYS,
-    GOOGLE_MAX_DOWNLOAD_PERMISSIONS,
+    GOOGLE_MAX_DOWNLOAD_CONDITIONS,
 )
 from ..shared import emails
 from ..shared.gcloud_client import (
@@ -429,7 +429,9 @@ class Users(CommonColumns):
             query, columns=["email", "organization", "role", "trial_id", "permissions"]
         ).fillna("*")
 
-        with pd.ExcelWriter(io) as writer:
+        with pd.ExcelWriter(
+            io
+        ) as writer:  # https://github.com/PyCQA/pylint/issues/3060 pylint: disable=abstract-class-instantiated
             for trial_id in df["trial_id"].unique():
                 if trial_id == "*":
                     continue
@@ -548,12 +550,12 @@ class Permissions(CommonColumns):
         # subject to this constraint.)
         if not is_network_viewer and (
             len(Permissions.find_for_user(self.granted_to_user))
-            >= GOOGLE_MAX_DOWNLOAD_PERMISSIONS
+            >= GOOGLE_MAX_DOWNLOAD_CONDITIONS
         ):
             raise IntegrityError(
                 params=None,
                 statement=None,
-                orig=f"{grantee.email} has greater than or equal to the maximum number of allowed granular permissions ({GOOGLE_MAX_DOWNLOAD_PERMISSIONS}). Remove unused permissions to add others.",
+                orig=f"{grantee.email} has greater than or equal to the maximum number of allowed granular permissions ({GOOGLE_MAX_DOWNLOAD_CONDITIONS}). Remove unused permissions to add others.",
             )
 
         logger.info(

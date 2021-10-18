@@ -1249,7 +1249,8 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
     Permissions.grant_iam_permissions(user=user)
     gcloud_client.grant_lister_access.assert_called_with(user.email)
     gcloud_client.grant_download_access.assert_has_calls(
-        [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
+        [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types],
+        any_order=True,
     )
 
     refresh_intake_access.assert_called_once_with(user.email)

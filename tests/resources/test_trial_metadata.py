@@ -328,7 +328,7 @@ def test_create_trial(cidc_api, clean_db, monkeypatch):
 def test_update_trial(cidc_api, clean_db, monkeypatch):
     """Check that updating a trial works as expected"""
     user_id = setup_user(cidc_api, monkeypatch)
-    _, trial_record_id = set(setup_trial_metadata(cidc_api))
+    trial_record_id, _ = setup_trial_metadata(cidc_api)
     with cidc_api.app_context():
         trial = TrialMetadata.find_by_id(trial_record_id)
 

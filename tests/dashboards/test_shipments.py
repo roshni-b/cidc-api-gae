@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from dash.testing.composite import DashComposite
-from selenium.webdriver.common.by import By
 
 from cidc_api.models import (
     Users,
