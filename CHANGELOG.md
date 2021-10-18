@@ -9,7 +9,11 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.18` - this
+## Version `0.25.19` - this
+
+- `changed` CSMS_BASE_URL and CSMS_TOKEN_URL to be pulled from secrets
+
+## Version `0.25.18` - 14 Oct 2021
 
 - `fixed` changed prefix generator to correctly handle prefixes without regex support
 

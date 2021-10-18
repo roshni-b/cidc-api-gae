@@ -41,5 +41,3 @@ env_variables:
   GOOGLE_ARTIFACT_UPLOAD_TOPIC: "artifact_upload"
   GOOGLE_UPLOAD_ROLE: "projects/cidc-dfci/roles/objectUploader"
   GOOGLE_LISTER_ROLE: "projects/cidc-dfci/roles/CustomRoleLister"
-  CSMS_BASE_URL: "https://csms-api.nci.nih.gov/api/v1/cimac"
-  CSMS_TOKEN_URL: "https://bioappdev.okta.com/oauth2/aus4e9y48iy1kwRUS297/v1/token"
