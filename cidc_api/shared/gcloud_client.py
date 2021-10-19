@@ -695,13 +695,21 @@ def _find_and_pop_binding(
         )
     )
 
-    # if it's an expiring permission, it'll be in the form (prefix or prefix2) and time
+    # if it's an expiring permission, it'll be in the form: (prefix or prefix2) and time
+    # # old permissions are in the form: time and prefix
     prefix_conditions = (
         binding.get("condition", {}).get("expression", "") if binding else ""
     )
     if GOOGLE_AND_OPERATOR in prefix_conditions:
         # clean up parentheses
-        prefix_conditions = prefix_conditions.split(GOOGLE_AND_OPERATOR)[0][1:-1]
+        prefix_conditions = prefix_conditions.split(GOOGLE_AND_OPERATOR)
+        if "resource.name.startsWith" in prefix_conditions[1]:
+            # old-style: time and prefix
+            prefix_conditions = prefix_conditions[1]
+        else:
+            # (prefix or prefix2) and time
+            prefix_conditions = prefix_conditions[0].strip("()")
+
     remaining_conditions = [
         condition
         for condition in prefix_conditions.split(GOOGLE_OR_OPERATOR)
