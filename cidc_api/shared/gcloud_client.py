@@ -141,7 +141,12 @@ def grant_upload_access(user_email: str):
     policy = bucket.get_iam_policy()
     policy[GOOGLE_UPLOAD_ROLE] = {*policy[GOOGLE_UPLOAD_ROLE], f"user:{user_email}"}
     logger.info(f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}")
-    bucket.set_iam_policy(policy)
+
+    try:
+        bucket.set_iam_policy(policy)
+    except Exception as e:
+        logger.error(str(e))
+        raise e
 
 
 def revoke_upload_access(user_email: str):
@@ -155,7 +160,12 @@ def revoke_upload_access(user_email: str):
     policy = bucket.get_iam_policy()
     policy[GOOGLE_UPLOAD_ROLE].discard(f"user:{user_email}")
     logger.info(f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}")
-    bucket.set_iam_policy(policy)
+
+    try:
+        bucket.set_iam_policy(policy)
+    except Exception as e:
+        logger.error(str(e))
+        raise e
 
 
 def get_intake_bucket_name(user_email: str) -> str:
@@ -284,13 +294,8 @@ def _build_trial_upload_prefixes(
     else:
         broad_upload_type = upload_type.lower().replace(" ", "_").split("_", 1)[0]
         return [
-            f"{trial}/{upload}"
+            f"{trial}/{broad_upload_type}"
             for trial in (trial_id if isinstance(trial_id, set) else [trial_id])
-            for upload in (
-                broad_upload_type
-                if isinstance(broad_upload_type, set)
-                else [broad_upload_type]
-            )
         ]
 
 
@@ -307,7 +312,6 @@ def grant_gcs_access(
     an object URL `prefix` to restrict this permission grant to only a portion of the objects 
     in the given bucket.
     """
-    print(prefixes)
     # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.version = 3
@@ -341,7 +345,12 @@ def grant_gcs_access(
 
     # (re)insert the binding into the policy
     policy.bindings.extend(bindings)
-    bucket.set_iam_policy(policy)
+
+    try:
+        bucket.set_iam_policy(policy)
+    except Exception as e:
+        logger.error(str(e))
+        raise e
 
 
 def revoke_nonexpiring_gcs_access(
@@ -373,7 +382,11 @@ def revoke_nonexpiring_gcs_access(
                 )
                 policy.bindings.extend(readd_bindings)
 
-    bucket.set_iam_policy(policy)
+    try:
+        bucket.set_iam_policy(policy)
+    except Exception as e:
+        logger.error(str(e))
+        raise e
 
 
 def revoke_expiring_gcs_access(
@@ -402,7 +415,7 @@ def revoke_expiring_gcs_access(
             else:
                 all_other_conditions.extend(other_conditions)
 
-    readd_bindings = _build_bindings_with_expiry(
+    readd_bindings = _build_bindings_without_expiry(
         bucket.name,
         role,
         user_email,
@@ -410,7 +423,11 @@ def revoke_expiring_gcs_access(
         other_conditions=all_other_conditions,
     )
     policy.bindings.extend(readd_bindings)
-    bucket.set_iam_policy(policy)
+    try:
+        bucket.set_iam_policy(policy)
+    except Exception as e:
+        logger.error(str(e))
+        raise e
 
 
 # Arbitrary upper bound on the number of GCS bindings we expect a user to have
@@ -434,7 +451,11 @@ def revoke_all_download_access(user_email: str):
         if _find_and_pop_binding(policy, GOOGLE_DOWNLOAD_ROLE, user_email)[0] is None:
             break
 
-    bucket.set_iam_policy(policy)
+    try:
+        bucket.set_iam_policy(policy)
+    except Exception as e:
+        logger.error(str(e))
+        raise e
 
 
 user_member = lambda email: f"user:{email}"
@@ -559,7 +580,6 @@ def _build_bindings_with_expiry(
         [c.split("/objects/")[-1].strip('")') for c in other_conditions]
     )
 
-    print(prefixes, other_conditions)
     # going to add the expiration after, so don't return directly
     ret = [
         {
@@ -675,13 +695,21 @@ def _find_and_pop_binding(
         )
     )
 
-    # if it's an expiring permission, it'll be in the form (prefix or prefix2) and time
+    # if it's an expiring permission, it'll be in the form: (prefix or prefix2) and time
+    # # old permissions are in the form: time and prefix
     prefix_conditions = (
         binding.get("condition", {}).get("expression", "") if binding else ""
     )
     if GOOGLE_AND_OPERATOR in prefix_conditions:
         # clean up parentheses
-        prefix_conditions = prefix_conditions.split(GOOGLE_AND_OPERATOR)[0][1:-1]
+        prefix_conditions = prefix_conditions.split(GOOGLE_AND_OPERATOR)
+        if "resource.name.startsWith" in prefix_conditions[1]:
+            # old-style: time and prefix
+            prefix_conditions = prefix_conditions[1]
+        else:
+            # (prefix or prefix2) and time
+            prefix_conditions = prefix_conditions[0].strip("()")
+
     remaining_conditions = [
         condition
         for condition in prefix_conditions.split(GOOGLE_OR_OPERATOR)
