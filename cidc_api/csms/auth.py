@@ -83,8 +83,9 @@ def get_with_paging(
             limit = 5000
         elif "manifests" in url:
             limit = 50
+    kwargs.update(dict(limit=limit, offset=offset))
 
-    res = get_with_authorization(url, limit=limit, offset=offset, **kwargs)
+    res = get_with_authorization(url, params=kwargs)
     while res.status_code < 300 and len(res.json().get("data", [])) > 0:
         # if there's not an error and we're still returning
         yield from res.json()["data"]
