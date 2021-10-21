@@ -170,9 +170,7 @@ def _extract_info_from_manifest(
     )
 
     # Also verify that the trial exists
-    trial_md = TrialMetadata.select_for_update_by_trial_id(
-        trial_id, session=session
-    )  # JSON
+    trial_md = TrialMetadata.find_by_trial_id(trial_id, session=session)  # JSON
     trial = ClinicalTrial.get_by_id(trial_id, session=session)  # relational
     if trial_md is None or trial is None:
         raise Exception(

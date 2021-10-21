@@ -78,7 +78,7 @@ def test_change_protocol_identifier_error(cidc_api, clean_db, monkeypatch):
             # Change trial_id or manifest_id is adding a new Shipment
             ## but this means they'll conflict on the sample
             # a bad ID raises a no trial found like insert_manifest_...
-            with pytest.raises(Exception, match="No trial found with id"):
+            with pytest.raises(Exception, match="does not exist"):
                 new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
                 new_manifest["samples"] = [
                     {
@@ -405,7 +405,7 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
         setup_user(cidc_api, monkeypatch)
 
         # blank db throws error
-        with pytest.raises(Exception, match="No trial found with id"):
+        with pytest.raises(Exception, match="does not exist"):
             insert_manifest_into_blob(manifest, uploader_email="test@email.com")
 
         # also checks for trial existence in relational
@@ -477,7 +477,7 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         setup_user(cidc_api, monkeypatch)
 
         # blank db throws error
-        with pytest.raises(Exception, match="No trial found with id"):
+        with pytest.raises(Exception, match="does not exist"):
             insert_manifest_from_json(manifest, uploader_email="test@email.com")
 
         errs = insert_record_batch(
