@@ -11,7 +11,7 @@ This Changelog tracks changes to this project. The notes below include a summary
 
 ## Version `0.25.23` - 21 Oct 2021
 
-- `fixed` check if trial exists in JSON by non-erroring function; returns None instead
+- `changed` moved validation of trial's existing in the JSON blobs to better reflect name and usage
 
 ## Version `0.25.22` - 21 Oct 2021
 
