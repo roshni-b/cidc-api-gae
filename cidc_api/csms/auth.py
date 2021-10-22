@@ -90,6 +90,6 @@ def get_with_paging(
         # if there's not an error and we're still returning
         yield from res.json()["data"]
         offset += 1  # get the next page
-        res = get_with_authorization(url, **kwargs)
+        res = get_with_authorization(url, params=kwargs)
     else:
         res.raise_for_status()
