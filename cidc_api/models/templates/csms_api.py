@@ -143,8 +143,6 @@ def _extract_info_from_manifest(
         if manifest's status is not qc_complete (or null)
     - f"Manifest {manifest_id} contains no samples: {manifest}"
     - f"No consistent protocol_identifier defined for samples on manifest {manifest_id}"
-    - f"Clinical trial with protocol identifier={trial_id} does not exist"
-        if trial is missing from TrialMetadata OR ClinicalTrial OR both
     """
     manifest_id = _get_and_check(
         obj=manifest, key="manifest_id", msg=f"No manifest_id in: {manifest}"
@@ -168,16 +166,6 @@ def _extract_info_from_manifest(
         key="protocol_identifier",
         msg=f"No consistent protocol_identifier defined for samples on manifest {manifest_id}",
     )
-
-    # Also verify that the trial exists
-    trial_md = TrialMetadata.select_for_update_by_trial_id(
-        trial_id, session=session
-    )  # JSON
-    trial = ClinicalTrial.get_by_id(trial_id, session=session)  # relational
-    if trial_md is None or trial is None:
-        raise Exception(
-            f"Clinical trial with protocol identifier={trial_id} does not exist"
-        )
 
     return trial_id, manifest_id, samples
 
@@ -445,6 +433,8 @@ def insert_manifest_from_json(
     trial_id, manifest_id, samples = _extract_info_from_manifest(
         manifest, session=session
     )
+    # validate that trial exists in the JSON json or error otherwise
+    _ = TrialMetadata.select_for_update_by_trial_id(trial_id)
 
     if (
         session.query(Shipment)
@@ -734,6 +724,8 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
     trial_id, manifest_id, csms_samples = _extract_info_from_manifest(
         csms_manifest, session=session
     )
+    # validate that trial exists in the JSON json or error otherwise
+    _ = TrialMetadata.select_for_update_by_trial_id(trial_id)
 
     cidc_shipment = (
         session.query(Shipment).filter(Shipment.manifest_id == manifest_id).first()
