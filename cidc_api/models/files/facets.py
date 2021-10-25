@@ -19,38 +19,6 @@ Facets = Dict[str, Union[FacetConfig, Dict[str, FacetConfig]]]
 # dictionary maps subfacet names to a list of SQLAlchemy filter clause elements
 # for looking up files associated with the given subfacet.
 assay_facets: Facets = {
-    "Templates": {
-        "Assays": FacetConfig(
-            [
-                "Assay Type|IHC|All IHC Files|/ihc",
-                "Assay Type|Olink|All Olink Files|/olink",
-                "clinical_data|Assay Metadata",
-                "cytof|Assay Metadata",
-                "elisa|Assay Metadata",
-                "hande|Assay Metadata",
-                "ihc|Assay Metadata",
-                "mif|Assay Metadata",
-                "nanostring|Assay Metadata",
-                "[no facet group]",
-                "olink|Assay Metadata",
-                "rna_bam|Assay Metadata",
-                "tcr_fastq|Assay Metadata",
-                "wes_bam|Assay Metadata",
-                "wes_fastq|Assay Metadata",
-            ],
-            "Excel templates used to upload assay data.",
-        ),
-        "Analyses": FacetConfig(
-            [
-                "cytof_analysis|Assay Metadata",
-                "rna_level1_analysis|Assay Metadata",
-                "tcr_analysis|Assay Metadata",
-                "wes_analysis|Assay Metadata",
-                "wes_tumor_only_analysis|Assay Metadata",
-            ],
-            "Excel templates used to upload analysis data.",
-        ),
-    },
     "Miscellaneous": {"All": FacetConfig(["/misc_data/"])},
     "Nanostring": {
         "Source": FacetConfig(
