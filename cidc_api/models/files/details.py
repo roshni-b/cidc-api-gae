@@ -608,6 +608,11 @@ details_dict = {
         "tab-separated statistics of cells, summarized across each phenotype in the region-of-interest, from inForm",
         "A wide tab-separated file containing information and statistics across all cells of a given phenotype in the region-of-interest. Contains the same measures of position, size, shape and marker expression in several compartments as does the cell_seg_data file. Exported from inForm (PerkinElmer).",
     ),
+    "/mif/qc_report.zip": FileDetails(
+        "miscellaneous",
+        "QC Report",
+        "Spreadsheets containing info regarding Quality Control from pathology and reasoning for expected failures.",
+    ),
     # Olink
     "Assay Type|Olink|All Olink Files|/olink": FileDetails(
         "miscellaneous",
