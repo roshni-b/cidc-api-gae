@@ -102,7 +102,7 @@ def _get_upload_type(samples: Iterable[Dict[str, Any]]) -> str:
 def _get_and_check(
     obj: Union[Dict[str, Any], List[Dict[str, Any]]],
     key: str,
-    msg: Callable[[Any], str],
+    msg: str,
     default: Any = None,
     check: Callable[[Any], bool] = bool,
 ) -> Any:
@@ -124,7 +124,7 @@ def _get_and_check(
 
 
 def _extract_info_from_manifest(
-    manifest: Dict[str, Any], *, session: Session
+    manifest: Dict[str, Any]
 ) -> Tuple[str, str, List[Dict[str, Any]]]:
     """
     Given a manifest, do initial validation and return some key values
@@ -295,7 +295,7 @@ def _convert_samples(
 @with_default_session
 def insert_manifest_into_blob(
     manifest: Dict[str, Any], uploader_email: str, *, session: Session
-):
+) -> None:
     """
     Given a CSMS-style manifest, add it into the JSON metadata blob
     
@@ -324,9 +324,7 @@ def insert_manifest_into_blob(
     # schemas import here to keep JSON-blob code together
     from cidc_schemas.prism.merger import merge_clinical_trial_metadata
 
-    trial_id, manifest_id, samples = _extract_info_from_manifest(
-        manifest, session=session
-    )
+    trial_id, manifest_id, samples = _extract_info_from_manifest(manifest)
     trial_md = TrialMetadata.select_for_update_by_trial_id(trial_id)
     if manifest_id in [s["manifest_id"] for s in trial_md.metadata_json["shipments"]]:
         raise Exception(
@@ -401,11 +399,9 @@ def insert_manifest_into_blob(
 @with_default_session
 def insert_manifest_from_json(
     manifest: Dict[str, Any], uploader_email: str, *, session: Session
-) -> List[Exception]:
+) -> None:
     """
     Given a CSMS-style manifest, validate and add it into the relational tables.
-
-    Returns errors
     
     Exceptions Raised
     -----------------
@@ -430,9 +426,7 @@ def insert_manifest_from_json(
     - "No Collection event with trial_id, event_name = {trial_id}, {event_name}; needed for sample {cimac_id} on manifest {manifest_id}"
     - "Multiple errors: [{errors from insert_record_batch}]"
     """
-    trial_id, manifest_id, samples = _extract_info_from_manifest(
-        manifest, session=session
-    )
+    trial_id, manifest_id, samples = _extract_info_from_manifest(manifest)
     # validate that trial exists in the JSON json or error otherwise
     _ = TrialMetadata.select_for_update_by_trial_id(trial_id)
 
@@ -719,11 +713,9 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
     - f"No assay_priority defined for manifest_id={manifest_id} for trial {trial_id}"
     - f"No assay_type defined for manifest_id={manifest_id} for trial {trial_id}"
     """
+    trial_id, manifest_id, csms_samples = _extract_info_from_manifest(csms_manifest)
     # ----- Get all our information together -----
-    csms_manifest["trial_id"] = csms_manifest.pop("protocol_identifier")
-    trial_id, manifest_id, csms_samples = _extract_info_from_manifest(
-        csms_manifest, session=session
-    )
+    csms_manifest["trial_id"] = trial_id
     # validate that trial exists in the JSON json or error otherwise
     _ = TrialMetadata.select_for_update_by_trial_id(trial_id)
 
