@@ -9,6 +9,15 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.28` - 26 Oct 2021
+
+- `remove` incorrect accessing of CSMS manifest protocol_identifier which is only stored on the samples
+
+## Version `0.25.27` - 25 Oct 2021
+
+- `added` facets and file details for mIF report file
+- `remove` Templates facet entirely
+
 ## Version `0.25.26` - 22 Oct 2021
 
 - `fixed` second call to get_with_authorization again

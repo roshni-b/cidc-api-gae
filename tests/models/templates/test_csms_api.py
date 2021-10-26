@@ -172,7 +172,6 @@ def test_manifest_non_critical_changes(cidc_api, clean_db, monkeypatch):
                     "manifest_id",
                     "modified_time",
                     "modified_timestamp",
-                    "protocol_identifier",
                     "samples",
                     "status",
                     "submitter",
@@ -197,7 +196,7 @@ def test_manifest_non_critical_changes(cidc_api, clean_db, monkeypatch):
                 assert len(changes) == 1 and changes[0] == Change(
                     entity_type="shipment",
                     manifest_id=manifest["manifest_id"],
-                    trial_id=manifest["protocol_identifier"],
+                    trial_id=manifest["samples"][0]["protocol_identifier"],
                     changes={
                         key: (
                             datetime.strptime(manifest[key], "%Y-%m-%d %H:%M:%S").date()
@@ -229,7 +228,6 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
                     "manifest_id",
                     "modified_time",
                     "modified_timestamp",
-                    "protocol_identifier",
                     "samples",
                     "status",
                     "submitter",
@@ -280,7 +278,7 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
                     assert len(changes) == 1 and changes[0] == Change(
                         entity_type="shipment",
                         manifest_id=manifest["manifest_id"],
-                        trial_id=manifest["protocol_identifier"],
+                        trial_id=manifest["samples"][0]["protocol_identifier"],
                         changes={key: (manifest["samples"][0][key], "foo"),},
                     ), str(changes)
 
@@ -384,9 +382,9 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
 
                 assert len(changes) == 1 and changes[0] == Change(
                     entity_type="sample",
-                    trial_id=manifest["protocol_identifier"],
                     manifest_id=manifest["manifest_id"],
                     cimac_id=manifest["samples"][0]["cimac_id"],
+                    trial_id=manifest["samples"][0]["protocol_identifier"],
                     changes={
                         key: (
                             manifest["samples"][0][key],

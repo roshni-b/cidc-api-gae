@@ -634,7 +634,6 @@ manifests = [
         "courier": "Inter-Site Delivery",
         "date_received": "2021-01-05 00:00:00",
         "date_shipped": "2021-01-03 00:00:00",
-        "protocol_identifier": "test_trial",
         "quality_of_shipment": "Specimen shipment received in good condition",
         "receiving_party": "Adaptive",
         "ship_from": "from",
