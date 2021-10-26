@@ -33,7 +33,6 @@ from .model_core import (
 from .sync_schemas import _get_all_values
 from .trial_metadata import (
     cimac_id_regex,
-    ClinicalTrial,
     CollectionEvent,
     Participant,
     Sample,
@@ -325,7 +324,7 @@ def insert_manifest_into_blob(
     from cidc_schemas.prism.merger import merge_clinical_trial_metadata
 
     trial_id, manifest_id, samples = _extract_info_from_manifest(manifest)
-    trial_md = TrialMetadata.select_for_update_by_trial_id(trial_id)
+    trial_md = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
     if manifest_id in [s["manifest_id"] for s in trial_md.metadata_json["shipments"]]:
         raise Exception(
             f"Manifest with manifest_id={manifest_id} already exists for trial {trial_id}"
@@ -383,7 +382,7 @@ def insert_manifest_into_blob(
         raise Exception({"prism errors": [str(e) for e in errs]})
 
     # save it
-    trial_md.update(changes={"metadata_json": merged})
+    trial_md.update(changes={"metadata_json": merged}, session=session)
 
     # create pseudo-UploadJobs
     UploadJobs(
@@ -393,7 +392,7 @@ def insert_manifest_into_blob(
         metadata_patch=patch,
         upload_type=_get_upload_type(samples),
         uploader_email=uploader_email,
-    ).insert()
+    ).insert(session=session)
 
 
 @with_default_session
@@ -428,7 +427,7 @@ def insert_manifest_from_json(
     """
     trial_id, manifest_id, samples = _extract_info_from_manifest(manifest)
     # validate that trial exists in the JSON json or error otherwise
-    _ = TrialMetadata.select_for_update_by_trial_id(trial_id)
+    _ = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
 
     if (
         session.query(Shipment)
@@ -471,7 +470,7 @@ def insert_manifest_from_json(
     ordered_records[Sample] = []
     for cimac_participant_id, partic_samples in sample_map.items():
         # add the participant if they don't already exist
-        partic = Participant.get_by_id(trial_id, cimac_participant_id)
+        partic = Participant.get_by_id(trial_id, cimac_participant_id, session=session)
         if partic is None and not any(
             # check if we're already going to add it
             [
@@ -717,7 +716,7 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
     # ----- Get all our information together -----
     csms_manifest["trial_id"] = trial_id
     # validate that trial exists in the JSON json or error otherwise
-    _ = TrialMetadata.select_for_update_by_trial_id(trial_id)
+    _ = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
 
     cidc_shipment = (
         session.query(Shipment).filter(Shipment.manifest_id == manifest_id).first()

@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.29` - 26 Oct 2021
+
+- `fixed` correctly pass session throughout models/templates/csms_api
+
 ## Version `0.25.28` - 26 Oct 2021
 
 - `remove` incorrect accessing of CSMS manifest protocol_identifier which is only stored on the samples
