@@ -9,7 +9,35 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.19` - this
+## Version `0.25.26` - 22 Oct 2021
+
+- `fixed` second call to get_with_authorization again
+
+## Version `0.25.25` - 22 Oct 2021
+
+- `fixed` second call to get_with_authorization
+
+## Version `0.25.24` - 22 Oct 2021
+
+- `changed` schemas bump for mIF QC report
+
+## Version `0.25.23` - 21 Oct 2021
+
+- `changed` moved validation of trial's existing in the JSON blobs to better reflect name and usage
+
+## Version `0.25.22` - 21 Oct 2021
+
+- `fixed` pass limit and offset as params instead of kwargs to requests.get
+
+## Version `0.25.21` - 19 Oct 2021
+
+- `added` handling to remove old-style permissions
+
+## Version `0.25.20` - 19 Oct 2021
+
+- `added` logging to set_iam_policy errors
+
+## Version `0.25.19` - 15 Oct 2021
 
 - `changed` CSMS_BASE_URL and CSMS_TOKEN_URL to be pulled from secrets
 
