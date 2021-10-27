@@ -434,6 +434,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         "participants": [{"samples": [1, 2]}, {"samples": [3]}],
         "expected_assays": ["ihc", "olink"],
         "assays": {
+            "atacseq": [{"records": records * 13}],
             "wes": [
                 {"records": records * 6},
                 {"records": records * 5},
@@ -452,6 +453,7 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
             "hande": [{"records": records * 5}],
         },
         "analysis": {
+            "atacseq_analysis": [{"records": records * 12}],
             "wes_analysis": {
                 "pair_runs": [
                     # 7 here for wes_assay: t0/1/2, n0/1/2/3
@@ -551,6 +553,8 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
         [
             {
                 "expected_assays": [],
+                "atacseq": 0.0,
+                "atacseq_analysis": 0.0,
                 "cytof": 5.0,
                 "cytof_analysis": 2.0,
                 "olink": 8.0,
@@ -587,6 +591,8 @@ def test_trial_metadata_get_summaries(clean_db, monkeypatch):
                 "total_participants": 2,
                 "total_samples": 3,
                 "clinical_participants": 7.0,
+                "atacseq": 13.0,
+                "atacseq_analysis": 12.0,
                 "rna": 2.0,
                 "nanostring": 3.0,
                 "h&e": 5.0,
