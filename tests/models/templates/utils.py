@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 from collections import OrderedDict
 from datetime import datetime
 

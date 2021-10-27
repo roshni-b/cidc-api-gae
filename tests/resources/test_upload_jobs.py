@@ -1,5 +1,8 @@
 import io
 import logging
+import os
+
+os.environ["TZ"] = "UTC"
 from copy import deepcopy
 from deepdiff import DeepDiff
 from datetime import datetime
@@ -752,7 +755,7 @@ def test_upload_endpoint_blocking(cidc_api, clean_db, monkeypatch):
 
     assay_form = lambda: form_data("cytof.xlsx", io.BytesIO(b"1234"), "cytof")
     analysis_form = lambda: form_data(
-        "cytof_analysis.xlsx", io.BytesIO(b"1234"), "cytof_analysis",
+        "cytof_analysis.xlsx", io.BytesIO(b"1234"), "cytof_analysis"
     )
 
     res = client.post(ASSAY_UPLOAD, data=assay_form())

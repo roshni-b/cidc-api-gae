@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 from cidc_api.models.templates.file_metadata import Upload
 from flask.globals import session
 from sqlalchemy.orm.session import Session
