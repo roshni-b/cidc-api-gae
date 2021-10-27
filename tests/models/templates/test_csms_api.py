@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 from datetime import datetime
 from collections import OrderedDict
 import pytest
@@ -203,7 +206,7 @@ def test_manifest_non_critical_changes(cidc_api, clean_db, monkeypatch):
                             if key.startswith("date")
                             else manifest[key],
                             "foo",
-                        ),
+                        )
                     },
                 ), str(changes)
 
@@ -216,11 +219,7 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
             if manifest.get("status") not in (None, "qc_complete"):
                 continue
             # Test non-critical changes for the manifest but stored on the samples
-            for key in [
-                "assay_priority",
-                "assay_type",
-                "sample_manifest_type",
-            ]:
+            for key in ["assay_priority", "assay_type", "sample_manifest_type"]:
                 # ignore list from calc_diff + criticals
                 if key in [
                     "barcode",
@@ -279,7 +278,7 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
                         entity_type="shipment",
                         manifest_id=manifest["manifest_id"],
                         trial_id=manifest["samples"][0]["protocol_identifier"],
-                        changes={key: (manifest["samples"][0][key], "foo"),},
+                        changes={key: (manifest["samples"][0][key], "foo")},
                     ), str(changes)
 
 
@@ -389,7 +388,7 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
                         key: (
                             manifest["samples"][0][key],
                             new_manifest["samples"][0][key],
-                        ),
+                        )
                     },
                 ), str(changes)
 
@@ -408,7 +407,7 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
 
         # also checks for trial existence in relational
         errs = insert_record_batch(
-            {ClinicalTrial: [ClinicalTrial(protocol_identifier="test_trial",)]}
+            {ClinicalTrial: [ClinicalTrial(protocol_identifier="test_trial")]}
         )
         assert len(errs) == 0
 
@@ -419,7 +418,7 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
             "allowed_cohort_names": [],
             "allowed_collection_event_names": [],
         }
-        TrialMetadata(trial_id="test_trial", metadata_json=metadata_json,).insert()
+        TrialMetadata(trial_id="test_trial", metadata_json=metadata_json).insert()
 
         with pytest.raises(Exception, match="not found within '/allowed_cohort_names/"):
             insert_manifest_into_blob(manifest, uploader_email="test@email.com")
@@ -479,7 +478,7 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
             insert_manifest_from_json(manifest, uploader_email="test@email.com")
 
         errs = insert_record_batch(
-            {ClinicalTrial: [ClinicalTrial(protocol_identifier="test_trial",)]}
+            {ClinicalTrial: [ClinicalTrial(protocol_identifier="test_trial")]}
         )
         assert len(errs) == 0
 
@@ -491,7 +490,7 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
             "allowed_cohort_names": [],
             "allowed_collection_event_names": [],
         }
-        TrialMetadata(trial_id="test_trial", metadata_json=metadata_json,).insert()
+        TrialMetadata(trial_id="test_trial", metadata_json=metadata_json).insert()
 
         with pytest.raises(
             Exception, match="No Collection event with trial_id, event_name"

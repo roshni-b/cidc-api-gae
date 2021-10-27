@@ -1,5 +1,8 @@
 """Utilities for interacting with the Google Cloud Platform APIs."""
 import json
+import os
+
+os.environ["TZ"] = "UTC"
 import datetime
 import warnings
 import hashlib

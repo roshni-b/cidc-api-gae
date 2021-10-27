@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 from cidc_api.models.templates.trial_metadata import Cohort, CollectionEvent
 from cidc_api.models.templates.utils import insert_record_batch
 from collections import OrderedDict
@@ -474,7 +477,7 @@ def test_add_new_manifest_from_json(cidc_api, clean_db, monkeypatch):
         "participants": [],
         "shipments": [],
         "allowed_cohort_names": ["Arm_A", "Arm_Z"],
-        "allowed_collection_event_names": ["Baseline", "Pre_Day_1_Cycle_2",],
+        "allowed_collection_event_names": ["Baseline", "Pre_Day_1_Cycle_2"],
     }
 
     ordered_records = OrderedDict()

@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 from datetime import datetime, date
 
 import pytest

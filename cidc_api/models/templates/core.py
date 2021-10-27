@@ -8,6 +8,9 @@ __all__ = [
     "WorksheetConfig",
 ]
 
+import os
+
+os.environ["TZ"] = "UTC"
 import datetime
 from collections import defaultdict, OrderedDict
 from enum import Enum

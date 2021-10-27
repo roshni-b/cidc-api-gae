@@ -1,4 +1,7 @@
 import io
+import os
+
+os.environ["TZ"] = "UTC"
 from datetime import datetime
 
 from flask import Blueprint, send_file

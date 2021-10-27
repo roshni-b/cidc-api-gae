@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 import datetime
 from typing import BinaryIO, Tuple, List
 from functools import wraps

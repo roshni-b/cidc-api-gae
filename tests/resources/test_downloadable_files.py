@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 from datetime import datetime
 import logging
 from typing import Tuple
@@ -63,7 +66,7 @@ def setup_downloadable_files(cidc_api) -> Tuple[int, int]:
         trial_id_1, "wes/.../reads_123.bam", "wes_bam", "/wes/r1_L.fastq.gz"
     )
     cytof_file = make_file(
-        trial_id_2, "cytof/.../analysis.zip", "cytof", "/cytof_analysis/analysis.zip",
+        trial_id_2, "cytof/.../analysis.zip", "cytof", "/cytof_analysis/analysis.zip"
     )
 
     with cidc_api.app_context():

@@ -6,6 +6,10 @@ import io
 import logging
 from copy import deepcopy
 from functools import wraps
+
+import os
+
+os.environ["TZ"] = "UTC"
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, call
 

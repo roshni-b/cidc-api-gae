@@ -6,6 +6,9 @@ __all__ = [
     "NewManifestError",
 ]
 
+import os
+
+os.environ["TZ"] = "UTC"
 from collections import defaultdict, OrderedDict
 from datetime import date, datetime, time
 from sqlalchemy.orm.session import Session
@@ -760,11 +763,7 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
             #     cidc_sample_map[cimac_id] = {}
 
             formatted = (
-                (
-                    db_sample.trial_id,
-                    db_sample.shipment_manifest_id,
-                    db_sample.cimac_id,
-                )
+                (db_sample.trial_id, db_sample.shipment_manifest_id, db_sample.cimac_id)
                 if db_sample is not None
                 else f"<no sample found>"
             )
@@ -881,9 +880,7 @@ def _handle_upload_differences(
 @with_default_session
 def detect_manifest_changes(
     csms_manifest: Dict[str, Any], uploader_email: str, *, session: Session
-) -> Tuple[
-    OrderedDictType[Type, List[MetadataModel]], List[Change],
-]:
+) -> Tuple[OrderedDictType[Type, List[MetadataModel]], List[Change]]:
     """
     Given a CSMS-style manifest, see if it has any differences from the current state of the relational db
     If a new manifest, throws a NewManifestError

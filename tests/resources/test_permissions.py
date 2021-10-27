@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 from cidc_api.models.models import ALL_UPLOAD_TYPES
 from unittest.mock import MagicMock
 from datetime import datetime
