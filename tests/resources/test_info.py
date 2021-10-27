@@ -1,5 +1,7 @@
 import os
 import shutil
+
+os.environ["TZ"] = "UTC"
 from datetime import datetime
 
 from cidc_schemas import prism

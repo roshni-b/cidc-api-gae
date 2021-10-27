@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 import cidc_api
 from datetime import datetime
 import json
@@ -5,11 +8,7 @@ import os
 import pytest
 from unittest.mock import MagicMock
 
-from cidc_api.models.models import (
-    TrialMetadata,
-    UploadJobs,
-    Users,
-)
+from cidc_api.models.models import TrialMetadata, UploadJobs, Users
 from cidc_api.models.templates import ClinicalTrial
 from cidc_api.models.templates.sync_schemas import (
     _make_sample_to_shipment_map,
@@ -38,7 +37,7 @@ def test_make_sample_to_shipment_map():
         "shipments": [
             {"manifest_id": "test_manifest"},
             {"manifest_id": "test_manifest2"},
-        ],
+        ]
     }
     clean_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
         mock_return
@@ -49,8 +48,8 @@ def test_make_sample_to_shipment_map():
     mock_return.metadata_patch = {
         "shipments": [{"manifest_id": "test_manifest"}],
         "participants": [
-            {"samples": [{"cimac_id": "CTTTPP111.00"}, {"cimac_id": "CTTTPP112.00"},],},
-            {"samples": [{"cimac_id": "CTTTPP211.00"}, {"cimac_id": "CTTTPP212.00"},],},
+            {"samples": [{"cimac_id": "CTTTPP111.00"}, {"cimac_id": "CTTTPP112.00"}]},
+            {"samples": [{"cimac_id": "CTTTPP211.00"}, {"cimac_id": "CTTTPP212.00"}]},
         ],
     }
     clean_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
@@ -75,7 +74,7 @@ def test_syncall_from_blobs(clean_db, cidc_api, monkeypatch):
         md_patch = json.load(open(ct_filepath, "r"))
 
         trial_md = TrialMetadata(
-            metadata_json=md_patch, trial_id=md_patch["protocol_identifier"],
+            metadata_json=md_patch, trial_id=md_patch["protocol_identifier"]
         )
         trial_md.insert()
 

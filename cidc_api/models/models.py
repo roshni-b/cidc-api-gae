@@ -24,6 +24,9 @@ __all__ = [
 
 import re
 import hashlib
+import os
+
+os.environ["TZ"] = "UTC"
 from datetime import datetime, timedelta
 from enum import Enum as EnumBaseClass
 from functools import wraps

@@ -6,6 +6,9 @@ __all__ = [
     "NewManifestError",
 ]
 
+import os
+
+os.environ["TZ"] = "UTC"
 from collections import defaultdict, OrderedDict
 from datetime import date, datetime, time
 from sqlalchemy.orm.session import Session
@@ -33,7 +36,6 @@ from .model_core import (
 from .sync_schemas import _get_all_values
 from .trial_metadata import (
     cimac_id_regex,
-    ClinicalTrial,
     CollectionEvent,
     Participant,
     Sample,
@@ -102,7 +104,7 @@ def _get_upload_type(samples: Iterable[Dict[str, Any]]) -> str:
 def _get_and_check(
     obj: Union[Dict[str, Any], List[Dict[str, Any]]],
     key: str,
-    msg: Callable[[Any], str],
+    msg: str,
     default: Any = None,
     check: Callable[[Any], bool] = bool,
 ) -> Any:
@@ -124,7 +126,7 @@ def _get_and_check(
 
 
 def _extract_info_from_manifest(
-    manifest: Dict[str, Any], *, session: Session
+    manifest: Dict[str, Any]
 ) -> Tuple[str, str, List[Dict[str, Any]]]:
     """
     Given a manifest, do initial validation and return some key values
@@ -295,7 +297,7 @@ def _convert_samples(
 @with_default_session
 def insert_manifest_into_blob(
     manifest: Dict[str, Any], uploader_email: str, *, session: Session
-):
+) -> None:
     """
     Given a CSMS-style manifest, add it into the JSON metadata blob
     
@@ -324,10 +326,8 @@ def insert_manifest_into_blob(
     # schemas import here to keep JSON-blob code together
     from cidc_schemas.prism.merger import merge_clinical_trial_metadata
 
-    trial_id, manifest_id, samples = _extract_info_from_manifest(
-        manifest, session=session
-    )
-    trial_md = TrialMetadata.select_for_update_by_trial_id(trial_id)
+    trial_id, manifest_id, samples = _extract_info_from_manifest(manifest)
+    trial_md = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
     if manifest_id in [s["manifest_id"] for s in trial_md.metadata_json["shipments"]]:
         raise Exception(
             f"Manifest with manifest_id={manifest_id} already exists for trial {trial_id}"
@@ -385,7 +385,7 @@ def insert_manifest_into_blob(
         raise Exception({"prism errors": [str(e) for e in errs]})
 
     # save it
-    trial_md.update(changes={"metadata_json": merged})
+    trial_md.update(changes={"metadata_json": merged}, session=session)
 
     # create pseudo-UploadJobs
     UploadJobs(
@@ -395,17 +395,15 @@ def insert_manifest_into_blob(
         metadata_patch=patch,
         upload_type=_get_upload_type(samples),
         uploader_email=uploader_email,
-    ).insert()
+    ).insert(session=session)
 
 
 @with_default_session
 def insert_manifest_from_json(
     manifest: Dict[str, Any], uploader_email: str, *, session: Session
-) -> List[Exception]:
+) -> None:
     """
     Given a CSMS-style manifest, validate and add it into the relational tables.
-
-    Returns errors
     
     Exceptions Raised
     -----------------
@@ -430,11 +428,9 @@ def insert_manifest_from_json(
     - "No Collection event with trial_id, event_name = {trial_id}, {event_name}; needed for sample {cimac_id} on manifest {manifest_id}"
     - "Multiple errors: [{errors from insert_record_batch}]"
     """
-    trial_id, manifest_id, samples = _extract_info_from_manifest(
-        manifest, session=session
-    )
+    trial_id, manifest_id, samples = _extract_info_from_manifest(manifest)
     # validate that trial exists in the JSON json or error otherwise
-    _ = TrialMetadata.select_for_update_by_trial_id(trial_id)
+    _ = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
 
     if (
         session.query(Shipment)
@@ -477,7 +473,7 @@ def insert_manifest_from_json(
     ordered_records[Sample] = []
     for cimac_participant_id, partic_samples in sample_map.items():
         # add the participant if they don't already exist
-        partic = Participant.get_by_id(trial_id, cimac_participant_id)
+        partic = Participant.get_by_id(trial_id, cimac_participant_id, session=session)
         if partic is None and not any(
             # check if we're already going to add it
             [
@@ -719,13 +715,11 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
     - f"No assay_priority defined for manifest_id={manifest_id} for trial {trial_id}"
     - f"No assay_type defined for manifest_id={manifest_id} for trial {trial_id}"
     """
+    trial_id, manifest_id, csms_samples = _extract_info_from_manifest(csms_manifest)
     # ----- Get all our information together -----
-    csms_manifest["trial_id"] = csms_manifest.pop("protocol_identifier")
-    trial_id, manifest_id, csms_samples = _extract_info_from_manifest(
-        csms_manifest, session=session
-    )
+    csms_manifest["trial_id"] = trial_id
     # validate that trial exists in the JSON json or error otherwise
-    _ = TrialMetadata.select_for_update_by_trial_id(trial_id)
+    _ = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
 
     cidc_shipment = (
         session.query(Shipment).filter(Shipment.manifest_id == manifest_id).first()
@@ -769,11 +763,7 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
             #     cidc_sample_map[cimac_id] = {}
 
             formatted = (
-                (
-                    db_sample.trial_id,
-                    db_sample.shipment_manifest_id,
-                    db_sample.cimac_id,
-                )
+                (db_sample.trial_id, db_sample.shipment_manifest_id, db_sample.cimac_id)
                 if db_sample is not None
                 else f"<no sample found>"
             )
@@ -890,9 +880,7 @@ def _handle_upload_differences(
 @with_default_session
 def detect_manifest_changes(
     csms_manifest: Dict[str, Any], uploader_email: str, *, session: Session
-) -> Tuple[
-    OrderedDictType[Type, List[MetadataModel]], List[Change],
-]:
+) -> Tuple[OrderedDictType[Type, List[MetadataModel]], List[Change]]:
     """
     Given a CSMS-style manifest, see if it has any differences from the current state of the relational db
     If a new manifest, throws a NewManifestError

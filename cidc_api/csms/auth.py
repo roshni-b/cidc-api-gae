@@ -1,5 +1,7 @@
 __all__ = ["get_token", "get_with_authorization", "get_with_paging"]
+import os
 
+os.environ["TZ"] = "UTC"
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterator
 import requests

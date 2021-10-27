@@ -3,6 +3,9 @@
 This file doesn't contain tests for methods that don't directly correspond
 to data resources, like endpoints that handle upload-related functionality.
 """
+import os
+
+os.environ["TZ"] = "UTC"
 from cidc_api.models.templates.trial_metadata import ClinicalTrial
 from collections import OrderedDict
 from cidc_api.models.templates.utils import insert_record_batch

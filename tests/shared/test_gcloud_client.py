@@ -1,4 +1,7 @@
 import json
+import os
+
+os.environ["TZ"] = "UTC"
 from io import BytesIO
 from unittest.mock import call, MagicMock
 from datetime import datetime
@@ -200,7 +203,7 @@ def test_refresh_intake_access(monkeypatch):
 
     grant_gcs_access = MagicMock()
     monkeypatch.setattr(
-        "cidc_api.shared.gcloud_client.grant_gcs_access", grant_gcs_access,
+        "cidc_api.shared.gcloud_client.grant_gcs_access", grant_gcs_access
     )
 
     refresh_intake_access(EMAIL)
@@ -268,7 +271,7 @@ def test_revoke_download_access(monkeypatch):
         EMAIL,
         prefixes=["10021/wes", "10021/cytof"],
     )
-    bindings.append({"role": "some-other-role", "members": {f"user:JohnDoe"}},)
+    bindings.append({"role": "some-other-role", "members": {f"user:JohnDoe"}})
 
     def set_iam_policy(policy):
         assert not any(
@@ -293,7 +296,7 @@ def test_revoke_download_access(monkeypatch):
         EMAIL,
         prefixes=["10021/wes", "10021/wes", "10021/cytof"],
     )
-    bindings.append({"role": "some-other-role", "members": {f"user:JohnDoe"}},)
+    bindings.append({"role": "some-other-role", "members": {f"user:JohnDoe"}})
     _mock_gcloud_storage(bindings, set_iam_policy, monkeypatch)
     with pytest.warns(UserWarning, match="multiple conditional bindings"):
         revoke_download_access(EMAIL, "10021", "wes")

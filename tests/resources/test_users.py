@@ -1,3 +1,6 @@
+import os
+
+os.environ["TZ"] = "UTC"
 from datetime import datetime
 from typing import Tuple
 from unittest.mock import MagicMock
