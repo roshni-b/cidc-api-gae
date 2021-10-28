@@ -502,7 +502,7 @@ def upload_manifest(
         else:
             logger.info("Relational success.")
     else:
-        logger.error(f"Relational errror: no template for type {template_type}")
+        logger.error(f"Relational error: no template for type {template_type}")
 
     return jsonify({"metadata_json_patch": md_patch})
 
@@ -604,7 +604,7 @@ def upload_data_files(
         else:
             logger.info("Relational success.")
     else:
-        logger.error(f"Relational errror: no template for type {template_type}")
+        logger.error(f"Relational error: no template for type {template_type}")
 
     response = {
         "job_id": job.id,
