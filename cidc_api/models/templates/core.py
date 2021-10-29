@@ -46,6 +46,17 @@ filterwarnings(
 )
 
 
+def _format_for_json_serialization(value):
+    if isinstance(value, datetime.datetime):
+        return value.strftime("%Y%m%dT%H%M%S.%f")
+    elif isinstance(value, datetime.date):
+        return value.strftime("%Y%m%d")
+    elif isinstance(value, datetime.time):
+        return value.strftime("T%H%M%S.%f")
+    else:
+        return str(value)
+
+
 class Entry:
     """
     One field in a metadata worksheet. Provides configuration for reading a
@@ -55,7 +66,9 @@ class Entry:
     Args:
       column: column attribute on a SQLAlchemy model class.
       name: optional human-readable label for this field, if not inferrable from `column`.
+      gcs_uri_format: allowed iff hasattr(column.class_, 'object_url'), fstring .
       process_as: optional dictionary mapping column attributes to data processing function.
+      deprecated: bool (default False) of whether to add this name/value to the neighboring json_data.
 
     TO IMPLEMENT:
       encrypt: whether the spreadsheet value should be encrypted before storage. 
@@ -65,18 +78,32 @@ class Entry:
         self,
         column: Column,
         name: Optional[str] = None,
+        *,
         gcs_uri_format: Optional[str] = None,
         process_as: Dict[Column, Callable[[str], Any]] = {},
+        deprecated: bool = False,
     ):
         self.column = column
         self.name = name if name else column.name.replace("_", " ").capitalize()
         self.gcs_uri_format = gcs_uri_format
         self.process_as = process_as
+        self.deprecated = deprecated
 
         if gcs_uri_format and not hasattr(column.class_, "object_url"):
             raise Exception(
                 f"gcs_uri_format should only be defined for columns on a File, not {column.class_.__name__}"
             )
+        if deprecated:
+            if not hasattr(column.class_, "json_data"):
+                raise Exception(
+                    f"deprecated should only be True for columns with a neighboring json_data, not {column.class_.__name__}"
+                )
+            elif process_as:
+                for col in process_as.keys():
+                    if not hasattr(col.class_, "json_data"):
+                        raise Exception(
+                            f"deprecated should only be True for columns with a neighboring json_data, not {col.class_.__name__} (in process_as)"
+                        )
 
         self.doc = column.doc
         self.sqltype = column.type
@@ -127,10 +154,23 @@ class Entry:
                     getattr(self.column.class_, "object_url")
                 ] = self.gcs_uri_format.format(**format_dict)
 
+            # Handle deprecation to add to json_data column
+            # class_."json_data" is JSONB -> dict
+            # specific handling for dict in MetadataModel.merge and MetadataTemplate.read
+            if self.deprecated:
+                column_mapping[getattr(self.column.class_, "json_data")] = {
+                    self.column.name: _format_for_json_serialization(value)
+                }
+
             # Finally, handle process_as
             for column, process in self.process_as.items():
                 context.update(column_mapping)
                 column_mapping[column] = process(value, context)
+
+                if self.deprecated:
+                    column_mapping[getattr(column.class_, "json_data")] = {
+                        column.name: _format_for_json_serialization(value)
+                    }
 
         except Exception as e:
             raise Exception(
@@ -372,11 +412,16 @@ class MetadataTemplate:
             for entry in config.preamble:
                 # process the value
                 try:
-                    preamble_dict.update(
-                        entry.get_column_mapping(
-                            preamble_values.get(entry.name.lower())
-                        )
+                    new_value_map = entry.get_column_mapping(
+                        preamble_values.get(entry.name.lower())
                     )
+
+                    for col, val in new_value_map.items():
+                        if isinstance(val, dict) and col in preamble_dict:
+                            preamble_dict[col].update(val)
+                        else:  # not isinstance(val, dict) or col not in preamble_dict
+                            preamble_dict[col] = val
+
                 except Exception as e:
                     # add a bit of context
                     raise Exception(
@@ -411,11 +456,15 @@ class MetadataTemplate:
                 for entry in data_configs:
                     # process the value
                     try:
-                        data_dict.update(
-                            entry.get_column_mapping(
-                                data_values.get(entry.name.lower()), context
-                            )
+                        new_value_map = entry.get_column_mapping(
+                            data_values.get(entry.name.lower()), context
                         )
+
+                        for col, val in new_value_map.items():
+                            if isinstance(val, dict) and col in data_dict:
+                                data_dict[col].update(val)
+                            else:  # not isinstance(val, dict) or col not in data_dict
+                                data_dict[col] = val
                     except Exception as e:
                         # add some context here
                         raise Exception(
@@ -515,6 +564,8 @@ class MetadataTemplate:
                     ]
                 ):
                     deduped_instances[model].append(instance)
+
+        from .trial_metadata import Sample
 
         # now order the models for insertion based on the calculated order
         ordered_instances: OrderedDict_Type[Type, List[MetadataModel]] = OrderedDict()

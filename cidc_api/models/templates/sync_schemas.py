@@ -285,7 +285,7 @@ def _sync_participants_and_samples(
             records[Sample].append(
                 Sample(
                     trial_id=new_trial.protocol_identifier,
-                    shipment_manifest_id=shipment_map[sample["cimac_id"]],
+                    manifest_id=shipment_map[sample["cimac_id"]],
                     # neither of the above are in sample, so don't need a `drop`
                     **_get_all_values(target=Sample, old=sample),
                 )

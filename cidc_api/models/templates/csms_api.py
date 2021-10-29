@@ -373,7 +373,8 @@ def insert_manifest_into_blob(
             ),
         )
         partic["samples"] = [
-            _get_all_values(target=Sample, old=sample) for sample in partic_samples
+            _get_all_values(target=Sample, old=sample, drop=["manifest_id"])
+            for sample in partic_samples
         ]
 
         patch["participants"].append(partic)
@@ -584,6 +585,7 @@ def _calc_difference(
         "barcode",
         "biobank_id",
         "entry_number",
+        "json_data",
         "modified_time",
         "modified_timestamp",
         "qc_comments",
@@ -624,9 +626,9 @@ def _calc_difference(
     return Change(
         entity_type,
         trial_id=csms["trial_id"],
-        manifest_id=csms["manifest_id"]
-        if "manifest_id" in csms
-        else csms["shipment_manifest_id"],
+        manifest_id=cidc["manifest_id"]
+        if entity_type == "sample"
+        else csms["shipment_manifest_id" if entity_type == "upload" else "manifest_id"],
         cimac_id=csms["cimac_id"] if entity_type == "sample" else None,
         changes=changes,
     )
@@ -640,7 +642,7 @@ def _get_cidc_sample_map(trial_id, manifest_id, session) -> Dict[str, Dict[str, 
     cidc_partic_map = {p.cimac_participant_id: p for p in cidc_partic}
     cidc_samples = (
         session.query(Sample)
-        .filter(Sample.shipment_manifest_id == manifest_id, Sample.trial_id == trial_id)
+        .filter(Sample.manifest_id == manifest_id, Sample.trial_id == trial_id)
         .all()
     )
     ## make maps from cimac_id to a full dict
@@ -667,7 +669,6 @@ def _get_csms_sample_map(
             # participant-level critical field
             cohort_name=csms_sample["cohort_name"],
             # name changes
-            shipment_manifest_id=csms_sample["manifest_id"],
             trial_id=csms_sample["protocol_identifier"],
             participant_id=csms_sample["participant_id"],
             # not in CSMS
@@ -741,7 +742,7 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
         if cimac_id not in csms_sample_map:
             formatted = (
                 cidc_sample["trial_id"],
-                cidc_sample["shipment_manifest_id"],
+                cidc_sample["manifest_id"],
                 cidc_sample["cimac_id"],
             )
             raise Exception(
@@ -763,7 +764,7 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
             #     cidc_sample_map[cimac_id] = {}
 
             formatted = (
-                (db_sample.trial_id, db_sample.shipment_manifest_id, db_sample.cimac_id)
+                (db_sample.trial_id, db_sample.manifest_id, db_sample.cimac_id)
                 if db_sample is not None
                 else f"<no sample found>"
             )
