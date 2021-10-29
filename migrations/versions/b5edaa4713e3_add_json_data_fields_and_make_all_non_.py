@@ -42,7 +42,6 @@ def upgrade():
     op.alter_column('samples', 'type_of_sample',
                existing_type=postgresql.ENUM('Tumor Tissue', 'Normal Tissue', 'Skin Tissue', 'Blood', 'Bone Marrow', 'Cerebrospinal Fluid', 'Lymph Node', 'Stool', 'Cell Product', 'White Blood Cell Apheresis', 'Not Reported', 'Other', name='sample_types_enum'),
                nullable=True)
-    op.drop_constraint('samples_trial_id_shipment_manifest_id_fkey', 'samples', type_='foreignkey')
     op.create_foreign_key(None, 'samples', 'shipments', ['trial_id', 'manifest_id'], ['trial_id', 'manifest_id'])
     op.drop_column('samples', 'shipment_manifest_id')
     op.add_column('shipments', sa.Column('json_data', postgresql.JSONB(astext_type=sa.Text()), nullable=False))
@@ -126,7 +125,6 @@ def downgrade():
     op.drop_column('shipments', 'json_data')
     op.add_column('samples', sa.Column('shipment_manifest_id', sa.VARCHAR(), autoincrement=False, nullable=False))
     op.drop_constraint(None, 'samples', type_='foreignkey')
-    op.create_foreign_key('samples_trial_id_shipment_manifest_id_fkey', 'samples', 'shipments', ['trial_id', 'shipment_manifest_id'], ['trial_id', 'manifest_id'])
     op.alter_column('samples', 'type_of_sample',
                existing_type=postgresql.ENUM('Tumor Tissue', 'Normal Tissue', 'Skin Tissue', 'Blood', 'Bone Marrow', 'Cerebrospinal Fluid', 'Lymph Node', 'Stool', 'Cell Product', 'White Blood Cell Apheresis', 'Not Reported', 'Other', name='sample_types_enum'),
                nullable=False)
