@@ -9,6 +9,11 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.33` - 29 Oct 2021
+
+- `fixed` fix mIF excluded samples tab
+- `fixed` fix typo 'errrors'
+
 ## Version `0.25.32` - 27 Oct 2021
 
 - `added` subquery for counting ATACseq analysis to get_summaries for Data Overview dashboard
