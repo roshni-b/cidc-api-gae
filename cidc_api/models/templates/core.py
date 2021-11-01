@@ -47,12 +47,12 @@ filterwarnings(
 
 
 def _format_for_json_serialization(value):
-    if isinstance(value, datetime.datetime):
-        return value.strftime("%Y%m%dT%H%M%S.%f")
-    elif isinstance(value, datetime.date):
+    if isinstance(value, datetime.date):
         return value.strftime("%Y%m%d")
     elif isinstance(value, datetime.time):
         return value.strftime("T%H%M%S.%f")
+    elif isinstance(value, datetime.datetime):
+        return value.strftime("%Y%m%dT%H%M%S.%f")
     else:
         return str(value)
 

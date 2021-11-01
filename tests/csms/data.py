@@ -205,7 +205,6 @@ _samples_definitions = [
             "standardized_collection_event_name": "Baseline",
             "status": "qc_complete",
             "assay_priority": "1",
-            "assay_type": "RNAseq",
             "biobank_id": "biobank",
             "box_number": "X",
             "entry_number": 1,

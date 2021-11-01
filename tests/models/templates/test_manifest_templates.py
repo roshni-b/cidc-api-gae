@@ -80,8 +80,8 @@ def assert_pbmc_worked(cidc_api, clean_db):
         assert shipment.json_data["tracking_number"] == "TrackN"
         assert shipment.json_data["account_number"] == "AccN"
         assert shipment.json_data["shipping_condition"] == "Frozen_Dry_Ice"
-        assert shipment.json_data["date_shipped"] == "20011010T000000.000000"
-        assert shipment.json_data["date_received"] == "20021010T000000.000000"
+        assert shipment.json_data["date_shipped"] == "20011010"
+        assert shipment.json_data["date_received"] == "20021010"
         assert (
             shipment.json_data["quality_of_shipment"]
             == "Specimen shipment received in good condition"
@@ -328,8 +328,8 @@ def test_tissue_slide_template(clean_db, cidc_api, tmp_path):
         assert shipment.json_data["tracking_number"] == "TrackN"
         assert shipment.json_data["account_number"] == "AccN"
         assert shipment.json_data["shipping_condition"] == "Not Reported"
-        assert shipment.json_data["date_shipped"] == "20011010T000000.000000"
-        assert shipment.json_data["date_received"] == "20021010T000000.000000"
+        assert shipment.json_data["date_shipped"] == "20011010"
+        assert shipment.json_data["date_received"] == "20021010"
         assert (
             shipment.json_data["quality_of_shipment"]
             == "Specimen shipment received in poor condition"
