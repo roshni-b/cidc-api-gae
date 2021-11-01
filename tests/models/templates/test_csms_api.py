@@ -1,6 +1,7 @@
 import os
 
 os.environ["TZ"] = "UTC"
+from copy import deepcopy
 from datetime import datetime
 from collections import OrderedDict
 import pytest
@@ -14,7 +15,6 @@ from cidc_api.models import (
     Shipment,
     TrialMetadata,
 )
-from cidc_api.models.models import UploadJobStatus, UploadJobs
 from cidc_api.models.templates.csms_api import *
 from cidc_api.models.templates.file_metadata import Upload
 from cidc_api.models.templates.trial_metadata import Participant
@@ -65,7 +65,7 @@ def manifest_change_setup(cidc_api, monkeypatch):
             continue
 
         # insert manifest before we check for changes
-        insert_manifest_from_json(manifest, uploader_email="test@email.com")
+        insert_manifest_from_json(deepcopy(manifest), uploader_email="test@email.com")
         # should check out, but let's make sure
         validate_relational("test_trial")
 
@@ -82,26 +82,26 @@ def test_change_protocol_identifier_error(cidc_api, clean_db, monkeypatch):
             ## but this means they'll conflict on the sample
             # a bad ID raises a no trial found like insert_manifest_...
             with pytest.raises(Exception, match="No trial found with id"):
-                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+                new_manifest = deepcopy(manifest)
                 new_manifest["samples"] = [
                     {
                         k: v if k != "protocol_identifier" else "bar"
                         for k, v in sample.items()
                     }
-                    for sample in manifest["samples"]
+                    for sample in new_manifest["samples"]
                 ]
                 detect_manifest_changes(new_manifest, uploader_email="test@email.com")
             # this is why we needed a second valid trial to test this check
             with pytest.raises(Exception, match="Change in critical field for"):
                 # CIDC trial_id = CSMS protocol_identifier
                 # stored on samples, not manifest
-                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+                new_manifest = deepcopy(manifest)
                 new_manifest["samples"] = [
                     {
                         k: v if k != "protocol_identifier" else "foo"
                         for k, v in sample.items()
                     }
-                    for sample in manifest["samples"]
+                    for sample in new_manifest["samples"]
                 ]
                 detect_manifest_changes(new_manifest, uploader_email="test@email.com")
 
@@ -116,9 +116,8 @@ def test_change_manifest_id_error(cidc_api, clean_db, monkeypatch):
             # manifest_id has no such complication, but is also on the samples
             # changing the manifest_id makes it new
             with pytest.raises(NewManifestError):
-                new_manifest = {
-                    k: v if k != "manifest_id" else "foo" for k, v in manifest.items()
-                }
+                new_manifest = deepcopy(manifest)
+                new_manifest["manifest_id"] = "foo"
                 new_manifest["samples"] = [
                     {k: v if k != "manifest_id" else "foo" for k, v in sample.items()}
                     for sample in new_manifest["samples"]
@@ -136,17 +135,17 @@ def test_change_cimac_id_error(cidc_api, clean_db, monkeypatch):
             # Changing a cimac_id is adding/removing a Sample
             ## so this is a different error
             with pytest.raises(Exception, match="Malformatted cimac_id"):
-                new_manifest = {k: v for k, v in manifest.items()}
+                new_manifest = deepcopy(manifest)
                 new_manifest["samples"] = [
                     {k: v if k != "cimac_id" else "foo" for k, v in sample.items()}
                     if n == 0
                     else sample
-                    for n, sample in enumerate(manifest["samples"])
+                    for n, sample in enumerate(new_manifest["samples"])
                 ]
                 detect_manifest_changes(new_manifest, uploader_email="test@email.com")
             # need to use an actually valid cimac_id
             with pytest.raises(Exception, match="Missing sample"):
-                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+                new_manifest = deepcopy(manifest)
                 new_manifest["samples"] = [
                     {
                         k: v if k != "cimac_id" else "CXXXP0555.00"
@@ -154,7 +153,7 @@ def test_change_cimac_id_error(cidc_api, clean_db, monkeypatch):
                     }
                     if n == 0
                     else sample
-                    for n, sample in enumerate(manifest["samples"])
+                    for n, sample in enumerate(new_manifest["samples"])
                 ]
                 detect_manifest_changes(new_manifest, uploader_email="test@email.com")
 
@@ -162,28 +161,32 @@ def test_change_cimac_id_error(cidc_api, clean_db, monkeypatch):
 def test_manifest_non_critical_changes(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         manifest_change_setup(cidc_api, monkeypatch)
-        # grab a completed manifest
-        for manifest in manifests:
-            if manifest.get("status") not in (None, "qc_complete"):
+        # Test non-critical changes on the manifest itself
+        keys = {k for manifest in manifests for k in manifest.keys()}
+        for key in keys:
+            # ignore list from calc_diff + criticals
+            if key in [
+                "barcode",
+                "biobank_id",
+                "manifest_id",
+                "modified_time",
+                "modified_timestamp",
+                "samples",
+                "status",
+                "submitter",
+            ]:
                 continue
-            # Test non-critical changes on the manifest itself
-            for key in manifest.keys():
-                # ignore list from calc_diff + criticals
-                if key in [
-                    "barcode",
-                    "biobank_id",
-                    "manifest_id",
-                    "modified_time",
-                    "modified_timestamp",
-                    "samples",
-                    "status",
-                    "submitter",
-                ]:
+
+            # grab a completed manifest
+            for manifest in manifests:
+                if (
+                    manifest.get("status") not in (None, "qc_complete")
+                    or key not in manifest
+                ):
                     continue
 
-                new_manifest = {
-                    k: v if k != key else "foo" for k, v in manifest.items()
-                }
+                new_manifest = deepcopy(manifest)
+                new_manifest[key] = "foo"
                 records, changes = detect_manifest_changes(
                     new_manifest, uploader_email="test@email.com"
                 )
@@ -191,7 +194,7 @@ def test_manifest_non_critical_changes(cidc_api, clean_db, monkeypatch):
                     len(records) == 1
                     and Shipment in records
                     and len(records[Shipment]) == 1
-                ), f"{records}\n{changes}"
+                ), f"{key}: {records}\n{changes}"
                 assert getattr(records[Shipment][0], key) == "foo", (
                     str(records) + "\n" + str(changes)
                 )
@@ -221,24 +224,28 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
             # Test non-critical changes for the manifest but stored on the samples
             for key in ["assay_priority", "assay_type", "sample_manifest_type"]:
                 # ignore list from calc_diff + criticals
-                if key in [
-                    "barcode",
-                    "biobank_id",
-                    "manifest_id",
-                    "modified_time",
-                    "modified_timestamp",
-                    "samples",
-                    "status",
-                    "submitter",
-                ]:
+                if (
+                    key
+                    in [
+                        "barcode",
+                        "biobank_id",
+                        "manifest_id",
+                        "modified_time",
+                        "modified_timestamp",
+                        "samples",
+                        "status",
+                        "submitter",
+                    ]
+                    or key not in manifest["samples"][0]
+                ):
                     continue
 
-                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+                new_manifest = deepcopy(manifest)
 
                 if key == "sample_manifest_type":
                     new_manifest["samples"] = [
                         {k: v for k, v in sample.items()}
-                        for sample in manifest["samples"]
+                        for sample in new_manifest["samples"]
                     ]
                     for n in range(len(new_manifest["samples"])):
                         new_manifest["samples"][n].update(
@@ -251,7 +258,7 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
                 else:
                     new_manifest["samples"] = [
                         {k: v if k != key else "foo" for k, v in sample.items()}
-                        for sample in manifest["samples"]
+                        for sample in new_manifest["samples"]
                     ]
 
                 records, changes = detect_manifest_changes(
@@ -264,13 +271,13 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
                         and Sample in records
                         and Upload in records
                         and len(records[Upload]) == 1
-                    ), f"{records}\n{changes}"
+                    ), f"{key}: {records}\n{changes}"
                 else:
                     assert (
                         len(records) == 1
                         and Shipment in records
                         and len(records[Shipment]) == 1
-                    ), f"{records}\n{changes}"
+                    ), f"{key}: {records}\n{changes}"
                     assert getattr(records[Shipment][0], key) == "foo", (
                         str(records) + "\n" + str(changes)
                     )
@@ -318,24 +325,22 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
                     "type_of_sample",
                 ]:
                     continue
-                else:
-                    print(key)
 
-                new_manifest = {k: v for k, v in manifest.items() if k != "samples"}
+                new_manifest = deepcopy(manifest)
 
                 if key in ["sample_derivative_concentration"]:
                     new_manifest["samples"] = [
                         {k: v if k != key else 10 for k, v in sample.items()}
                         if n == 0
                         else sample
-                        for n, sample in enumerate(manifest["samples"])
+                        for n, sample in enumerate(new_manifest["samples"])
                     ]
                 else:
                     new_manifest["samples"] = [
                         {k: v if k != key else "foo" for k, v in sample.items()}
                         if n == 0
                         else sample
-                        for n, sample in enumerate(manifest["samples"])
+                        for n, sample in enumerate(new_manifest["samples"])
                     ]
 
                 records, changes = detect_manifest_changes(
@@ -345,6 +350,8 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
                 # name change for when we're looking below
                 if key == "standardized_collection_event_name":
                     key = "collection_event_name"
+                elif key == "fixation_or_stabilization_type":
+                    key = "fixation_stabilization_type"
 
                 if key not in ["cohort_name", "participant_id"]:
                     assert (
@@ -386,7 +393,19 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
                     trial_id=manifest["samples"][0]["protocol_identifier"],
                     changes={
                         key: (
-                            manifest["samples"][0][key],
+                            type(changes[0].changes[key][0])(
+                                manifest["samples"][0][
+                                    "standardized_collection_event_name"
+                                    if key == "collection_event_name"
+                                    and "standardized_collection_event_name"
+                                    in manifest["samples"][0]
+                                    else (
+                                        "fixation_or_stabilization_type"
+                                        if key == "fixation_stabilization_type"
+                                        else key
+                                    )
+                                ]
+                            ),
                             new_manifest["samples"][0][key],
                         )
                     },
@@ -475,7 +494,9 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
 
         # blank db throws error
         with pytest.raises(Exception, match="No trial found with id"):
-            insert_manifest_from_json(manifest, uploader_email="test@email.com")
+            insert_manifest_from_json(
+                deepcopy(manifest), uploader_email="test@email.com"
+            )
 
         errs = insert_record_batch(
             {ClinicalTrial: [ClinicalTrial(protocol_identifier="test_trial")]}
@@ -495,7 +516,9 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         with pytest.raises(
             Exception, match="No Collection event with trial_id, event_name"
         ):
-            insert_manifest_from_json(manifest, uploader_email="test@email.com")
+            insert_manifest_from_json(
+                deepcopy(manifest), uploader_email="test@email.com"
+            )
 
         errs = insert_record_batch(
             {
@@ -511,7 +534,9 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         assert len(errs) == 0, errs
 
         with pytest.raises(Exception, match="no Cohort with trial_id, cohort_name"):
-            insert_manifest_from_json(manifest, uploader_email="test@email.com")
+            insert_manifest_from_json(
+                deepcopy(manifest), uploader_email="test@email.com"
+            )
 
         errs = insert_record_batch(
             {
@@ -523,7 +548,7 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         )
         assert len(errs) == 0
 
-        insert_manifest_from_json(manifest, uploader_email="test@email.com")
+        insert_manifest_from_json(deepcopy(manifest), uploader_email="test@email.com")
         validate_relational("test_trial")
 
         for other_manifest in [
@@ -531,8 +556,12 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
             for m in manifests
             if m.get("status") in [None, "qc_complete"] and m != manifest
         ]:
-            insert_manifest_from_json(other_manifest, uploader_email="test@email.com")
+            insert_manifest_from_json(
+                deepcopy(other_manifest), uploader_email="test@email.com"
+            )
             validate_relational("test_trial")
 
         with pytest.raises(Exception, match="already exists for trial"):
-            insert_manifest_from_json(manifest, uploader_email="test@email.com")
+            insert_manifest_from_json(
+                deepcopy(manifest), uploader_email="test@email.com"
+            )

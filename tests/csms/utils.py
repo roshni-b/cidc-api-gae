@@ -190,11 +190,30 @@ def validate_relational(trial_id: str, *, session: Session):
         )
 
         for k, v in sample.items():
+            if k in ["collection_event_name", "standardized_collection_event_name"]:
+                # already checked above
+                continue
+
             if k == "participant_id":
                 k = "trial_participant_id"
 
             if hasattr(inst, k):
-                assert getattr(inst, k) == v
+
+                if k == "processed_sample_type":
+                    processed_sample_type_map: Dict[str, str] = {
+                        "tissue_slide": "Fixed Slide",
+                        "tumor_tissue_dna": "Tissue Scroll",
+                        "plasma": "Plasma",
+                        "normal_tissue_dna": "Tissue Scroll",
+                        "h_and_e": "H&E-Stained Fixed Tissue Slide Specimen",
+                    }
+                    assert getattr(inst, k) == processed_sample_type_map.get(
+                        v, v
+                    ), f"{k}: {getattr(inst, k)} != {v}"
+                else:
+                    assert (
+                        type(v)(getattr(inst, k)) == v
+                    ), f"{k}: {getattr(inst, k)} != {v}: {type(v)}"
 
     assert session.query(Upload).filter(Upload.trial_id == trial_id).count() != 0
 
