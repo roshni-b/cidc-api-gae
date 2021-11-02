@@ -61,13 +61,27 @@ def manifest_change_setup(cidc_api, monkeypatch):
     TrialMetadata(trial_id="foo", metadata_json=metadata_json).insert()
 
     for manifest in manifests:
-        if manifest.get("status") not in (None, "qc_complete"):
+        if manifest.get("status") not in (None, "qc_complete") or manifest.get(
+            "excluded"
+        ):
             continue
 
         # insert manifest before we check for changes
         insert_manifest_from_json(deepcopy(manifest), uploader_email="test@email.com")
         # should check out, but let's make sure
         validate_relational("test_trial")
+
+
+def test_detect_changes_when_excluded(cidc_api, clean_db, monkeypatch):
+    with cidc_api.app_context():
+        manifest_change_setup(cidc_api, monkeypatch)
+        manifest = manifests[-1]
+        assert manifest.get("excluded")
+
+        assert detect_manifest_changes(manifest, uploader_email="test@email.com") == (
+            {},
+            [],
+        )
 
 
 def test_change_protocol_identifier_error(cidc_api, clean_db, monkeypatch):
@@ -378,7 +392,6 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
                     if key not in [
                         "cimac_id",
                         "cimac_participant_id",
-                        "cohort_name",
                         "collection_event_name",
                         "manifest_id",
                         "json_data",
@@ -585,7 +598,9 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         for other_manifest in [
             m
             for m in manifests
-            if m.get("status") in [None, "qc_complete"] and m != manifest
+            if m.get("status") in (None, "qc_complete")
+            and m != manifest
+            and not m.get("excluded")
         ]:
             insert_manifest_from_json(
                 deepcopy(other_manifest), uploader_email="test@email.com"

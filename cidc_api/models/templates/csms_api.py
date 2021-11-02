@@ -900,6 +900,16 @@ def detect_manifest_changes(
         if the connections between any critical fields is changed
         namely trial_id, manifest_id, cimac_id
     """
+    # if it's an excluded manifest, we don't consider it for changes
+    if _get_and_check(
+        obj=csms_manifest,
+        key="excluded",
+        default=False,
+        msg=f"not called",
+        check=lambda _: True,
+    ):
+        return {}, []
+
     # ----- Initial validation, raises Exception if issues -----
     ret0, ret1 = OrderedDict(), []
     (

@@ -4,6 +4,7 @@ __all__ = [
 ]
 
 from collections import OrderedDict
+from copy import deepcopy
 from sqlalchemy.orm.session import Session
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -166,23 +167,9 @@ def _get_all_values(
         if c.name not in drop and c.name in old
     }
 
-    # put all deprecated columns into the json_data column
+    # put all original data into the json_data column
     if "json_data" not in drop and any(c.name == "json_data" for c in columns_to_check):
-        ret["json_data"] = {
-            k: v
-            for k, v in ret.items()
-            # these are the only columns that aren't deprecated
-            if k
-            not in [
-                "cimac_id",
-                "cimac_participant_id",
-                "cohort_name",
-                "collection_event_name",
-                "manifest_id",
-                "json_data",
-                "trial_id",
-            ]
-        }
+        ret["json_data"] = deepcopy(old)
 
     return ret
 

@@ -349,7 +349,7 @@ def test_tissue_slide_template(clean_db, cidc_api, tmp_path):
                 assert partic.cohort_name == "Arm_A"
 
         assert len(samples) == 4
-        for i, sample in enumerate(samples):
+        for i, sample in enumerate(sorted(samples, key=lambda s: s.cimac_id)):
             partic = participants[i // 3]
 
             assert sample.trial_id == "test_trial"
