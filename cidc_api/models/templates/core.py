@@ -565,8 +565,6 @@ class MetadataTemplate:
                 ):
                     deduped_instances[model].append(instance)
 
-        from .trial_metadata import Sample
-
         # now order the models for insertion based on the calculated order
         ordered_instances: OrderedDict_Type[Type, List[MetadataModel]] = OrderedDict()
         for next_model in MODEL_INSERTION_ORDER:
