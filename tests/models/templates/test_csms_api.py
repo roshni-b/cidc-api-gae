@@ -198,6 +198,18 @@ def test_manifest_non_critical_changes(cidc_api, clean_db, monkeypatch):
                 assert getattr(records[Shipment][0], key) == "foo", (
                     str(records) + "\n" + str(changes)
                 )
+                if key not in [
+                    "cimac_id",
+                    "cimac_participant_id",
+                    "cohort_name",
+                    "collection_event_name",
+                    "manifest_id",
+                    "json_data",
+                    "trial_id",
+                ]:
+                    assert records[Shipment][0].json_data[key] == "foo", (
+                        str(records) + "\n" + str(changes)
+                    )
 
                 assert len(changes) == 1 and changes[0] == Change(
                     entity_type="shipment",
@@ -224,20 +236,7 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
             # Test non-critical changes for the manifest but stored on the samples
             for key in ["assay_priority", "assay_type", "sample_manifest_type"]:
                 # ignore list from calc_diff + criticals
-                if (
-                    key
-                    in [
-                        "barcode",
-                        "biobank_id",
-                        "manifest_id",
-                        "modified_time",
-                        "modified_timestamp",
-                        "samples",
-                        "status",
-                        "submitter",
-                    ]
-                    or key not in manifest["samples"][0]
-                ):
+                if key not in manifest["samples"][0]:
                     continue
 
                 new_manifest = deepcopy(manifest)
@@ -281,6 +280,18 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
                     assert getattr(records[Shipment][0], key) == "foo", (
                         str(records) + "\n" + str(changes)
                     )
+                    if key not in [
+                        "cimac_id",
+                        "cimac_participant_id",
+                        "cohort_name",
+                        "collection_event_name",
+                        "manifest_id",
+                        "json_data",
+                        "trial_id",
+                    ]:
+                        assert records[Shipment][0].json_data[key] == "foo", (
+                            str(records) + "\n" + str(changes)
+                        )
                     assert len(changes) == 1 and changes[0] == Change(
                         entity_type="shipment",
                         manifest_id=manifest["manifest_id"],
@@ -364,6 +375,21 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
                         == new_manifest["samples"][0][key]
                     ), f"{records}\n{changes}"
 
+                    if key not in [
+                        "cimac_id",
+                        "cimac_participant_id",
+                        "cohort_name",
+                        "collection_event_name",
+                        "manifest_id",
+                        "json_data",
+                        "trial_id",
+                    ]:
+                        assert (
+                            key in records[Sample][0].json_data
+                            and records[Sample][0].json_data[key]
+                            == new_manifest["samples"][0][key]
+                        ), f"{records}\n{changes}"
+
                 elif key == "cohort_name":
                     assert (
                         len(records) == 1
@@ -383,6 +409,11 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
                     ), f"{records}\n{changes}"
                     assert (
                         getattr(records[Participant][0], "trial_participant_id")
+                        == new_manifest["samples"][0][key]
+                    ), f"{records}\n{changes}"
+                    assert (
+                        "trial_participant_id" in records[Participant][0]
+                        and records[Participant][0]["trial_participant_id"]
                         == new_manifest["samples"][0][key]
                     ), f"{records}\n{changes}"
 

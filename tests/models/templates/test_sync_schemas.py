@@ -124,6 +124,24 @@ def test_syncall_from_blobs(clean_db, cidc_api, monkeypatch):
         assert db_ship.shipping_condition == json_ship["shipping_condition"]
         assert db_ship.tracking_number == json_ship["tracking_number"]
 
+        # Check json_data
+        assert db_ship.json_data["account_number"] == json_ship["account_number"]
+        assert db_ship.json_data["assay_priority"] == json_ship["assay_priority"]
+        assert db_ship.json_data["assay_type"] == json_ship["assay_type"]
+        assert db_ship.json_data["courier"] == json_ship["courier"]
+        assert db_ship.json_data["date_received"] == json_ship["date_received"]
+        assert db_ship.json_data["date_shipped"] == json_ship["date_shipped"]
+        assert (
+            db_ship.json_data["quality_of_shipment"] == json_ship["quality_of_shipment"]
+        )
+        assert db_ship.json_data["receiving_party"] == json_ship["receiving_party"]
+        assert db_ship.json_data["ship_from"] == json_ship["ship_from"]
+        assert db_ship.json_data["ship_to"] == json_ship["ship_to"]
+        assert (
+            db_ship.json_data["shipping_condition"] == json_ship["shipping_condition"]
+        )
+        assert db_ship.json_data["tracking_number"] == json_ship["tracking_number"]
+
         participants = sorted(
             [p for p in trial.participants], key=lambda p: p.cimac_participant_id
         )
@@ -160,5 +178,38 @@ def test_syncall_from_blobs(clean_db, cidc_api, monkeypatch):
                 assert db_sample.type_of_sample == json_sample["type_of_sample"]
                 assert (
                     db_sample.type_of_primary_container
+                    == json_sample["type_of_primary_container"]
+                )
+
+                # Check json_data
+                assert (
+                    db_sample.json_data["material_used"] == json_sample["material_used"]
+                )
+                assert (
+                    db_sample.json_data["material_remaining"]
+                    == json_sample["material_remaining"]
+                )
+                assert (
+                    db_sample.json_data["parent_sample_id"]
+                    == json_sample["parent_sample_id"]
+                )
+                assert (
+                    db_sample.json_data["quality_of_sample"]
+                    == json_sample["quality_of_sample"]
+                )
+                assert (
+                    db_sample.json_data["sample_location"]
+                    == json_sample["sample_location"]
+                )
+                assert (
+                    db_sample.json_data["sample_volume_units"]
+                    == json_sample["sample_volume_units"]
+                )
+                assert (
+                    db_sample.json_data["type_of_sample"]
+                    == json_sample["type_of_sample"]
+                )
+                assert (
+                    db_sample.json_data["type_of_primary_container"]
                     == json_sample["type_of_primary_container"]
                 )

@@ -344,7 +344,9 @@ def insert_manifest_into_blob(
     # a patch is just the parts that are new, equivalent to the return of schemas.prismify
     patch = {
         "protocol_identifier": trial_id,
-        "shipments": [_get_all_values(target=Shipment, old=manifest)],
+        "shipments": [
+            _get_all_values(target=Shipment, old=manifest, drop=["json_data"])
+        ],
         "participants": [],
     }
 
@@ -361,11 +363,15 @@ def insert_manifest_into_blob(
             cimac_participant_id=cimac_participant_id,
             participant_id=partic_samples[0]["participant_id"],
             **_get_all_values(
-                target=Participant, old=partic_samples[0], drop=["trial_participant_id"]
+                target=Participant,
+                old=partic_samples[0],
+                drop=["json_data", "trial_participant_id"],
             ),
         )
         partic["samples"] = [
-            _get_all_values(target=Sample, old=sample, drop=["manifest_id"])
+            _get_all_values(
+                target=Sample, old=sample, drop=["json_data", "manifest_id"]
+            )
             for sample in partic_samples
         ]
 

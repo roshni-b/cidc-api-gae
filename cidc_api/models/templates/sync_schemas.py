@@ -160,11 +160,31 @@ def _get_all_values(
         if hasattr(b, "__table__"):
             columns_to_check.extend(b.__table__.columns)
 
-    return {
+    ret = {
         c.name: old[c.name]
         for c in columns_to_check
         if c.name not in drop and c.name in old
     }
+
+    # put all deprecated columns into the json_data column
+    if "json_data" not in drop and any(c.name == "json_data" for c in columns_to_check):
+        ret["json_data"] = {
+            k: v
+            for k, v in ret.items()
+            # these are the only columns that aren't deprecated
+            if k
+            not in [
+                "cimac_id",
+                "cimac_participant_id",
+                "cohort_name",
+                "collection_event_name",
+                "manifest_id",
+                "json_data",
+                "trial_id",
+            ]
+        }
+
+    return ret
 
 
 def _generate_new_trial(

@@ -144,6 +144,10 @@ def validate_relational(trial_id: str, *, session: Session):
 
             if hasattr(inst, k) and k not in ["samples"]:
                 assert getattr(inst, k) == v, f"{k}: {getattr(inst, k)} != {v}"
+                if k in inst.json_data:
+                    if k in ["date_received", "date_shipped"]:
+                        v = v.strftime("%Y-%m-%d %H:%M:%S")
+                    assert inst.json_data[k] == v, f"{k}: {inst.json_data[k]} != {v}"
 
     participants = session.query(Participant).filter(Participant.trial_id == trial_id)
     for inst in participants:
@@ -161,6 +165,9 @@ def validate_relational(trial_id: str, *, session: Session):
 
             assert (
                 inst.trial_participant_id == s["trial_participant_id"]
+            ), f"participant_id not uniquely defined for participant {inst.cimac_participant_id}"
+            assert (
+                inst.json_data["trial_participant_id"] == s["trial_participant_id"]
             ), f"participant_id not uniquely defined for participant {inst.cimac_participant_id}"
 
         if any("cohort_name" in s for s in inst_samples):
@@ -214,6 +221,10 @@ def validate_relational(trial_id: str, *, session: Session):
                     assert (
                         type(v)(getattr(inst, k)) == v
                     ), f"{k}: {getattr(inst, k)} != {v}: {type(v)}"
+                    if k in inst.json_data:
+                        assert (
+                            type(v)(inst.json_data[k]) == v
+                        ), f"{k}: {inst.json_data[k]} != {v}: {type(v)}"
 
     assert session.query(Upload).filter(Upload.trial_id == trial_id).count() != 0
 
@@ -280,16 +291,14 @@ def validate_json_blob(trial_md: dict):
                 )
             )
 
-            if "standardized_collection_event_name" in sample:
-                assert (
-                    sample["collection_event_name"]
-                    == this_sample["standardized_collection_event_name"]
-                )
-            else:
-                assert (
-                    sample["collection_event_name"]
-                    == this_sample["collection_event_name"]
-                )
+            assert (
+                sample["collection_event_name"]
+                == this_sample[
+                    "standardized_collection_event_name"
+                    if "standardized_collection_event_name" in sample
+                    else "collection_event_name"
+                ]
+            )
 
             for k, v in this_sample.items():
                 if k in sample:
