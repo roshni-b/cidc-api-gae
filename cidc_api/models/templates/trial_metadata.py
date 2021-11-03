@@ -14,7 +14,6 @@ __all__ = [
 ]
 
 import re
-from sqlalchemy.orm.session import Session
 from sqlalchemy import (
     CheckConstraint,
     Column,
@@ -28,6 +27,8 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
+from sqlalchemy.orm.session import Session
+from sqlalchemy.dialects.postgresql import JSONB
 from typing import List
 
 from .model_core import MetadataModel, with_default_session
@@ -241,6 +242,7 @@ class Shipment(MetadataModel):
         unique=True,
         doc="Filename of the manifest used to ship this sample. Example: E4412_PBMC.",
     )
+    json_data = Column(JSONB, nullable=False, default={})
 
     __table_args__ = (
         UniqueConstraint(trial_id, manifest_id, name="unique_trial_manifest"),
@@ -267,23 +269,18 @@ class Shipment(MetadataModel):
             "Other",
             name="assay_priority_enum",
         ),
-        nullable=False,
         doc="Priority of the assay as it appears on the intake form.",
     )
-    assay_type = Column(AssaysEnum, nullable=False, doc="Assay and sample type used.")
+    assay_type = Column(AssaysEnum, nullable=True, doc="Assay and sample type used.")
     courier = Column(
         Enum("FEDEX", "USPS", "UPS", "Inter-Site Delivery", name="courier_enum"),
-        nullable=False,
         doc="Courier utilized for shipment.",
     )
     tracking_number = Column(
-        String,
-        nullable=False,
-        doc="Air bill number assigned to shipment. Example: 4567788343.",
+        String, doc="Air bill number assigned to shipment. Example: 4567788343.",
     )
     account_number = Column(
         String,
-        nullable=False,
         doc="Courier account number to pay for shipping if available. Example: 45465732.",
     )
     shipping_condition = Column(
@@ -296,11 +293,10 @@ class Shipment(MetadataModel):
             "Other",
             name="shipping_condition_enum",
         ),
-        nullable=False,
         doc="Type of shipment made.",
     )
-    date_shipped = Column(Date, nullable=False, doc="Date of shipment.")
-    date_received = Column(Date, nullable=False, doc="Date of receipt.")
+    date_shipped = Column(Date, doc="Date of shipment.")
+    date_received = Column(Date, doc="Date of receipt.")
     quality_of_shipment = Column(
         Enum(
             "Specimen shipment received in good condition",
@@ -309,13 +305,10 @@ class Shipment(MetadataModel):
             "Other",
             name="quality_of_shipment_enum",
         ),
-        nullable=False,
         doc="Indication that specimens were received in good condition.",
     )
-    ship_from = Column(String, nullable=False, doc="Contact information for shipment.")
-    ship_to = Column(
-        String, nullable=False, doc="Physical shipping address of the destination."
-    )
+    ship_from = Column(String, doc="Contact information for shipment.")
+    ship_to = Column(String, doc="Physical shipping address of the destination.")
     receiving_party = Column(
         Enum(
             "MDA_Wistuba",
@@ -337,7 +330,6 @@ class Shipment(MetadataModel):
             "FNLCR_MoCha",
             name="receiving_party_enum",
         ),
-        nullable=False,
         doc="Site where sample was shipped to be assayed.",
     )
 
@@ -363,10 +355,11 @@ class Participant(MetadataModel):
     )
     trial_participant_id = Column(
         String,
-        nullable=False,
+        nullable=True,
         doc="Trial Participant Identifier. Crypto-hashed after upload.",
     )
-    cohort_name = Column(String)
+    cohort_name = Column(String, nullable=True)
+    json_data = Column(JSONB, nullable=False, default={})
 
     __table_args__ = (
         UniqueConstraint(
@@ -429,8 +422,9 @@ class Sample(MetadataModel):
         doc="Specimen identifier assigned by the CIMAC-CIDC Network. Formatted as C????????.??",
     )
     cimac_participant_id = Column(String, nullable=False)
-    collection_event_name = Column(String, nullable=False)
-    shipment_manifest_id = Column(String, nullable=False)
+    manifest_id = Column(String, nullable=False)
+    collection_event_name = Column(String, nullable=True)
+    json_data = Column(JSONB, nullable=False, default={})
 
     __table_args__ = (
         ForeignKeyConstraint(
@@ -442,7 +436,7 @@ class Sample(MetadataModel):
             [CollectionEvent.trial_id, CollectionEvent.event_name],
         ),
         ForeignKeyConstraint(
-            [trial_id, shipment_manifest_id], [Shipment.trial_id, Shipment.manifest_id]
+            [trial_id, manifest_id], [Shipment.trial_id, Shipment.manifest_id]
         ),
         CheckConstraint("cimac_id ~ '^C[A-Z0-9]{3}[A-Z0-9]{3}[A-Z0-9]{2}.[0-9]{2}$'"),
     )
@@ -464,7 +458,6 @@ class Sample(MetadataModel):
     )
     parent_sample_id = Column(
         String,
-        nullable=False,
         doc="Sample identifier assigned by the biorepository site. Crypto-hashed after upload.",
     )
     processed_sample_id = Column(
@@ -489,9 +482,7 @@ class Sample(MetadataModel):
         doc="ICD-0-3 histology and behavior code description. e.g. Hodgkin lymphoma, nod. scler., grade 1",
     )
     sample_location = Column(
-        String,
-        nullable=False,
-        doc="Sample location within the shipping container. Example: A1.",
+        String, doc="Sample location within the shipping container. Example: A1.",
     )
     type_of_sample = Column(
         Enum(
@@ -509,7 +500,7 @@ class Sample(MetadataModel):
             "Other",
             name="sample_types_enum",
         ),
-        nullable=False,
+        nullable=True,
         doc="Type of sample sent.",
     )
     type_of_tumor_sample = Column(
@@ -797,9 +788,7 @@ class Aliquot(MetadataModel):
     )
     quantity = Column(Integer, doc="Quantity of each aliquot shipped.")
     aliquot_replacement = Column(
-        Replacement,
-        nullable=False,
-        doc="Status of aliquot if replacement is/was requested.",
+        Replacement, doc="Status of aliquot if replacement is/was requested.",
     )
     aliquot_status = Column(
         Enum(
@@ -810,7 +799,6 @@ class Aliquot(MetadataModel):
             "Other",
             name="aliquot_status_enum",
         ),
-        nullable=False,
         doc="Status of aliquot used for other assay, exhausted, destroyed, or returned.",
     )
     material_extracted = Column(

@@ -4,6 +4,7 @@ __all__ = [
 ]
 
 from collections import OrderedDict
+from copy import deepcopy
 from sqlalchemy.orm.session import Session
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -160,11 +161,17 @@ def _get_all_values(
         if hasattr(b, "__table__"):
             columns_to_check.extend(b.__table__.columns)
 
-    return {
+    ret = {
         c.name: old[c.name]
         for c in columns_to_check
         if c.name not in drop and c.name in old
     }
+
+    # put all original data into the json_data column
+    if "json_data" not in drop and any(c.name == "json_data" for c in columns_to_check):
+        ret["json_data"] = deepcopy(old)
+
+    return ret
 
 
 def _generate_new_trial(
@@ -285,7 +292,7 @@ def _sync_participants_and_samples(
             records[Sample].append(
                 Sample(
                     trial_id=new_trial.protocol_identifier,
-                    shipment_manifest_id=shipment_map[sample["cimac_id"]],
+                    manifest_id=shipment_map[sample["cimac_id"]],
                     # neither of the above are in sample, so don't need a `drop`
                     **_get_all_values(target=Sample, old=sample),
                 )

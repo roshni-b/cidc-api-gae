@@ -1,5 +1,8 @@
 __all__ = ["manifests", "samples"]
 
+from copy import deepcopy
+
+
 _samples_definitions = [
     [
         {
@@ -205,7 +208,6 @@ _samples_definitions = [
             "standardized_collection_event_name": "Baseline",
             "status": "qc_complete",
             "assay_priority": "1",
-            "assay_type": "RNAseq",
             "biobank_id": "biobank",
             "box_number": "X",
             "entry_number": 1,
@@ -667,3 +669,6 @@ for n, _ in enumerate(manifests):
             f"Bad data, all status should be the same for manifest {manifests[n]['manifest_id']}:\n"
             + str([s.get("status") for s in manifests[n]["samples"]])
         )
+
+manifests.append(deepcopy(manifests[-1]))
+manifests[-1]["excluded"] = True

@@ -172,9 +172,7 @@ def _extract_info_from_manifest(
     return trial_id, manifest_id, samples
 
 
-def _extract_details_from_trial(
-    trial_id: str, manifest_id: str, samples: List[Dict[str, Any]], *, session: Session
-):
+def _extract_details_from_trial(samples: List[Dict[str, Any]]):
     """
     Given a trial, return some key values
     
@@ -191,13 +189,11 @@ def _extract_details_from_trial(
     assay_priority = _get_and_check(
         obj=samples,
         key="assay_priority",
-        msg=f"No assay_priority defined for manifest_id={manifest_id} for trial {trial_id}",
-        default="Not Reported",
+        msg="will not be thrown",
+        check=lambda _: True,
     )
     assay_type = _get_and_check(
-        obj=samples,
-        key="assay_type",
-        msg=f"No assay_type defined for manifest_id={manifest_id} for trial {trial_id}",
+        obj=samples, key="assay_type", msg="will not be thrown", check=lambda _: True,
     )
     return assay_priority, assay_type
 
@@ -339,19 +335,17 @@ def insert_manifest_into_blob(
         for p in trial_md.metadata_json["participants"]
         for s in p["samples"]
     ]
-    assay_priority, assay_type = _extract_details_from_trial(
-        trial_id, manifest_id, samples, session=session
-    )
+    assay_priority, assay_type = _extract_details_from_trial(samples)
+    if assay_priority:
+        manifest["assay_priority"] = assay_priority
+    if assay_type:
+        manifest["assay_type"] = assay_type
 
     # a patch is just the parts that are new, equivalent to the return of schemas.prismify
     patch = {
         "protocol_identifier": trial_id,
         "shipments": [
-            dict(
-                assay_priority=assay_priority,
-                assay_type=assay_type,
-                **_get_all_values(target=Shipment, old=manifest),
-            )
+            _get_all_values(target=Shipment, old=manifest, drop=["json_data"])
         ],
         "participants": [],
     }
@@ -369,11 +363,16 @@ def insert_manifest_into_blob(
             cimac_participant_id=cimac_participant_id,
             participant_id=partic_samples[0]["participant_id"],
             **_get_all_values(
-                target=Participant, old=partic_samples[0], drop=["trial_participant_id"]
+                target=Participant,
+                old=partic_samples[0],
+                drop=["json_data", "trial_participant_id"],
             ),
         )
         partic["samples"] = [
-            _get_all_values(target=Sample, old=sample) for sample in partic_samples
+            _get_all_values(
+                target=Sample, old=sample, drop=["json_data", "manifest_id"]
+            )
+            for sample in partic_samples
         ]
 
         patch["participants"].append(partic)
@@ -446,19 +445,16 @@ def insert_manifest_from_json(
     existing_cimac_ids = []
     for sample in session.query(Sample).filter(Sample.trial_id == trial_id).all():
         existing_cimac_ids.append(sample.cimac_id)
-    assay_priority, assay_type = _extract_details_from_trial(
-        trial_id, manifest_id, samples, session=session
-    )
+    assay_priority, assay_type = _extract_details_from_trial(samples)
+    if assay_priority:
+        manifest["assay_priority"] = assay_priority
+    if assay_type:
+        manifest["assay_type"] = assay_type
 
     # need to insert Shipment and Participants before Samples
     ordered_records = OrderedDict()
     ordered_records[Shipment] = [
-        Shipment(
-            trial_id=trial_id,
-            assay_priority=assay_priority,
-            assay_type=assay_type,
-            **_get_all_values(target=Shipment, old=manifest),
-        )
+        Shipment(trial_id=trial_id, **_get_all_values(target=Shipment, old=manifest))
     ]
 
     # sort samples by participants
@@ -584,6 +580,7 @@ def _calc_difference(
         "barcode",
         "biobank_id",
         "entry_number",
+        "json_data",
         "modified_time",
         "modified_timestamp",
         "qc_comments",
@@ -624,9 +621,9 @@ def _calc_difference(
     return Change(
         entity_type,
         trial_id=csms["trial_id"],
-        manifest_id=csms["manifest_id"]
-        if "manifest_id" in csms
-        else csms["shipment_manifest_id"],
+        manifest_id=cidc["manifest_id"]
+        if entity_type == "sample"
+        else csms["shipment_manifest_id" if entity_type == "upload" else "manifest_id"],
         cimac_id=csms["cimac_id"] if entity_type == "sample" else None,
         changes=changes,
     )
@@ -640,7 +637,7 @@ def _get_cidc_sample_map(trial_id, manifest_id, session) -> Dict[str, Dict[str, 
     cidc_partic_map = {p.cimac_participant_id: p for p in cidc_partic}
     cidc_samples = (
         session.query(Sample)
-        .filter(Sample.shipment_manifest_id == manifest_id, Sample.trial_id == trial_id)
+        .filter(Sample.manifest_id == manifest_id, Sample.trial_id == trial_id)
         .all()
     )
     ## make maps from cimac_id to a full dict
@@ -667,7 +664,6 @@ def _get_csms_sample_map(
             # participant-level critical field
             cohort_name=csms_sample["cohort_name"],
             # name changes
-            shipment_manifest_id=csms_sample["manifest_id"],
             trial_id=csms_sample["protocol_identifier"],
             participant_id=csms_sample["participant_id"],
             # not in CSMS
@@ -741,7 +737,7 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
         if cimac_id not in csms_sample_map:
             formatted = (
                 cidc_sample["trial_id"],
-                cidc_sample["shipment_manifest_id"],
+                cidc_sample["manifest_id"],
                 cidc_sample["cimac_id"],
             )
             raise Exception(
@@ -763,7 +759,7 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
             #     cidc_sample_map[cimac_id] = {}
 
             formatted = (
-                (db_sample.trial_id, db_sample.shipment_manifest_id, db_sample.cimac_id)
+                (db_sample.trial_id, db_sample.manifest_id, db_sample.cimac_id)
                 if db_sample is not None
                 else f"<no sample found>"
             )
@@ -771,11 +767,11 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
                 f"Change in critical field for: {formatted} to CSMS {(trial_id, manifest_id, cimac_id)}"
             )
 
-    csms_assay_priority, csms_assay_type = _extract_details_from_trial(
-        trial_id, manifest_id, csms_samples, session=session
-    )
-    csms_manifest["assay_priority"] = csms_assay_priority
-    csms_manifest["assay_type"] = csms_assay_type
+    csms_assay_priority, csms_assay_type = _extract_details_from_trial(csms_samples)
+    if csms_assay_priority:
+        csms_manifest["assay_priority"] = csms_assay_priority
+    if csms_assay_type:
+        csms_manifest["assay_type"] = csms_assay_type
 
     return trial_id, manifest_id, csms_sample_map, cidc_sample_map, cidc_shipment
 
@@ -904,6 +900,16 @@ def detect_manifest_changes(
         if the connections between any critical fields is changed
         namely trial_id, manifest_id, cimac_id
     """
+    # if it's an excluded manifest, we don't consider it for changes
+    if _get_and_check(
+        obj=csms_manifest,
+        key="excluded",
+        default=False,
+        msg=f"not called",
+        check=lambda _: True,
+    ):
+        return {}, []
+
     # ----- Initial validation, raises Exception if issues -----
     ret0, ret1 = OrderedDict(), []
     (
