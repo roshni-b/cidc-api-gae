@@ -9,6 +9,17 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.35` - 04 Nov 2021
+
+- `changed` version for schemas dependency, for tweak to mIF template
+
+## Version `0.25.34` - 03 Nov 2021
+
+- `add` unstructured JSONB json_data column for shipments, participants, samples
+- `add` copy of original JSON or CSMS data into json_data column
+- `deprecated` non-critical columns in relational manifests, adding to json_data
+- `add` correct exclusion of legacy CSMS manifests
+
 ## Version `0.25.33` - 29 Oct 2021
 
 - `fixed` fix mIF excluded samples tab

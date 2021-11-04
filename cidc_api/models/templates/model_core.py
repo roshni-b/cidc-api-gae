@@ -105,7 +105,10 @@ class MetadataModel(BaseModel):
         return tuple(unique_field_values)
 
     def merge(self, other):
-        """Merge column values from other into self, raising an error on conflicts between non-null fields."""
+        """
+        Merge column values from other into self, raising an error on conflicts between non-null fields.
+        Special handling for JSONB columns where dicts are combined, erroring if overlapping values conflict.
+        """
         if self.__class__ != other.__class__:
             raise Exception(
                 f"cannot merge {self.__class__} instance with {other.__class__} instance"
@@ -123,6 +126,23 @@ class MetadataModel(BaseModel):
             if hasattr(self, column.name):
                 current = getattr(self, column.name)
                 incoming = getattr(other, column.name)
+
+                # sqlalchemy unwraps JSONB to dict behind the scenes
+                if isinstance(current, dict) and isinstance(incoming, dict):
+                    # make a deepcopy to make sure it's a faithful copy
+                    from copy import deepcopy
+
+                    old = deepcopy(current)
+
+                    # update and reset the value
+                    current.update(incoming)
+                    setattr(self, column.name, current)
+
+                    # update incoming with the original, faithful copy from this instance
+                    # that way, current and incoming will disagree if any values overlap
+                    # do this after we update current to make sure that it's unaffected
+                    incoming.update(old)
+
                 if current is None:
                     setattr(self, column.name, incoming)
                 elif incoming is not None and current != incoming:
