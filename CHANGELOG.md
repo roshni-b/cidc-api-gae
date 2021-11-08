@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.37` - 08 Nov 2021
+
+- `fixed` raise error despite logging
+
 ## Version `0.25.36` - 08 Nov 2021
 
 - `added` logging around error in CSMS testing (`deprecated`)

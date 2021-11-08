@@ -469,6 +469,7 @@ def insert_manifest_from_json(
         if "trial_id" in dir():
             logger.info("Trial: " + str(trial_id))
         logger.info("Manifest: " + str(manifest))
+        raise e
 
     # sort samples by participants
     sample_map: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
