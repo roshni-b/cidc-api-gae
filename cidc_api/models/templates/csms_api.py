@@ -7,6 +7,7 @@ __all__ = [
 ]
 
 import os
+from re import L
 
 os.environ["TZ"] = "UTC"
 from collections import defaultdict, OrderedDict
@@ -42,6 +43,9 @@ from .trial_metadata import (
     Shipment,
 )
 from .utils import insert_record_batch
+from ...config.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class NewManifestError(Exception):
@@ -453,9 +457,18 @@ def insert_manifest_from_json(
 
     # need to insert Shipment and Participants before Samples
     ordered_records = OrderedDict()
-    ordered_records[Shipment] = [
-        Shipment(trial_id=trial_id, **_get_all_values(target=Shipment, old=manifest))
-    ]
+    try:
+        ordered_records[Shipment] = [
+            Shipment(
+                trial_id=trial_id, **_get_all_values(target=Shipment, old=manifest)
+            )
+        ]
+    except Exception as e:
+        logger.error(str(e))
+        logger.info("Trial? " + str("trial_id" in dir()))
+        if "trial_id" in dir():
+            logger.info("Trial: " + str(trial_id))
+        logger.info("Manifest: " + str(manifest))
 
     # sort samples by participants
     sample_map: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
