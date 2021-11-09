@@ -497,29 +497,38 @@ def test_add_new_manifest_from_json(cidc_api, clean_db, monkeypatch):
         assert len(errs) == 0
 
     client = cidc_api.test_client()
+    with cidc_api.app_context():
+        for manifest in manifests:
+            if manifest.get("status") not in (None, "qc_complete") or not manifest.get(
+                "excluded"
+            ):
+                continue
 
-    for manifest in manifests:
-        if manifest.get("status") not in [None, "qc_complete"]:
-            continue
+            res = client.post("/trial_metadata/new_manifest", json=manifest)
+            assert res.status_code == 200, res.json["error"]
 
-        res = client.post("/trial_metadata/new_manifest", json=manifest)
-        assert res.status_code == 200, res.json["error"]
-
-        with cidc_api.app_context():
             md_json = TrialMetadata.select_for_update_by_trial_id(
                 "test_trial"
             ).metadata_json
             validate_json_blob(md_json)
             validate_relational("test_trial")
 
-    # reusing one returns an error
-    manifest = [m for m in manifests if m.get("status") in [None, "qc_complete"]][0]
-    res = client.post("/trial_metadata/new_manifest", json=manifest)
-    assert res.status_code != 200
-    assert "already exists for trial" in res.json["error"]
+        # reusing one returns an error
+        manifest = [
+            m
+            for m in manifests
+            if m.get("status") in (None, "qc_complete") and not m.get("excluded")
+        ][0]
+        res = client.post("/trial_metadata/new_manifest", json=manifest)
+        assert res.status_code != 200
+        assert "already exists for trial" in res.json["error"]
 
-    # if not qc_complete, returns an error
-    manifest = [m for m in manifests if m.get("status") not in [None, "qc_complete"]][0]
-    res = client.post("/trial_metadata/new_manifest", json=manifest)
-    assert res.status_code != 200
-    assert "that is not qc_complete" in res.json["error"]
+        # if not qc_complete, returns an error
+        manifest = [
+            m
+            for m in manifests
+            if m.get("status") not in (None, "qc_complete") and not m.get("excluded")
+        ][0]
+        res = client.post("/trial_metadata/new_manifest", json=manifest)
+        assert res.status_code != 200
+        assert "that is not qc_complete" in res.json["error"]

@@ -116,8 +116,16 @@ def validate_relational(trial_id: str, *, session: Session):
 
     shipments = session.query(Shipment).filter(Shipment.trial_id == trial_id).all()
     for inst in shipments:
-        manifest = [m for m in manifests if m.get("manifest_id") == inst.manifest_id]
-        assert len(manifest) == 1, "Given manifest ID is not unique"
+        manifest = [
+            m
+            for m in manifests
+            if m.get("manifest_id") == inst.manifest_id
+            and m.get("status") in (None, "qc_complete")
+            and not m.get("excluded", True)
+        ]
+        assert (
+            len(manifest) == 1
+        ), f"Given manifest ID is not unique; for {inst.manifest_id} found {len(manifest)}"
         manifest = manifest[0]
 
         inst_samples = [
@@ -181,7 +189,7 @@ def validate_relational(trial_id: str, *, session: Session):
         inst_samples = [s for s in samples if s.get("cimac_id") == inst.cimac_id]
         assert (
             len(inst_samples) == 1
-        ), f"Sample not uniquely defined: {inst.primary_key_map()}"
+        ), f"Sample not uniquely defined: {inst.primary_key_map()}\n{inst_samples}"
         sample = inst_samples[0]
 
         if "standardized_collection_event_name" in sample:
@@ -194,7 +202,7 @@ def validate_relational(trial_id: str, *, session: Session):
 
         assert inst.cimac_participant_id == cimac_id_to_cimac_participant_id(
             sample["cimac_id"], None
-        )
+        ), f"{inst.cimac_id} {inst.cimac_participant_id} != {sample['cimac_id']} {cimac_id_to_cimac_participant_id(sample['cimac_id'], None)}"
 
         for k, v in sample.items():
             if k in ["collection_event_name", "standardized_collection_event_name"]:
@@ -239,9 +247,18 @@ def validate_json_blob(trial_md: dict):
 
     for shipment in trial_md["shipments"]:
         manifest = [
-            m for m in manifests if m.get("manifest_id") == shipment["manifest_id"]
+            m
+            for m in manifests
+            if (
+                m.get("manifest_id") == shipment["manifest_id"]
+                and m.get("status") in (None, "qc_complete")
+                and not m.get("excluded")
+            )
         ]
-        assert len(manifest) == 1, "Given manifest ID is not unique"
+
+        assert (
+            len(manifest) == 1
+        ), f"Given manifest ID is not unique, found {len(manifest)}"
         manifest = manifest[0]
 
         inst_samples = [
@@ -284,7 +301,7 @@ def validate_json_blob(trial_md: dict):
             ]
             assert (
                 len(this_sample) == 1
-            ), f"Sample not uniquely defined: {sample['cimac_id']}"
+            ), f"Sample not uniquely defined: {sample['cimac_id']}, found {len(this_sample)}"
             _, this_sample = next(
                 _convert_samples(
                     trial_md["protocol_identifier"], "manifest_id", this_sample, []
