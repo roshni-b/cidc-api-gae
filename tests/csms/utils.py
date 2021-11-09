@@ -245,6 +245,7 @@ def validate_json_blob(trial_md: dict):
     """
     global manifests, samples
 
+    assert len(trial_md.get("shipments", [])) != 0
     for shipment in trial_md["shipments"]:
         manifest = [
             m
