@@ -496,10 +496,9 @@ def test_add_new_manifest_from_json(cidc_api, clean_db, monkeypatch):
         errs = insert_record_batch(ordered_records)
         assert len(errs) == 0
 
-    client = cidc_api.test_client()
-    with cidc_api.app_context():
+        client = cidc_api.test_client()
         for manifest in manifests:
-            if manifest.get("status") not in (None, "qc_complete") or not manifest.get(
+            if manifest.get("status") not in (None, "qc_complete") or manifest.get(
                 "excluded"
             ):
                 continue

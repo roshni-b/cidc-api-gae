@@ -437,8 +437,6 @@ def insert_manifest_from_json(
     # validate that trial exists in the JSON json or error otherwise
     _ = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
 
-    print(manifest_id, trial_id)
-    print([(m.trial_id, m.manifest_id) for m in session.query(Shipment).all()])
     if (
         session.query(Shipment)
         .filter(Shipment.manifest_id == manifest_id, Shipment.trial_id == trial_id)
