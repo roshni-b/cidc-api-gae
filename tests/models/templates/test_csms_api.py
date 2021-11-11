@@ -82,8 +82,7 @@ def manifest_change_setup(cidc_api, monkeypatch):
 def test_detect_changes_when_excluded(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         manifest_change_setup(cidc_api, monkeypatch)
-        manifest = manifests[-2]
-        assert manifest.get("excluded")
+        manifest = [m for m in manifests if m.get("excluded")][0]
 
         assert detect_manifest_changes(manifest, uploader_email="test@email.com") == (
             {},
