@@ -483,6 +483,7 @@ def insert_manifest_from_json(
         trial_id, manifest_id, samples, existing_cimac_ids
     ):
         sample_map[cimac_id_to_cimac_participant_id(cimac_id, None)].append(sample)
+    del cimac_id, sample
 
     # each participant has a list of samples
     ordered_records[Participant] = []
@@ -520,7 +521,7 @@ def insert_manifest_from_json(
                 is None
             ):
                 raise Exception(
-                    f"No Collection event with trial_id, event_name = {trial_id}, {event_name}; needed for sample {cimac_id} on manifest {manifest_id}"
+                    f"No Collection event with trial_id, event_name = {trial_id}, {event_name}; needed for sample {sample['cimac_id']} on manifest {manifest_id}"
                 )
 
             new_sample = Sample(
