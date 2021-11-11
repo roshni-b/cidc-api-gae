@@ -349,7 +349,9 @@ def insert_manifest_into_blob(
     patch = {
         "protocol_identifier": trial_id,
         "shipments": [
-            _get_all_values(target=Shipment, old=manifest, drop=["json_data"])
+            _get_all_values(
+                target=Shipment, old=manifest, drop=["excluded", "json_data"]
+            )
         ],
         "participants": [],
     }
@@ -369,12 +371,12 @@ def insert_manifest_into_blob(
             **_get_all_values(
                 target=Participant,
                 old=partic_samples[0],
-                drop=["json_data", "trial_participant_id"],
+                drop=["excluded", "json_data", "trial_participant_id"],
             ),
         )
         partic["samples"] = [
             _get_all_values(
-                target=Sample, old=sample, drop=["json_data", "manifest_id"]
+                target=Sample, old=sample, drop=["excluded", "json_data", "manifest_id"]
             )
             for sample in partic_samples
         ]
@@ -460,7 +462,8 @@ def insert_manifest_from_json(
     try:
         ordered_records[Shipment] = [
             Shipment(
-                trial_id=trial_id, **_get_all_values(target=Shipment, old=manifest)
+                trial_id=trial_id,
+                **_get_all_values(target=Shipment, old=manifest, drop=["excluded"]),
             )
         ]
     except Exception as e:
@@ -468,7 +471,11 @@ def insert_manifest_from_json(
         logger.info("Trial? " + str("trial_id" in dir()))
         if "trial_id" in dir():
             logger.info("Trial: " + str(trial_id))
-        logger.info("Manifest: " + str(manifest))
+        logger.info(
+            "New CIDC manifest: "
+            + str(_get_all_values(target=Shipment, old=manifest, drop=["excluded"]))
+        )
+        raise e
 
     # sort samples by participants
     sample_map: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
@@ -476,6 +483,7 @@ def insert_manifest_from_json(
         trial_id, manifest_id, samples, existing_cimac_ids
     ):
         sample_map[cimac_id_to_cimac_participant_id(cimac_id, None)].append(sample)
+    del cimac_id, sample
 
     # each participant has a list of samples
     ordered_records[Participant] = []
@@ -493,16 +501,11 @@ def insert_manifest_from_json(
             new_partic = Participant(
                 trial_id=trial_id,
                 cimac_participant_id=cimac_participant_id,
-                **_get_all_values(target=Participant, old=partic_samples[0]),
+                **_get_all_values(
+                    target=Participant, old=partic_samples[0], drop="excluded"
+                ),
             )
             ordered_records[Participant].append(new_partic)
-        elif partic is None:
-            # we're good to add it!
-            partic = [
-                partic
-                for partic in ordered_records[Participant]
-                if partic.cimac_participant_id == cimac_participant_id
-            ][0]
 
         for sample in partic_samples:
             # explicitly make sure the CollectionEvent exists
@@ -518,13 +521,15 @@ def insert_manifest_from_json(
                 is None
             ):
                 raise Exception(
-                    f"No Collection event with trial_id, event_name = {trial_id}, {event_name}; needed for sample {cimac_id} on manifest {manifest_id}"
+                    f"No Collection event with trial_id, event_name = {trial_id}, {event_name}; needed for sample {sample['cimac_id']} on manifest {manifest_id}"
                 )
 
             new_sample = Sample(
                 trial_id=trial_id,
-                cimac_participant_id=cimac_id_to_cimac_participant_id(cimac_id, {}),
-                **_get_all_values(target=Sample, old=sample),
+                cimac_participant_id=cimac_id_to_cimac_participant_id(
+                    sample["cimac_id"], {}
+                ),
+                **_get_all_values(target=Sample, old=sample, drop=["excluded"]),
             )
             ordered_records[Sample].append(new_sample)
 
@@ -593,14 +598,19 @@ def _calc_difference(
         "barcode",
         "biobank_id",
         "entry_number",
+        "event",
+        "excluded",
         "json_data",
         "modified_time",
         "modified_timestamp",
         "qc_comments",
+        "reason",
         "sample_approved",
         "sample_manifest_type",
         "samples",
         "status",
+        "status_log",
+        "study_encoding",
         "submitter",
     ],
 ) -> Dict[str, Tuple[Any, Any]]:
@@ -627,7 +637,12 @@ def _calc_difference(
 
     # take difference by using symmetric set difference on the items
     # use set to not get same key multiple times if values differ
-    diff_keys = {k for k, _ in set(cidc1.items()) ^ set(csms1.items())}
+    diff_keys = {
+        k
+        for k in set(cidc1.keys()).union(set(csms1.keys()))
+        # guaranteed to be in one or the other, so never None == None
+        if cidc1.get(k) != csms1.get(k)
+    }
     # then get both values once per key to return
     changes = {k: (cidc.get(k), csms.get(k)) for k in diff_keys}
 
@@ -800,7 +815,12 @@ def _handle_shipment_differences(
     )
     if change:
         # since insert_record_batch is a merge, we can just generate a new object
-        return Shipment(**_get_all_values(target=Shipment, old=csms_manifest)), change
+        return (
+            Shipment(
+                **_get_all_values(target=Shipment, old=csms_manifest, drop=["excluded"])
+            ),
+            change,
+        )
     else:
         return None, None
 
@@ -837,7 +857,9 @@ def _handle_sample_differences(
                 # since insert_record_batch is a merge, we can just generate a new object
                 new_partic = Participant(
                     trial_participant_id=csms_sample["participant_id"],
-                    **_get_all_values(target=Participant, old=csms_sample),
+                    **_get_all_values(
+                        target=Participant, old=csms_sample, drop=["excluded"]
+                    ),
                 )
                 ret0[Participant].append(new_partic)
 
@@ -847,7 +869,9 @@ def _handle_sample_differences(
                 for k in change.changes
             ):
                 # since insert_record_batch is a merge, we can just generate a new object
-                new_sample = Sample(**_get_all_values(target=Sample, old=csms_sample))
+                new_sample = Sample(
+                    **_get_all_values(target=Sample, old=csms_sample, drop=["excluded"])
+                )
                 ret0[Sample].append(new_sample)
 
     # drop unneeded keys
