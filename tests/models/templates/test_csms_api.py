@@ -148,11 +148,6 @@ def test_change_manifest_id_error(cidc_api, clean_db, monkeypatch):
                 ]
                 detect_manifest_changes(new_manifest, uploader_email="test@email.com")
 
-            # make sure that you can then insert this manifest afterwards
-            if n == 0:
-                insert_manifest_from_json(new_manifest, uploader_email="test@email.com")
-                insert_manifest_into_blob(new_manifest, uploader_email="test@email.com")
-
 
 def test_change_cimac_id_error(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
@@ -557,7 +552,11 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
             changes={"metadata_json": metadata_json}
         )
 
-        insert_manifest_into_blob(manifest, uploader_email="test@email.com")
+        target = deepcopy(manifest)
+        with pytest.raises(NewManifestError):
+            detect_manifest_changes(target, uploader_email="test@email.com")
+
+        insert_manifest_into_blob(target, uploader_email="test@email.com")
 
         md_json = TrialMetadata.select_for_update_by_trial_id(
             "test_trial"
@@ -584,7 +583,11 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
 def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
     """test that insertion of manifest from json works as expected"""
     # grab a completed manifest
-    manifest = [m for m in manifests if m.get("status") in [None, "qc_complete"]][0]
+    manifest = [
+        m
+        for m in manifests
+        if m.get("status") in [None, "qc_complete"] and not m.get("excluded")
+    ][0]
 
     with cidc_api.app_context():
         setup_user(cidc_api, monkeypatch)
@@ -645,7 +648,11 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         )
         assert len(errs) == 0
 
-        insert_manifest_from_json(deepcopy(manifest), uploader_email="test@email.com")
+        target = deepcopy(manifest)
+        with pytest.raises(NewManifestError):
+            detect_manifest_changes(target, uploader_email="test@email.com")
+
+        insert_manifest_from_json(target, uploader_email="test@email.com")
         validate_relational("test_trial")
 
         for other_manifest in [
