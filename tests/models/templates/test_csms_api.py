@@ -131,7 +131,7 @@ def test_change_protocol_identifier_error(cidc_api, clean_db, monkeypatch):
 def test_change_manifest_id_error(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         manifest_change_setup(cidc_api, monkeypatch)
-        for manifest in manifests:
+        for n, manifest in enumerate(manifests):
             if manifest.get("status") not in (None, "qc_complete") or manifest.get(
                 "excluded"
             ):
@@ -147,6 +147,11 @@ def test_change_manifest_id_error(cidc_api, clean_db, monkeypatch):
                     for sample in new_manifest["samples"]
                 ]
                 detect_manifest_changes(new_manifest, uploader_email="test@email.com")
+
+            # make sure that you can then insert this manifest afterwards
+            if n == 0:
+                insert_manifest_from_json(new_manifest)
+                insert_manifest_into_blob(new_manifest)
 
 
 def test_change_cimac_id_error(cidc_api, clean_db, monkeypatch):
