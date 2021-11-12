@@ -150,8 +150,8 @@ def test_change_manifest_id_error(cidc_api, clean_db, monkeypatch):
 
             # make sure that you can then insert this manifest afterwards
             if n == 0:
-                insert_manifest_from_json(new_manifest)
-                insert_manifest_into_blob(new_manifest)
+                insert_manifest_from_json(new_manifest, uploader_email="test@email.com")
+                insert_manifest_into_blob(new_manifest, uploader_email="test@email.com")
 
 
 def test_change_cimac_id_error(cidc_api, clean_db, monkeypatch):
