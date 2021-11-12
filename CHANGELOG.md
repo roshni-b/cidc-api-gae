@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.40` - 12 Nov 2021
+
+- `fixed` bug in iterating offset in csms.auth.get_wget_with_paging
+
 ## Version `0.25.39` - 12 Nov 2021
 
 - `fixed` CSMS bug from chaining `detect_manifest_changes` and `insert_manifest_...`
