@@ -371,7 +371,13 @@ def insert_manifest_into_blob(
             **_get_all_values(
                 target=Participant,
                 old=partic_samples[0],
-                drop=["excluded", "json_data", "trial_participant_id"],
+                drop=[
+                    "cimac_participant_id",
+                    "excluded",
+                    "json_data",
+                    "participant_id",
+                    "trial_participant_id",
+                ],
             ),
         )
         partic["samples"] = [
@@ -463,7 +469,9 @@ def insert_manifest_from_json(
         ordered_records[Shipment] = [
             Shipment(
                 trial_id=trial_id,
-                **_get_all_values(target=Shipment, old=manifest, drop=["excluded"]),
+                **_get_all_values(
+                    target=Shipment, old=manifest, drop=["excluded", "trial_id"]
+                ),
             )
         ]
     except Exception as e:
@@ -502,7 +510,9 @@ def insert_manifest_from_json(
                 trial_id=trial_id,
                 cimac_participant_id=cimac_participant_id,
                 **_get_all_values(
-                    target=Participant, old=partic_samples[0], drop="excluded"
+                    target=Participant,
+                    old=partic_samples[0],
+                    drop=["cimac_participant_id", "excluded", "trial_id"],
                 ),
             )
             ordered_records[Participant].append(new_partic)
@@ -529,7 +539,11 @@ def insert_manifest_from_json(
                 cimac_participant_id=cimac_id_to_cimac_participant_id(
                     sample["cimac_id"], {}
                 ),
-                **_get_all_values(target=Sample, old=sample, drop=["excluded"]),
+                **_get_all_values(
+                    target=Sample,
+                    old=sample,
+                    drop=["cimac_participant_id", "excluded", "trial_id"],
+                ),
             )
             ordered_records[Sample].append(new_sample)
 
@@ -603,6 +617,7 @@ def _calc_difference(
         "json_data",
         "modified_time",
         "modified_timestamp",
+        "protocol_identifier",
         "qc_comments",
         "reason",
         "sample_approved",
@@ -612,6 +627,7 @@ def _calc_difference(
         "status_log",
         "study_encoding",
         "submitter",
+        "trial_id",
     ],
 ) -> Dict[str, Tuple[Any, Any]]:
     """
@@ -629,11 +645,7 @@ def _calc_difference(
         for k, v in cidc.items()
         if k not in ignore
     }
-    csms1 = {
-        "trial_id" if k == "protocol_identifier" else k: v
-        for k, v in csms.items()
-        if k not in ignore
-    }
+    csms1 = {k: v for k, v in csms.items() if k not in ignore}
 
     # take difference by using symmetric set difference on the items
     # use set to not get same key multiple times if values differ
@@ -648,7 +660,7 @@ def _calc_difference(
 
     return Change(
         entity_type,
-        trial_id=csms["trial_id"],
+        trial_id=cidc["trial_id"],
         manifest_id=cidc["manifest_id"]
         if entity_type == "sample"
         else csms["shipment_manifest_id" if entity_type == "upload" else "manifest_id"],
@@ -698,7 +710,17 @@ def _get_csms_sample_map(
             cimac_participant_id=cimac_id_to_cimac_participant_id(csms_cimac_id, {}),
             sample_manifest_type=csms_sample.get("sample_manifest_type"),
             # the rest of the values
-            **_get_all_values(target=Sample, old=csms_sample),
+            **_get_all_values(
+                target=Sample,
+                old=csms_sample,
+                drop=[
+                    "cimac_participant_id",
+                    "cohort_name",
+                    "participant_id",
+                    "sample_manifest_type",
+                    "trial_id",
+                ],
+            ),
         )
         for csms_cimac_id, csms_sample in _convert_samples(
             trial_id, manifest_id, csms_samples
@@ -741,7 +763,6 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
     """
     trial_id, manifest_id, csms_samples = _extract_info_from_manifest(csms_manifest)
     # ----- Get all our information together -----
-    csms_manifest["trial_id"] = trial_id
     # validate that trial exists in the JSON json or error otherwise
     _ = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
 
@@ -858,7 +879,9 @@ def _handle_sample_differences(
                 new_partic = Participant(
                     trial_participant_id=csms_sample["participant_id"],
                     **_get_all_values(
-                        target=Participant, old=csms_sample, drop=["excluded"]
+                        target=Participant,
+                        old=csms_sample,
+                        drop=["excluded", "trial_participant_id"],
                     ),
                 )
                 ret0[Participant].append(new_partic)

@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.39` - 12 Nov 2021
+
+- `fixed` CSMS bug from chaining `detect_manifest_changes` and `insert_manifest_...`
+
 ## Version `0.25.38` - 11 Nov 2021
 
 - `added` excluded property to CSMS test data and tests
