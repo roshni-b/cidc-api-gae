@@ -35,6 +35,7 @@ num_participants = 3
 
 def setup_data(cidc_api, clean_db):
     user = Users(email="test@email.com", approval_date=datetime.now())
+
     shipment = {
         "courier": "FEDEX",
         "ship_to": "",
@@ -50,21 +51,12 @@ def setup_data(cidc_api, clean_db):
         "shipping_condition": "Frozen_Dry_Ice",
         "quality_of_shipment": "Specimen shipment received in good condition",
     }
-    shipment2 = {
-        "courier": "FEDEX",
-        "manifest_id": "test_trial-H&E",
-        "account_number": "X",
-        "receiving_party": "MSSM_Rahman",
-        "shipping_condition": "Ambient",
-        "quality_of_shipment": "Specimen shipment received in good condition",
-    }
-    metadata = {
+    patch1 = {
         "protocol_identifier": trial_id,
         "shipments": [
             # we get duplicate shipment uploads sometimes
             shipment,
             shipment,
-            shipment2,
         ],
         "participants": [
             {
@@ -88,20 +80,44 @@ def setup_data(cidc_api, clean_db):
         "allowed_cohort_names": [""],
         "allowed_collection_event_names": [""],
     }
-    trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata)
     upload_job = UploadJobs(
         uploader_email=user.email,
-        trial_id=trial.trial_id,
+        trial_id=trial_id,
         upload_type="pbmc",
         gcs_xlsx_uri="",
-        metadata_patch=metadata,
+        metadata_patch=patch1,
         multifile=False,
     )
     upload_job._set_status_no_validation(UploadJobStatus.MERGE_COMPLETED.value)
+
+    shipment2 = {
+        "courier": "FEDEX",
+        "manifest_id": "test_trial-H&E",
+        "shipments": [shipment2,],
+        "participants": [
+                "participant_id": "x",
+                "cohort_name": "",
+                "samples": [
+                        "type_of_sample": "Other",
+                        "collection_event_name": "",
+            }
+            for p in range(num_participants)
+        upload_type="pbmc",
+        gcs_xlsx_uri="",
+        metadata_patch=patch2,
+    )
+    upload_job2._set_status_no_validation(UploadJobStatus.MERGE_COMPLETED.value)
+        "protocol_identifier": trial_id,
+        "shipments": patch1["shipments"] + patch2["shipments"],
+        "allowed_collection_event_names": [""],
+    }
+    trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata)
+
     with cidc_api.app_context():
         user.insert()
         trial.insert()
         upload_job.insert()
+        upload_job2.insert()
 
         clean_db.refresh(user)
         clean_db.refresh(upload_job)
@@ -110,6 +126,7 @@ def setup_data(cidc_api, clean_db):
     return user, upload_job, trial
 
 
+@pytest.mark.skip()
 def test_shipments_dashboard(cidc_api, clean_db, monkeypatch, dash_duo: DashComposite):
     """
     Check that the shipments dashboard behaves as expected.
