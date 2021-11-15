@@ -210,8 +210,9 @@ def test_get_trial_shipments(cidc_api, clean_db):
 
     with cidc_api.app_context():
         shipments = get_trial_shipments(trial_id)
-        assert len(shipments) == 1
-        shipment = shipments[0]
-        assert shipment["cidc_received"] == upload_job._created
-        assert shipment["participant_count"] == num_participants
-        assert shipment["sample_count"] == sum(num_samples)
+        assert len(shipments) == 2
+
+        for shipment in shipments:
+            assert shipment["cidc_received"] == upload_job._created
+            assert shipment["participant_count"] == num_participants
+            assert shipment["sample_count"] == sum(num_samples)
