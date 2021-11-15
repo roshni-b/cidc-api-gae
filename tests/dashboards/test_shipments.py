@@ -50,12 +50,21 @@ def setup_data(cidc_api, clean_db):
         "shipping_condition": "Frozen_Dry_Ice",
         "quality_of_shipment": "Specimen shipment received in good condition",
     }
+    shipment2 = {
+        "courier": "FEDEX",
+        "manifest_id": "test_trial-H&E",
+        "account_number": "X",
+        "receiving_party": "MSSM_Rahman",
+        "shipping_condition": "Ambient",
+        "quality_of_shipment": "Specimen shipment received in good condition",
+    }
     metadata = {
         "protocol_identifier": trial_id,
         "shipments": [
             # we get duplicate shipment uploads sometimes
             shipment,
             shipment,
+            shipment2,
         ],
         "participants": [
             {
