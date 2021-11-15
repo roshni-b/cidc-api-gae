@@ -93,22 +93,51 @@ def setup_data(cidc_api, clean_db):
     shipment2 = {
         "courier": "FEDEX",
         "manifest_id": "test_trial-H&E",
+        "account_number": "X",
+        "receiving_party": "MSSM_Rahman",
+        "shipping_condition": "Ambient",
+        "quality_of_shipment": "Specimen shipment received in good condition",
+    }
+    patch2 = {
+        "protocol_identifier": trial_id,
         "shipments": [shipment2,],
         "participants": [
+            {
+                "cimac_participant_id": f"CTTTP2{p}",
                 "participant_id": "x",
                 "cohort_name": "",
                 "samples": [
+                    {
+                        "cimac_id": f"CTTTPP{p}S2.0{s}",
+                        "sample_location": "",
+                        "type_of_primary_container": "Other",
                         "type_of_sample": "Other",
                         "collection_event_name": "",
+                        "parent_sample_id": "",
+                    }
+                    for s in range(num_samples[p])
+                ],
             }
             for p in range(num_participants)
+        ],
+        "allowed_cohort_names": [""],
+        "allowed_collection_event_names": [""],
+    }
+    upload_job2 = UploadJobs(
+        uploader_email=user.email,
+        trial_id=trial_id,
         upload_type="pbmc",
         gcs_xlsx_uri="",
         metadata_patch=patch2,
+        multifile=False,
     )
     upload_job2._set_status_no_validation(UploadJobStatus.MERGE_COMPLETED.value)
+
+    metadata = {
         "protocol_identifier": trial_id,
         "shipments": patch1["shipments"] + patch2["shipments"],
+        "participants": patch1["participants"] + patch2["participants"],
+        "allowed_cohort_names": [""],
         "allowed_collection_event_names": [""],
     }
     trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata)
@@ -126,7 +155,6 @@ def setup_data(cidc_api, clean_db):
     return user, upload_job, trial
 
 
-@pytest.mark.skip()
 def test_shipments_dashboard(cidc_api, clean_db, monkeypatch, dash_duo: DashComposite):
     """
     Check that the shipments dashboard behaves as expected.
