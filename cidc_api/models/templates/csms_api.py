@@ -389,6 +389,7 @@ def insert_manifest_into_blob(
 
         patch["participants"].append(partic)
 
+    logger.info(f"Patch for {trial_id} manifest {manifest_id}:\n{patch}")
     # merge and validate the data
     # the existence of the correct cohort and collection_event names are checked here
     merged, errs = merge_clinical_trial_metadata(patch, trial_md.metadata_json)
