@@ -9,7 +9,11 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.41` - 12 Nov 2021
+## Version `0.25.42` - 15 Nov 2021
+
+- `fixed` correctly pass session in more places
+
+## Version `0.25.41` - 15 Nov 2021
 
 - `added` logging to see if `insert_manifest_into_blob` is called as expected
 

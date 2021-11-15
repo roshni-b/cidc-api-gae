@@ -161,7 +161,7 @@ class CommonColumns(BaseModel):  # type: ignore
         `changes` should be a dictionary mapping column names to updated values.
         """
         # Ensure the record exists in the database
-        if not self.find_by_id(self.id):
+        if not self.find_by_id(self.id, session=session):
             raise NoResultFound()
 
         # Update this record's fields if changes were provided
@@ -522,7 +522,7 @@ class Permissions(CommonColumns):
         if self.upload_type == self.EVERY and self.trial_id == self.EVERY:
             raise ValueError("A permission must have a trial id or upload type.")
 
-        grantee = Users.find_by_id(self.granted_to_user)
+        grantee = Users.find_by_id(self.granted_to_user, session=session)
         if grantee is None:
             raise IntegrityError(
                 params=None,
@@ -532,7 +532,7 @@ class Permissions(CommonColumns):
 
         grantor = None
         if self.granted_by_user is not None:
-            grantor = Users.find_by_id(self.granted_by_user)
+            grantor = Users.find_by_id(self.granted_by_user, session=session)
         else:
             raise IntegrityError(
                 params=None,
@@ -552,7 +552,7 @@ class Permissions(CommonColumns):
         # (with the exception of Network Viewers, who can't download data from GCS and aren't
         # subject to this constraint.)
         if not is_network_viewer and (
-            len(Permissions.find_for_user(self.granted_to_user))
+            len(Permissions.find_for_user(self.granted_to_user, session=session))
             >= GOOGLE_MAX_DOWNLOAD_CONDITIONS
         ):
             raise IntegrityError(
@@ -626,12 +626,12 @@ class Permissions(CommonColumns):
 
         NOTE: values provided to the `commit` argument will be ignored. This method always commits.
         """
-        grantee = Users.find_by_id(self.granted_to_user)
+        grantee = Users.find_by_id(self.granted_to_user, session=session)
         if grantee is None:
             raise NoResultFound(f"no user with id {self.granted_to_user}")
 
         if not isinstance(deleted_by, Users):
-            deleted_by_user = Users.find_by_id(deleted_by)
+            deleted_by_user = Users.find_by_id(deleted_by, session=session)
         else:
             deleted_by_user = deleted_by
         if deleted_by_user is None:
@@ -741,7 +741,7 @@ class Permissions(CommonColumns):
     def _change_all_iam_permissions(grant: bool, session: Session):
         perms = Permissions.list(page_size=Permissions.count(), session=session)
         for perm in perms:
-            user = Users.find_by_id(perm.granted_to_user)
+            user = Users.find_by_id(perm.granted_to_user, session=session)
             if user.is_admin() or user.is_nci_user() or user.disabled:
                 continue
 
