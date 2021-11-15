@@ -150,9 +150,10 @@ def setup_data(cidc_api, clean_db):
 
         clean_db.refresh(user)
         clean_db.refresh(upload_job)
+        clean_db.refresh(upload_job2)
         clean_db.refresh(trial)
 
-    return user, upload_job, trial
+    return user, (upload_job, upload_job2), trial
 
 
 def test_shipments_dashboard(cidc_api, clean_db, monkeypatch, dash_duo: DashComposite):
@@ -206,13 +207,13 @@ def test_get_manifest_samples(cidc_api, clean_db):
 
 def test_get_trial_shipments(cidc_api, clean_db):
     """Test the helper function used for getting a list of shipments for a given trial."""
-    _, upload_job, _ = setup_data(cidc_api, clean_db)
+    _, upload_jobs, _ = setup_data(cidc_api, clean_db)
 
     with cidc_api.app_context():
         shipments = get_trial_shipments(trial_id)
         assert len(shipments) == 2
 
         for shipment in shipments:
-            assert shipment["cidc_received"] == upload_job._created
+            assert shipment["cidc_received"] in [u._created for u in upload_jobs]
             assert shipment["participant_count"] == num_participants
             assert shipment["sample_count"] == sum(num_samples)
