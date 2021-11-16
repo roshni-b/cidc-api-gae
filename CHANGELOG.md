@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## this
+
+- `added` handling in shipments dashboard for no shipment assay_type
+
 ## Version `0.25.42` - 15 Nov 2021
 
 - `fixed` correctly pass session in more places
