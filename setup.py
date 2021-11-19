@@ -20,6 +20,6 @@ setup(
         "cidc_api.models.templates",
     ],
     url="https://github.com/CIMAC-CIDC/cidc_api-gae",
-    version="0.25.42",
+    version="0.25.43",
     zip_safe=False,
 )

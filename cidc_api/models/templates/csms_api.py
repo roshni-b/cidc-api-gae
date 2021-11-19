@@ -7,7 +7,6 @@ __all__ = [
 ]
 
 import os
-from re import L
 
 os.environ["TZ"] = "UTC"
 from collections import defaultdict, OrderedDict
@@ -242,6 +241,7 @@ def _convert_samples(
             "plasma": "Plasma",
             "normal_tissue_dna": "Tissue Scroll",
             "h_and_e": "H&E-Stained Fixed Tissue Slide Specimen",
+            "pbmc": "PBMC",
         }
         if sample["processed_sample_type"] in processed_sample_type_map:
             sample["processed_sample_type"] = processed_sample_type_map[
