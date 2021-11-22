@@ -9,7 +9,11 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.43` - this
+## Version `0.25.44` - 22 Nov 2021
+
+- `added` dry_run option for both CSMS insert functions
+
+## Version `0.25.43` - 22 Nov 2021
 
 - `added` conversion for CSMS value 'pbmc' for processed sample type
 - `added` handling in shipments dashboard for no shipment assay_type
