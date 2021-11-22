@@ -296,10 +296,15 @@ def _convert_samples(
 
 @with_default_session
 def insert_manifest_into_blob(
-    manifest: Dict[str, Any], uploader_email: str, *, session: Session
+    manifest: Dict[str, Any],
+    uploader_email: str,
+    *,
+    dry_run: bool = False,
+    session: Session,
 ) -> None:
     """
     Given a CSMS-style manifest, add it into the JSON metadata blob
+    If `dry_run`, calls `session.rollback` instead of `session.commit`
     
     Exceptions Raised
     -----------------
@@ -397,7 +402,7 @@ def insert_manifest_into_blob(
         raise Exception({"prism errors": [str(e) for e in errs]})
 
     # save it
-    trial_md.update(changes={"metadata_json": merged}, session=session)
+    trial_md.update(changes={"metadata_json": merged}, commit=False, session=session)
 
     # create pseudo-UploadJobs
     UploadJobs(
@@ -407,15 +412,26 @@ def insert_manifest_into_blob(
         metadata_patch=patch,
         upload_type=_get_upload_type(samples),
         uploader_email=uploader_email,
-    ).insert(session=session)
+    ).insert(commit=False, session=session)
+
+    if dry_run:
+        session.flush()
+        session.rollback()
+    else:
+        session.commit()
 
 
 @with_default_session
 def insert_manifest_from_json(
-    manifest: Dict[str, Any], uploader_email: str, *, session: Session
+    manifest: Dict[str, Any],
+    uploader_email: str,
+    *,
+    dry_run: bool = False,
+    session: Session,
 ) -> None:
     """
     Given a CSMS-style manifest, validate and add it into the relational tables.
+    If `dry_run`, calls `session.rollback` instead of `session.commit`
     
     Exceptions Raised
     -----------------
@@ -563,7 +579,7 @@ def insert_manifest_from_json(
 
     # add and validate the data
     # the existence of the correct cohort names are checked here
-    errs = insert_record_batch(ordered_records, session=session)
+    errs = insert_record_batch(ordered_records, dry_run=dry_run, session=session)
     if len(errs):
         raise Exception("Multiple errors: [" + "\n".join(str(e) for e in errs) + "]")
 
