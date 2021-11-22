@@ -9,8 +9,9 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## this
+## Version `0.25.43` - this
 
+- `added` conversion for CSMS value 'pbmc' for processed sample type
 - `added` handling in shipments dashboard for no shipment assay_type
 
 ## Version `0.25.42` - 15 Nov 2021
