@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.45` - 23 Nov 2021
+
+- `changed` schemas dependency for WES paired analysis comments field
+
 ## Version `0.25.44` - 22 Nov 2021
 
 - `added` dry_run option for both CSMS insert functions
