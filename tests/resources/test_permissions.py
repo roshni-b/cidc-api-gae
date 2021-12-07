@@ -13,7 +13,6 @@ from cidc_api.models import (
     TrialMetadata,
     CIDCRole,
 )
-from cidc_api.config.settings import GOOGLE_MAX_DOWNLOAD_PERMISSIONS
 
 from ..utils import mock_current_user, make_admin, mock_gcloud_client
 
@@ -140,9 +139,7 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     res = client.post("permissions")
     assert res.status_code == 401
     assert "not authorized to access this endpoint" in res.json["_error"]["message"]
-    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
-    gcloud_client.revoke_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
     make_admin(current_user_id, cidc_api)
@@ -176,9 +173,7 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     assert {**res.json, **perm} == res.json
     with cidc_api.app_context():
         assert Permissions.find_by_id(res.json["id"])
-    gcloud_client.grant_lister_access.assert_called_once()
     gcloud_client.grant_download_access.assert_called_once()
-    gcloud_client.revoke_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
     # Re-insertion is not allowed
@@ -186,9 +181,7 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     res = client.post("permissions", json=perm)
     assert res.status_code == 400
     assert "unique constraint" in res.json["_error"]["message"]
-    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
-    gcloud_client.revoke_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
     # The permission grantee must exist
@@ -197,37 +190,12 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
     res = client.post("permissions", json=perm)
     assert res.status_code == 400
     assert "user must exist, but no user found" in res.json["_error"]["message"]
-    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
-    gcloud_client.revoke_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
     with cidc_api.app_context():
         clean_db.query(Permissions).delete()
         clean_db.commit()
-
-    # # ----- This subtest has become unwieldy as GOOGLE_MAX_DOWNLOAD_PERMISSIONS is so large -----
-    # # The permission grantee must have <= GOOGLE_MAX_DOWNLOAD_PERMISSIONS
-    # perm["granted_to_user"] = current_user_id
-    # inserts_fail_eventually = False
-    # upload_types = list(ALL_UPLOAD_TYPES)
-    # for i in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS + 1):
-    #     gcloud_client.reset_mocks()
-    #     perm["upload_type"] = upload_types[i % len(upload_types)]
-    #     res = client.post("permissions", json=perm)
-    #     if res.status_code != 201:
-    #         assert res.status_code == 400
-    #         assert (
-    #             "greater than or equal to the maximum number of allowed granular permissions"
-    #             in res.json["_error"]["message"]
-    #         )
-    #         gcloud_client.grant_lister_access.assert_not_called()
-    #         gcloud_client.grant_download_access.assert_not_called()
-    #         gcloud_client.revoke_lister_access.assert_not_called()
-    #         gcloud_client.revoke_download_access.assert_not_called()
-    #         inserts_fail_eventually = True
-    #         break
-    # assert inserts_fail_eventually
 
 
 def test_delete_permission(cidc_api, clean_db, monkeypatch):
@@ -245,9 +213,7 @@ def test_delete_permission(cidc_api, clean_db, monkeypatch):
     res = client.delete(f"permissions/{perm.id}")
     assert res.status_code == 401
     assert "not authorized to access this endpoint" in res.json["_error"]["message"]
-    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
-    gcloud_client.revoke_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
     make_admin(current_user_id, cidc_api)
@@ -256,9 +222,7 @@ def test_delete_permission(cidc_api, clean_db, monkeypatch):
     gcloud_client.reset_mock()
     res = client.delete(f"permissions/{perm.id}")
     assert res.status_code == 428
-    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
-    gcloud_client.revoke_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
     headers = {"If-Match": "foobar"}
@@ -267,18 +231,14 @@ def test_delete_permission(cidc_api, clean_db, monkeypatch):
     gcloud_client.reset_mock()
     res = client.delete(f"permissions/1232123", headers=headers)
     assert res.status_code == 404
-    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
-    gcloud_client.revoke_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
     # A mismatched ETag leads to a PreconditionFailed error
     gcloud_client.reset_mock()
     res = client.delete(f"permissions/{perm.id}", headers=headers)
     assert res.status_code == 412
-    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
-    gcloud_client.revoke_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
     headers["If-Match"] = perm._etag
@@ -300,7 +260,5 @@ def test_delete_permission(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         assert Permissions.find_by_id(perm.id) is None
 
-    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
-    gcloud_client.revoke_lister_access.assert_not_called()  # there's a second permission still
     gcloud_client.revoke_download_access.assert_called_once()

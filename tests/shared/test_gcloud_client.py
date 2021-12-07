@@ -5,7 +5,6 @@ os.environ["TZ"] = "UTC"
 from io import BytesIO
 from unittest.mock import call, MagicMock
 from datetime import datetime
-import pytest
 
 from werkzeug.datastructures import FileStorage
 from google.api_core.iam import Policy
@@ -15,24 +14,20 @@ from cidc_api.config import settings
 from cidc_api.shared.gcloud_client import (
     create_intake_bucket,
     grant_upload_access,
-    grant_lister_access,
     grant_download_access,
     refresh_intake_access,
     revoke_upload_access,
-    revoke_lister_access,
     revoke_download_access,
     revoke_all_download_access,
     upload_xlsx_to_gcs,
     upload_xlsx_to_intake_bucket,
-    _build_bindings_with_expiry,
-    _build_bindings_without_expiry,
+    _build_iam_binding,
     _build_trial_upload_prefixes,
     _pseudo_blob,
     _xlsx_gcs_uri_format,
 )
 from cidc_api.config.settings import (
-    GOOGLE_DATA_BUCKET,
-    GOOGLE_DOWNLOAD_ROLE,
+    GOOGLE_ACL_DATA_BUCKET,
     GOOGLE_INTAKE_BUCKET,
     GOOGLE_INTAKE_ROLE,
     GOOGLE_LISTER_ROLE,
@@ -44,22 +39,72 @@ ID = 123
 EMAIL = "test.user@email.com"
 
 
-def _mock_gcloud_storage(bindings, set_iam_policy_fn, monkeypatch):
+def _mock_gcloud_storage_client(
+    monkeypatch, iam_bindings=[], set_iam_policy_fn=None
+) -> MagicMock:
+    """
+    Mocks google.cloud.storage and google.cloud.storage.Client, returning the client
+    Mocks both IAM- and ACL-related functions
+    While IAM parameters are explicitly passed for background bindings and a check function,
+        ACL checks are performed by checking calls to b.acl.[grant/revoke]_[role] for b in the returned mock_client.blobs
+        mock_client.list_blobs returns [mock_client.blobs[0]] if prefix == "10021/wes" else mock_client.blobs
+
+    Parameters
+    ----------
+    monkeypatch
+        needed for mocking
+    iam_bindings : List[{"role": str, "members": List[str]}] = []
+        returned by [Blob/Bucket].get_iam_policy
+        mocks the google return of the existing bindings on the objects
+    set_iam_policy_fn : Callable = None
+        single arg will be the updated IAM policy, in the form {str role: List[str member]}
+        use to assert that changes have been made while also mocking google call
+
+    Returns
+    -------
+    mock_client : MagicMock
+        the return value mocked mocking `gcloud_client._get_storage_client`
+        ACL checks are performed by checking calls to b.acl.[grant/revoke]_[role] for b in the mock_client.blobs
+        mock_client.list_blobs returns [mock_client.blobs[0]] if prefix == "10021/wes" else mock_client.blobs
+    """
     api_request = MagicMock()
-    api_request.return_value = {"bindings": bindings}
-    monkeypatch.setattr("google.cloud._http.JSONConnection.api_request", api_request)
+    api_request.return_value = {"bindings": iam_bindings}
+    monkeypatch.setattr(
+        "google.cloud.storage.blob.Blob.get_iam_policy", lambda *a, **kw: api_request
+    )
 
     def set_iam_policy(self, policy):
         set_iam_policy_fn(policy)
 
+    monkeypatch.setattr("google.cloud.storage.blob.Blob.set_iam_policy", set_iam_policy)
     monkeypatch.setattr(
         "google.cloud.storage.bucket.Bucket.set_iam_policy", set_iam_policy
     )
 
     # mocking `google.cloud.storage.Client()` to not actually create a client
+    # mock ACL-related `client.list_blobs` to return fake objects entirely
+    mock_client = MagicMock()
+    mock_client.blobs = [
+        MagicMock(),
+        MagicMock(),
+    ]
+
+    def mock_list_blobs(*a, prefix: str = "", **kw):
+        if prefix == "10021/wes":
+            return [mock_client.blobs[0]]
+        else:
+            return mock_client.blobs
+
+    mock_client.list_blobs = mock_list_blobs
+    # then check calls to b.acl.[grant/revoke]_[role] for b in mock_client.blobs
+    # note the return value mock_client.list_blobs depends solely on the `prefix` kwargs
+
+    # mocking `gcloud_client._get_storage_client` to not actually create a client
     monkeypatch.setattr(
-        "google.cloud.client.ClientWithProject.__init__", lambda *a, **kw: None
+        gcloud_client, "_get_storage_client", lambda *a, **kw: mock_client
     )
+
+    return mock_client
 
 
 def test_build_trial_upload_prefixes(monkeypatch):
@@ -78,57 +123,15 @@ def test_build_trial_upload_prefixes(monkeypatch):
     assert _build_trial_upload_prefixes("foo", "rna_bam") == ["foo/rna"]
 
 
-def test_grant_lister_access(monkeypatch):
-    """Check that grant_lister_access adds policy bindings as expected"""
-
-    def set_iam_policy(policy):
-        assert len(policy.bindings) == 2, str(policy.bindings)
-        assert all(b["role"] == GOOGLE_LISTER_ROLE for b in policy.bindings)
-        assert any("user:rando" in b["members"] for b in policy.bindings)
-        assert any(f"user:{EMAIL}" in b["members"] for b in policy.bindings)
-
-    _mock_gcloud_storage(
-        [
-            {"role": GOOGLE_LISTER_ROLE, "members": ["user:rando"]},
-            {"role": GOOGLE_LISTER_ROLE, "members": [f"user:{EMAIL}"]},
-        ],
-        set_iam_policy,
-        monkeypatch,
-    )
-
-    grant_lister_access(EMAIL)
-
-
-def test_revoke_lister_access(monkeypatch):
-    """Check that grant_lister_access adds policy bindings as expected"""
-
-    def set_iam_policy(policy):
-        assert len(policy.bindings) == 1
-        assert all(b["role"] == GOOGLE_LISTER_ROLE for b in policy.bindings)
-        assert any("user:rando" in b["members"] for b in policy.bindings)
-        assert all(f"user:{EMAIL}" not in b["members"] for b in policy.bindings)
-
-    _mock_gcloud_storage(
-        [
-            {"role": GOOGLE_LISTER_ROLE, "members": ["user:rando"]},
-            {"role": GOOGLE_LISTER_ROLE, "members": [f"user:{EMAIL}"]},
-        ],
-        set_iam_policy,
-        monkeypatch,
-    )
-
-    revoke_lister_access(EMAIL)
-
-
 def test_grant_upload_access(monkeypatch):
     def set_iam_policy(policy):
         assert f"user:rando" in policy[GOOGLE_UPLOAD_ROLE]
         assert f"user:{EMAIL}" in policy[GOOGLE_UPLOAD_ROLE]
 
-    _mock_gcloud_storage(
+    _mock_gcloud_storage_client(
+        monkeypatch,
         [{"role": GOOGLE_UPLOAD_ROLE, "members": ["user:rando"]}],
         set_iam_policy,
-        monkeypatch,
     )
 
     grant_upload_access(EMAIL)
@@ -139,10 +142,10 @@ def test_revoke_upload_access(monkeypatch):
         assert f"user:rando" in policy[GOOGLE_UPLOAD_ROLE]
         assert f"user:{EMAIL}" not in policy[GOOGLE_UPLOAD_ROLE]
 
-    _mock_gcloud_storage(
+    _mock_gcloud_storage_client(
+        monkeypatch,
         [{"role": GOOGLE_UPLOAD_ROLE, "members": ["user:rando", f"user:{EMAIL}"]}],
         set_iam_policy,
-        monkeypatch,
     )
 
     revoke_upload_access(EMAIL)
@@ -167,13 +170,13 @@ def test_create_intake_bucket(monkeypatch):
         assert policy.bindings[0]["members"] == {f"user:{EMAIL}"}
 
     create_intake_bucket(EMAIL)
-    _mock_gcloud_storage(
+    _mock_gcloud_storage_client(
+        monkeypatch,
         [
             {"role": GOOGLE_LISTER_ROLE, "members": ["user:rando"]},
             {"role": GOOGLE_LISTER_ROLE, "members": [f"user:{EMAIL}"]},
         ],
         set_iam_policy,
-        monkeypatch,
     )
 
     # Bucket name should have structure:
@@ -195,10 +198,10 @@ def test_create_intake_bucket(monkeypatch):
 
 
 def test_refresh_intake_access(monkeypatch):
-    _mock_gcloud_storage(
-        _build_bindings_with_expiry(GOOGLE_INTAKE_BUCKET, GOOGLE_INTAKE_ROLE, EMAIL),
-        lambda i: i,
+    _mock_gcloud_storage_client(
         monkeypatch,
+        _build_iam_binding(GOOGLE_INTAKE_BUCKET, GOOGLE_INTAKE_ROLE, EMAIL),
+        lambda i: i,
     )
 
     grant_gcs_access = MagicMock()
@@ -210,121 +213,37 @@ def test_refresh_intake_access(monkeypatch):
     args, kwargs = grant_gcs_access.call_args_list[0]
     assert args[0].name.startswith(GOOGLE_INTAKE_BUCKET)
     assert args[1:] == (GOOGLE_INTAKE_ROLE, EMAIL)
-    assert "expiring" in kwargs and kwargs["expiring"]
+    assert "iam" in kwargs and kwargs["iam"]
 
 
 def test_grant_download_access(monkeypatch):
-    """Check that grant_download_access adds policy bindings as expected"""
-    bindings = [
-        # Role without a condition
-        {"role": "some-other-role", "members": {f"user:JohnDoe"}}
-    ]
-
-    # Check simple binding creation
-    def set_iam_policy(policy):
-        bindings = policy.bindings
-        assert len(bindings) == 1, str(bindings)
-        [binding] = bindings
-        assert binding["members"] == {f"user:{EMAIL}"}
-        assert binding["role"] == GOOGLE_DOWNLOAD_ROLE
-        condition = binding["condition"]
-        assert f"{GOOGLE_DOWNLOAD_ROLE} access on ['10021/wes']" in condition["title"]
-        assert "updated by the CIDC API" in condition["description"]
-        assert "10021/wes" in condition["expression"]
-        # no expiry on this binding, as expiration would be on the List Role
-
-    _mock_gcloud_storage([], set_iam_policy, monkeypatch)
+    """Check that grant_download_access makes ACL calls as expected"""
+    client = _mock_gcloud_storage_client(monkeypatch)
     grant_download_access(EMAIL, "10021", "wes_analysis")
-
-    matching_prefix = "10021/wes"
-    matching_binding = _build_bindings_without_expiry(
-        GOOGLE_DATA_BUCKET, GOOGLE_DOWNLOAD_ROLE, EMAIL, prefixes=[matching_prefix]
-    )[0]
-
-    # Check adding a second binding
-    def set_iam_policy(policy):
-        bindings = policy.bindings
-        assert len(bindings) == 2, str(bindings)
-        assert any(
-            matching_binding["condition"]["expression"] in b["condition"]["expression"]
-            for b in policy.bindings
-            if "condition" in b
-        ), (
-            matching_binding["condition"]["expression"]
-            + " not in "
-            + str(policy.bindings)
-        )
-        assert any(
-            "10021/participants" in binding["condition"]["expression"]
-            for binding in policy.bindings
-            if "condition" in binding
-        )
-
-    _mock_gcloud_storage([matching_binding] + bindings, set_iam_policy, monkeypatch)
-    grant_download_access(EMAIL, "10021", "Participants Info")
+    client.blobs[0].acl.grant_reader.assert_called_with(EMAIL)
+    client.blobs[1].acl.grant_reader.assert_not_called()
 
 
 def test_revoke_download_access(monkeypatch):
-    bindings = _build_bindings_with_expiry(
-        GOOGLE_DATA_BUCKET,
-        GOOGLE_DOWNLOAD_ROLE,
-        EMAIL,
-        prefixes=["10021/wes", "10021/cytof"],
-    )
-    bindings.append({"role": "some-other-role", "members": {f"user:JohnDoe"}})
-
-    def set_iam_policy(policy):
-        assert not any(
-            "10021/wes" in binding["condition"]["expression"]
-            for binding in policy.bindings
-            if "condition" in binding
-        ), str(policy.bindings)
-
-    # revocation on well-formed bindings
-    _mock_gcloud_storage(list(bindings), set_iam_policy, monkeypatch)
-    revoke_download_access(EMAIL, "10021", "wes")
-
-    # revocation when target binding doesn't exist
-    _mock_gcloud_storage(bindings[1:], set_iam_policy, monkeypatch)
-    with pytest.warns(UserWarning, match="revoke a non-existent"):
-        revoke_download_access(EMAIL, "10021", "wes")
-
-    # revocation when target binding is duplicated
-    bindings = _build_bindings_with_expiry(
-        GOOGLE_DATA_BUCKET,
-        GOOGLE_DOWNLOAD_ROLE,
-        EMAIL,
-        prefixes=["10021/wes", "10021/wes", "10021/cytof"],
-    )
-    bindings.append({"role": "some-other-role", "members": {f"user:JohnDoe"}})
-    _mock_gcloud_storage(bindings, set_iam_policy, monkeypatch)
-    with pytest.warns(UserWarning, match="multiple conditional bindings"):
-        revoke_download_access(EMAIL, "10021", "wes")
+    """Check that revoke_download_access makes ACL calls as expected"""
+    client = _mock_gcloud_storage_client(monkeypatch)
+    revoke_download_access(EMAIL, "10021", "wes_analysis")
+    client.blobs[0].acl.revoke_owner.assert_called_with(EMAIL)
+    client.blobs[0].acl.revoke_reader.assert_called_with(EMAIL)
+    client.blobs[0].acl.revoke_writer.assert_called_with(EMAIL)
+    client.blobs[1].acl.revoke_owner.assert_not_called()
+    client.blobs[1].acl.revoke_reader.assert_not_called()
+    client.blobs[1].acl.revoke_writer.assert_not_called()
 
 
 def test_revoke_all_download_access(monkeypatch):
-    bindings = [
-        {"members": {f"user:{EMAIL}"}, "role": "some-other-role"},
-        # This isn't realistic - more likely, there'd be different conditions
-        # associated with these duplicate bindings
-        {"members": {f"user:{EMAIL}"}, "role": GOOGLE_DOWNLOAD_ROLE},
-        {"members": {f"user:{EMAIL}"}, "role": GOOGLE_DOWNLOAD_ROLE},
-        {"members": {f"user:{EMAIL}"}, "role": GOOGLE_DOWNLOAD_ROLE},
-        {"members": {f"user:{EMAIL}"}, "role": GOOGLE_DOWNLOAD_ROLE},
-    ]
-
-    def set_iam_policy(policy):
-        assert len(policy.bindings) == 1
-        assert policy.bindings[0]["role"] != GOOGLE_DOWNLOAD_ROLE
-
-    # Deletion with many items, including duplicates
-    _mock_gcloud_storage(bindings, set_iam_policy, monkeypatch)
-    with pytest.warns(UserWarning, match="multiple conditional bindings"):
-        revoke_all_download_access(EMAIL)
-
-    # Idempotent deletion
-    _mock_gcloud_storage(bindings[:1], set_iam_policy, monkeypatch)
+    """Check that revoke_all_download_access makes ACL calls as expected against ALL blobs"""
+    client = _mock_gcloud_storage_client(monkeypatch)
     revoke_all_download_access(EMAIL)
+    for b in client.blobs:
+        b.acl.revoke_owner.assert_called_with(EMAIL)
+        b.acl.revoke_reader.assert_called_with(EMAIL)
+        b.acl.revoke_writer.assert_called_with(EMAIL)
 
 
 def test_xlsx_gcs_uri_format(monkeypatch):
@@ -374,7 +293,7 @@ def test_upload_xlsx_to_gcs(monkeypatch):
     )
     assert res == copied_blob
     assert call(GOOGLE_UPLOAD_BUCKET) in _get_bucket.call_args_list
-    assert call(GOOGLE_DATA_BUCKET) in _get_bucket.call_args_list
+    assert call(GOOGLE_ACL_DATA_BUCKET) in _get_bucket.call_args_list
     bucket.blob.assert_called_once_with(expected_name)
     blob.upload_from_file.assert_called_once_with(open_file)
     bucket.copy_blob.assert_called_once_with(blob, bucket)

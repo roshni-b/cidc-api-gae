@@ -34,14 +34,10 @@ def mock_gcloud_client(monkeypatch) -> MagicMock:
     gcloud_client = MagicMock()
     gcloud_client.revoke_download_access = MagicMock()
     gcloud_client.grant_download_access = MagicMock()
-    gcloud_client.revoke_lister_access = MagicMock()
-    gcloud_client.grant_lister_access = MagicMock()
 
     def reset_mocks():
         gcloud_client.grant_download_access.reset_mock()
         gcloud_client.revoke_download_access.reset_mock()
-        gcloud_client.grant_lister_access.reset_mock()
-        gcloud_client.revoke_lister_access.reset_mock()
 
     gcloud_client.reset_mocks = reset_mocks
 
@@ -52,13 +48,6 @@ def mock_gcloud_client(monkeypatch) -> MagicMock:
     monkeypatch.setattr(
         "cidc_api.models.models.revoke_download_access",
         gcloud_client.revoke_download_access,
-    )
-    monkeypatch.setattr(
-        "cidc_api.models.models.grant_lister_access", gcloud_client.grant_lister_access,
-    )
-    monkeypatch.setattr(
-        "cidc_api.models.models.revoke_lister_access",
-        gcloud_client.revoke_lister_access,
     )
 
     return gcloud_client
