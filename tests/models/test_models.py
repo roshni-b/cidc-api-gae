@@ -1,10 +1,7 @@
 from cidc_api.models.models import CommonColumns
-from jsonschema.validators import validate
 import pandas as pd
-from cidc_api.models.schemas import TrialMetadataListSchema
 import io
 import logging
-from copy import deepcopy
 from functools import wraps
 
 import os
@@ -19,7 +16,6 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from cidc_api.app import app
 from cidc_api.models import (
-    BaseModel,
     Users,
     TrialMetadata,
     UploadJobs,
@@ -39,7 +35,7 @@ from cidc_api.config.settings import (
 from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 from cidc_schemas import prism
 
-from ..utils import make_admin, make_role, mock_gcloud_client
+from ..utils import mock_gcloud_client
 
 
 def db_test(test):

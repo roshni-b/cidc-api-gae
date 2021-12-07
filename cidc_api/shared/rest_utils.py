@@ -16,7 +16,6 @@ from werkzeug.exceptions import (
 from marshmallow.exceptions import ValidationError
 
 from ..models import BaseModel, BaseSchema, ValidationMultiError
-from ..config.settings import ENV
 
 
 def delete_response():

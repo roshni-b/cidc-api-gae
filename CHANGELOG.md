@@ -9,6 +9,16 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.47` - this
+
+- `remove` all gcloud client logic associated with download logic ie conditional IAM permissions
+- `add` ACL gcloud client logic for downloads instead
+- `remove` all lister permission as no longer needed with ACL instead of IAM
+
+## Version `0.25.46` - 30 Nov 2021
+
+- `changed` schemas dependency (bump) for WES pipeline updates
+
 ## Version `0.25.45` - 23 Nov 2021
 
 - `changed` schemas dependency for WES paired analysis comments field
