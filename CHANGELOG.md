@@ -9,11 +9,16 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.47` - this
+## Version `0.25.48` - 08 Dec 2021
+
+- `add` error logging in Permission.insert
+
+## Version `0.25.47` - 08 Dec 2021
 
 - `remove` all gcloud client logic associated with download logic ie conditional IAM permissions
 - `add` ACL gcloud client logic for downloads instead
 - `remove` all lister permission as no longer needed with ACL instead of IAM
+- `add` admin endpoint to call already existing function to grant all download permissions
 
 ## Version `0.25.46` - 30 Nov 2021
 
