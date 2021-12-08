@@ -596,6 +596,8 @@ class Permissions(CommonColumns):
                 perm.insert(session=session)
             # Delete the just-created permissions record
             super().delete(session=session)
+
+            logger.warning(str(e))
             raise IAMException("IAM grant failed.") from e
 
     @with_default_session
