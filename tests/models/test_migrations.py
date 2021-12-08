@@ -7,10 +7,9 @@ import cidc_api.models.migrations as migrations
 from cidc_api.models.migrations import (
     RollbackableQueue,
     PieceOfWork,
-    Session,
     run_metadata_migration,
 )
-from cidc_api.models import UploadJobs, TrialMetadata, DownloadableFiles
+from cidc_api.models import UploadJobs, DownloadableFiles
 from cidc_api.config.settings import GOOGLE_DATA_BUCKET
 
 

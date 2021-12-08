@@ -8,30 +8,23 @@ import warnings
 import hashlib
 from collections import namedtuple
 from concurrent.futures import Future
-from typing import BinaryIO, List, Optional, Tuple
+from typing import BinaryIO, List, Optional, Union
 
 import requests
 from google.cloud import storage, pubsub
 from werkzeug.datastructures import FileStorage
 
 from ..config.settings import (
-    GOOGLE_AND_OPERATOR,
-    GOOGLE_DOWNLOAD_ROLE,
     GOOGLE_INTAKE_ROLE,
     GOOGLE_INTAKE_BUCKET,
     GOOGLE_UPLOAD_ROLE,
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_UPLOAD_TOPIC,
-    GOOGLE_DATA_BUCKET,
-    GOOGLE_LISTER_ROLE,
+    GOOGLE_ACL_DATA_BUCKET,
     GOOGLE_CLOUD_PROJECT,
     GOOGLE_EMAILS_TOPIC,
     GOOGLE_PATIENT_SAMPLE_TOPIC,
     GOOGLE_ARTIFACT_UPLOAD_TOPIC,
-    GOOGLE_MAX_CONDITIONAL_OPERATORS,
-    GOOGLE_MAX_DOWNLOAD_CONDITIONS,
-    GOOGLE_MAX_DOWNLOAD_PERMISSIONS,
-    GOOGLE_OR_OPERATOR,
     TESTING,
     ENV,
     DEV_CFUNCTIONS_SERVER,
@@ -45,6 +38,10 @@ _storage_client = None
 
 
 def _get_storage_client() -> storage.Client:
+    """
+    the project which the client acts on behalf of falls back to the default inferred from the environment
+    see: https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client
+    """
     global _storage_client
     if _storage_client is None:
         _storage_client = storage.Client()
@@ -52,7 +49,11 @@ def _get_storage_client() -> storage.Client:
 
 
 def _get_bucket(bucket_name: str) -> storage.Bucket:
-    """Get the bucket with name `bucket_name` from GCS."""
+    """
+    Get the bucket with name `bucket_name` from GCS.
+    This does not make an HTTP request; it simply instantiates a bucket object owned by _storage_client.
+    see: https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.bucket
+    """
     storage_client = _get_storage_client()
     bucket = storage_client.bucket(bucket_name)
     return bucket
@@ -76,7 +77,7 @@ def upload_xlsx_to_gcs(
     upload_moment: str,
 ):
     """
-    Upload an xlsx template file to GCS, returning the object URI.
+    Upload an xlsx template file to GOOGLE_ACL_DATA_BUCKET, returning the object URI.
     
     `template_category` is either "manifests" or "assays".
     `template_type` is an assay or manifest type, like "wes" or "pbmc" respectively.
@@ -93,7 +94,7 @@ def upload_xlsx_to_gcs(
 
     if ENV == "dev":
         logger.info(
-            f"Would've saved {blob_name} to {GOOGLE_UPLOAD_BUCKET} and {GOOGLE_DATA_BUCKET}"
+            f"Would've saved {blob_name} to {GOOGLE_UPLOAD_BUCKET} and {GOOGLE_ACL_DATA_BUCKET}"
         )
         return _pseudo_blob(
             blob_name, 0, "_pseudo_md5_hash", "_pseudo_crc32c", upload_moment
@@ -105,30 +106,10 @@ def upload_xlsx_to_gcs(
     filebytes.seek(0)
     blob.upload_from_file(filebytes)
 
-    data_bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+    data_bucket = _get_bucket(GOOGLE_ACL_DATA_BUCKET)
     final_object = upload_bucket.copy_blob(blob, data_bucket)
 
     return final_object
-
-
-def grant_lister_access(user_email: str):
-    """
-    Grant a user list access to the GOOGLE_DATA_BUCKET. List access is
-    required for the user to download or read objects from this bucket.
-    """
-    logger.info(f"granting list to {user_email}")
-    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
-    grant_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email, expiring=True)
-
-
-def revoke_lister_access(user_email: str):
-    """
-    Revoke a user's list access to the GOOGLE_DATA_BUCKET. List access is
-    required for the user to download or read objects from this bucket.
-    """
-    logger.info(f"revoking list to {user_email}")
-    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
-    revoke_expiring_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email)
 
 
 def grant_upload_access(user_email: str):
@@ -139,36 +120,16 @@ def grant_upload_access(user_email: str):
     """
     logger.info(f"granting upload to {user_email}")
     bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
-
-    # Update the bucket IAM policy to include the user as an uploader.
-    policy = bucket.get_iam_policy()
-    policy[GOOGLE_UPLOAD_ROLE] = {*policy[GOOGLE_UPLOAD_ROLE], f"user:{user_email}"}
-    logger.info(f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}")
-
-    try:
-        bucket.set_iam_policy(policy)
-    except Exception as e:
-        logger.error(str(e))
-        raise e
+    grant_gcs_access(bucket, GOOGLE_UPLOAD_ROLE, user_email, iam=True)
 
 
 def revoke_upload_access(user_email: str):
     """
-    Revoke a user's upload access for the given bucket.
+    Revoke a user's upload access from GOOGLE_UPLOAD_BUCKET.
     """
     logger.info(f"revoking upload from {user_email}")
     bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
-
-    # Update the bucket IAM policy to remove the user's uploader privileges.
-    policy = bucket.get_iam_policy()
-    policy[GOOGLE_UPLOAD_ROLE].discard(f"user:{user_email}")
-    logger.info(f"{GOOGLE_UPLOAD_ROLE} binding updated to {policy[GOOGLE_UPLOAD_ROLE]}")
-
-    try:
-        bucket.set_iam_policy(policy)
-    except Exception as e:
-        logger.error(str(e))
-        raise e
+    revoke_iam_gcs_access(bucket, GOOGLE_UPLOAD_ROLE, user_email)
 
 
 def get_intake_bucket_name(user_email: str) -> str:
@@ -199,7 +160,7 @@ def create_intake_bucket(user_email: str) -> storage.Bucket:
         bucket = storage_client.create_bucket(bucket)
 
     # Grant the user appropriate permissions
-    grant_gcs_access(bucket, GOOGLE_INTAKE_ROLE, user_email, expiring=True)
+    grant_gcs_access(bucket, GOOGLE_INTAKE_ROLE, user_email, iam=True)
 
     return bucket
 
@@ -212,7 +173,7 @@ def refresh_intake_access(user_email: str):
     bucket = _get_bucket(bucket_name)
 
     if bucket.exists():
-        grant_gcs_access(bucket, GOOGLE_INTAKE_ROLE, user_email, expiring=True)
+        grant_gcs_access(bucket, GOOGLE_INTAKE_ROLE, user_email, iam=True)
 
 
 def upload_xlsx_to_intake_bucket(
@@ -246,15 +207,17 @@ def grant_download_access(
     If upload_type is None, then grant access to all upload_types.
 
     If the user already has download access for this trial and upload type, idempotent.
+    Download access is controlled by ACL.
     """
     prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
 
     logger.info(f"Granting download access on prefixes {prefixes} to {user_email}")
 
-    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
-    grant_gcs_access(
-        bucket, GOOGLE_DOWNLOAD_ROLE, user_email, expiring=False, prefixes=prefixes
-    )
+    # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
+    storage_client = _get_storage_client()
+    for prefix in prefixes:
+        for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
+            blob.acl.grant_reader(user_email)
 
 
 def revoke_download_access(
@@ -263,16 +226,22 @@ def revoke_download_access(
     """
     Revoke a user's download access to all objects in a trial of a particular upload type.
 
-    Return the GCS URI from which access has been revoked.
+    Return the GCS URIs from which access has been revoked.
+    Download access is controlled by ACL.
     """
     prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
 
     logger.info(f"Revoking download access on {prefixes} from {user_email}")
 
-    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
-    return revoke_nonexpiring_gcs_access(
-        bucket, GOOGLE_DOWNLOAD_ROLE, user_email, prefixes
-    )
+    # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
+    storage_client = _get_storage_client()
+    removed_from = []
+    for prefix in prefixes:
+        for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
+            blob.acl.revoke_owner(user_email)
+            blob.acl.revoke_writer(user_email)
+            blob.acl.revoke_reader(user_email)
+            removed_from.append(f"gs://{blob.name}")
 
 
 def _build_trial_upload_prefixes(
@@ -303,155 +272,76 @@ def _build_trial_upload_prefixes(
 
 
 def grant_gcs_access(
-    bucket: storage.Bucket,
+    obj: Union[storage.Blob, storage.Bucket],
     role: str,
     user_email: str,
-    expiring: bool = True,
-    prefixes: List[str] = [""],
+    iam: bool = True,
 ):
     """
-    Grant `user_email` the provided `role` on a `bucket`, possibly expiring after `INACTIVE_USER_DAYS` 
-    days have elapsed. By default, permissions apply to the whole bucket. Optionally, provide 
-    an object URL `prefix` to restrict this permission grant to only a portion of the objects 
-    in the given bucket.
+    Grant `user_email` the provided `role` on a storage object `obj`.
+    `iam` access assumes `obj` is a bucket and will expire after `INACTIVE_USER_DAYS` days have elapsed.
+    if not `iam`, assumes ACL and therefore asserts role in ["owner", "reader", "writer"]
     """
-    # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
-    policy = bucket.get_iam_policy(requested_policy_version=3)
-    policy.version = 3
+    if iam:
+        # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
+        policy = obj.get_iam_policy(requested_policy_version=3)
+        policy.version = 3
 
-    # remove the existing binding if one exists so that we can recreate it with
-    # an updated TTL.
-    all_other_conditions = []
-    for prefix in prefixes:
-        _, other_conditions = _find_and_pop_binding(
-            policy, role, user_email, prefix=prefix, return_next=True
-        )
-        all_other_conditions.extend(other_conditions)
+        # remove the existing binding if one exists so that we can recreate it with an updated TTL.
+        _find_and_pop_iam_binding(policy, role, user_email)
 
-    # will return a set of additional conditions to extend if available
-    if expiring:
-        bindings = _build_bindings_with_expiry(
-            bucket.name,
-            role,
-            user_email,
-            prefixes=prefixes,
-            other_conditions=all_other_conditions,
-        )
+        binding = _build_iam_binding(obj.name, role, user_email,)
+        # insert the binding into the policy
+        policy.bindings.append(binding)
+
+        try:
+            obj.set_iam_policy(policy)
+        except Exception as e:
+            logger.error(str(e))
+            raise e
+
     else:
-        bindings = _build_bindings_without_expiry(
-            bucket.name,
-            role,
-            user_email,
-            prefixes=prefixes,
-            other_conditions=all_other_conditions,
-        )
+        assert role in [
+            "owner",
+            "reader",
+            "writer",
+        ], f"Passed invalid ACL role {role} to grant_gcs_access for {user_email} on {obj}"
 
-    # (re)insert the binding into the policy
-    policy.bindings.extend(bindings)
-
-    try:
-        bucket.set_iam_policy(policy)
-    except Exception as e:
-        logger.error(str(e))
-        raise e
-
-
-def revoke_nonexpiring_gcs_access(
-    bucket: storage.Bucket, role: str, user_email: str, prefixes: List[str] = [""]
-):
-    """Revoke a bucket IAM policy change made by calling `grant_gcs_access` with expiring=False."""
-    # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
-    policy = bucket.get_iam_policy(requested_policy_version=3)
-    policy.version = 3
-
-    # find and remove all matching policy bindings for this user if any exist
-    for prefix in prefixes:
-        for i in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS):
-            removed_binding, other_conditions = _find_and_pop_binding(
-                policy, role, user_email, prefix=prefix, return_next=False
-            )
-
-            if removed_binding is None:
-                if i == 0:
-                    warnings.warn(
-                        f"Tried to revoke a non-existent download IAM permission for {user_email}/{prefix}"
-                    )
-                break
-
-            # with only return others if removed_binding is not None
-            elif len(other_conditions):
-                readd_bindings = _build_bindings_without_expiry(
-                    bucket.name, role, user_email, other_conditions=other_conditions
-                )
-                policy.bindings.extend(readd_bindings)
-
-    try:
-        bucket.set_iam_policy(policy)
-    except Exception as e:
-        logger.error(str(e))
-        raise e
+        try:
+            if role == "owner":
+                logger.warning("Granting OWNER on {obj} to {user_email}")
+                obj.acl.grant_owner(user_email)
+            elif role == "writer":
+                logger.info("Granting WRITER on {obj} to {user_email}")
+                obj.acl.grant_writer(user_email)
+            else:  # role == "reader"
+                logger.info("Granting READER on {obj} to {user_email}")
+                obj.acl.grant_reader(user_email)
+        except Exception as e:
+            logger.error(str(e))
+            raise e
 
 
-def revoke_expiring_gcs_access(
-    bucket: storage.Bucket, role: str, user_email: str, prefixes: List[str] = [""]
-):
-    """Revoke a bucket IAM policy made by calling `grant_gcs_access` with (default) expiring=True."""
-    # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
-    policy = bucket.get_iam_policy(requested_policy_version=3)
-    policy.version = 3
-
-    # find and remove all matching policy bindings for this user if any exist
-    all_other_conditions = []
-    for prefix in prefixes:
-        for i in range(GOOGLE_MAX_DOWNLOAD_CONDITIONS):
-            removed_binding, other_conditions = _find_and_pop_binding(
-                policy, role, user_email, prefix=prefix, return_next=False
-            )
-            if removed_binding is None:
-                if i == 0:
-                    warnings.warn(
-                        f"Tried to revoke a non-existent download IAM permission for {user_email}/{prefix}"
-                    )
-                break
-
-            # with only return others if removed_binding is not None
-            else:
-                all_other_conditions.extend(other_conditions)
-
-    readd_bindings = _build_bindings_without_expiry(
-        bucket.name,
-        role,
-        user_email,
-        prefixes=[],  # explicitly not providing any new bindings here
-        other_conditions=all_other_conditions,
-    )
-    policy.bindings.extend(readd_bindings)
-    try:
-        bucket.set_iam_policy(policy)
-    except Exception as e:
-        logger.error(str(e))
-        raise e
-
-
-# Arbitrary upper bound on the number of GCS bindings we expect a user to have
+# Arbitrary upper bound on the number of GCS IAM bindings we expect a user to have for uploads
 MAX_REVOKE_ALL_ITERATIONS = 250
 
 
-def revoke_all_download_access(user_email: str):
-    """
-    Completely revoke a user's download access to all objects in the data bucket.
-    """
-    # get the current IAM policy for the data bucket
-    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+def revoke_iam_gcs_access(
+    bucket: storage.Bucket, role: str, user_email: str,
+):
+    """Revoke a bucket IAM policy made by calling `grant_gcs_access` with iam=True."""
     # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
     policy = bucket.get_iam_policy(requested_policy_version=3)
     policy.version = 3
 
-    # find and pop all download role policy bindings for this user
-    for _ in range(MAX_REVOKE_ALL_ITERATIONS):
-        # this finds and removes *any* download binding for the given user_email
-        # since we're popping them all, we don't care to readd any other conditions
-        if _find_and_pop_binding(policy, GOOGLE_DOWNLOAD_ROLE, user_email)[0] is None:
+    # find and remove any matching policy binding for this user
+    for i in range(MAX_REVOKE_ALL_ITERATIONS):
+        removed_binding = _find_and_pop_iam_binding(policy, role, user_email,)
+        if removed_binding is None:
+            if i == 0:
+                warnings.warn(
+                    f"Tried to revoke a non-existent download IAM permission for {user_email}"
+                )
             break
 
     try:
@@ -461,90 +351,24 @@ def revoke_all_download_access(user_email: str):
         raise e
 
 
+def revoke_all_download_access(user_email: str):
+    """
+    Completely revoke a user's download access to all objects in the data bucket.
+    Download access is controlled by ACL.
+    """
+    # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
+    storage_client = _get_storage_client()
+    for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET):
+        blob.acl.revoke_owner(user_email)
+        blob.acl.revoke_writer(user_email)
+        blob.acl.revoke_reader(user_email)
+
+
 user_member = lambda email: f"user:{email}"
 
 
-def _build_bindings_without_expiry(
-    bucket: str,
-    role: str,
-    user_email: str,
-    prefixes: List[str] = [""],
-    other_conditions: List[str] = [],
-) -> List[dict]:
-    """
-    Grant the user associated with `user_email` the provided IAM `role` when acting on objects
-    in `bucket` whose URIs start with any value in `prefixes`. These permissions remains active
-    indefinitely, as the required Lister role is applied with an expiry.
-
-    GCP IAM only allows up to 12 conditional operators ie combine 13 conditions
-    Therefore must split into multiple permissions of 13 conditions each.
-    As you can only have 20 permissions total ie 19 plus Lister, errors out beyond that.
-
-    See GCP common expression language syntax overview: https://cloud.google.com/iam/docs/conditions-overview
-
-    Parameters
-    ----------
-    bucket: str
-        the name of the bucket to build the binding for
-    role: str
-        the role name to build the binding for
-    user_email: str
-        the email of the user to build the binding for
-    prefixes: List[str] = [""]
-        a list of prefixes used to build resource.name.startsWith conditions
-        can't have more than GOOGLE_MAX_DOWNLOAD_CONDITIONS entries
-    other_conditions: List[str] = []
-        any already formatted conditions, such as returned from _find_and_pop_binding
-
-    Returns
-    -------
-    List[dict]
-        the bindings to be put onto policy.bindings
-    """
-    if len(prefixes) > GOOGLE_MAX_DOWNLOAD_CONDITIONS:
-        raise Exception(
-            f"A single user cannot have more than {GOOGLE_MAX_DOWNLOAD_CONDITIONS} download conditions"
-        )
-
-    timestamp = datetime.datetime.now()
-    return [
-        {
-            "role": role,
-            "members": {user_member(user_email)},  # convert format
-            "condition": {
-                "title": f"{role} access on {prefixes or 'bucket'}",
-                "description": f"Auto-updated by the CIDC API on {timestamp}",
-                # since this is non-expiring, all operators are OR and no brackets are needed
-                "expression": GOOGLE_OR_OPERATOR.join(
-                    [
-                        # put the other conditions in directly
-                        other_conditions.pop(0)
-                        # since we're using pop, have to stop at the end
-                        if len(other_conditions)
-                        # format object URL prefixes to the condition if specified
-                        else f'resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefixes.pop(0)}")'
-                        # can only have a certain number of operators, plus one for entries
-                        for _ in range(GOOGLE_MAX_CONDITIONAL_OPERATORS + 1)
-                        # since we're using pop, have to stop at the end
-                        if len(other_conditions) or (prefixes and len(prefixes))
-                    ]
-                ),
-            },
-        }
-        # they can only have a certain number of permissions
-        for _ in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS)
-        # since we're using pop above, have to stop at the end
-        if len(other_conditions) or (prefixes and len(prefixes))
-    ]
-
-
-def _build_bindings_with_expiry(
-    bucket: str,
-    role: str,
-    user_email: str,
-    ttl_days: int = INACTIVE_USER_DAYS,
-    prefixes: List[str] = [""],
-    other_conditions: List[str] = [],
+def _build_iam_binding(
+    bucket: str, role: str, user_email: str, ttl_days: int = INACTIVE_USER_DAYS,
 ) -> dict:
     """
     Grant the user associated with `user_email` the provided IAM `role` when acting
@@ -563,11 +387,6 @@ def _build_bindings_with_expiry(
         the email of the user to build the binding for
     ttl_days: int = INACTIVE_USER_DAYS
         the number of days until this permission should expire
-    prefixes: List[str] = [""]
-        a list of prefixes used to build resource.name.startsWith conditions
-        can't have more than GOOGLE_MAX_DOWNLOAD_CONDITIONS entries
-    other_conditions: List[str] = []
-        any already formatted conditions, such as returned from _find_and_pop_binding
 
     Returns
     -------
@@ -577,75 +396,23 @@ def _build_bindings_with_expiry(
     timestamp = datetime.datetime.now()
     expiry_date = (timestamp + datetime.timedelta(ttl_days)).date()
 
-    # use all of the prefixes for the name of the bindings
-    all_prefixes = prefixes.copy() if prefixes else []
-    all_prefixes.extend(
-        [c.split("/objects/")[-1].strip('")') for c in other_conditions]
-    )
-
     # going to add the expiration after, so don't return directly
-    ret = [
-        {
-            "role": role,
-            "members": {user_member(user_email)},  # convert format
-            "condition": {
-                "title": f"{role} access on {all_prefixes}",
-                "description": f"Auto-updated by the CIDC API on {timestamp}",
-                # since this is expiring, all operators are OR
-                # if there are no entries here, we don't need brackets; so we'll deal with it later
-                "expression": GOOGLE_OR_OPERATOR.join(
-                    [
-                        # put the other conditions in directly
-                        other_conditions.pop(0)
-                        # since we're using pop, have to stop at the end
-                        if len(other_conditions)
-                        # format object URL prefixes to the condition if specified
-                        else f'resource.name.startsWith("projects/_/buckets/{bucket}/objects/{prefixes.pop(0)}")'
-                        # can only have a certain number of operators, plus one for entries but minus one for the AND
-                        # the -1 here is why this differs from the _build_bindings_without_expiry
-                        for _ in range(GOOGLE_MAX_CONDITIONAL_OPERATORS)
-                        # since we're using pop, have to stop at the end
-                        if len(other_conditions) or (prefixes and len(prefixes))
-                    ]
-                ),
-            },
-        }
-        # they can only have a certain number of permissions
-        for _ in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS)
-        # since we're using pop, have to stop at the end
-        if len(other_conditions) or (prefixes and len(prefixes))
-    ]
-
-    # Add the TTL clause
-    new_condition = f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")'
-    for i in range(len(ret)):  # for each binding
-        if len(ret[i]["condition"]["expression"]):
-            # if it has OR conditions, it need brackets
-            ret[i]["condition"]["expression"] = (
-                "(" + ret[i]["condition"]["expression"] + ")" + GOOGLE_AND_OPERATOR
-            )
-        # add the expiration
-        ret[i]["condition"]["expression"] += new_condition
-
-    return ret
+    return {
+        "role": role,
+        "members": {user_member(user_email)},  # convert format
+        "condition": {
+            "title": f"{role} access on {bucket}",
+            "description": f"Auto-updated by the CIDC API on {timestamp}",
+            # since this is expiring, all operators are OR
+            # if there are no entries here, we don't need brackets; so we'll deal with it later
+            "expression": f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")',
+        },
+    }
 
 
-def _can_add_more_conditions(binding: dict) -> bool:
-    """Return if there is more space to add further prefix conditions, accounting for expiry"""
-    expression = binding.get("condition", {}).get("expression", "")
-    return (
-        expression.count(GOOGLE_OR_OPERATOR) + expression.count(GOOGLE_AND_OPERATOR)
-        < GOOGLE_MAX_CONDITIONAL_OPERATORS
-    )
-
-
-def _find_and_pop_binding(
-    policy: storage.bucket.Policy,
-    role: str,
-    user_email: str,
-    prefix: str = "",
-    return_next: bool = False,
-) -> Tuple[Optional[dict], List[str]]:
+def _find_and_pop_iam_binding(
+    policy: storage.bucket.Policy, role: str, user_email: str,
+) -> Optional[dict]:
     """
     Find an IAM policy binding for the given `user_email`, `policy`, and `role`, and pop
     it from the policy's bindings list if it exists. Matches the `prefix` if given.
@@ -657,74 +424,25 @@ def _find_and_pop_binding(
     """
     # try to find the policy binding on the `policy`
     user_binding_index = None
-    extendable_index = None
-    for i, binding in enumerate(policy.bindings):
-        role_matches = binding.get("role") == role
-        member_matches = binding.get("members") == {user_member(user_email)}
-        prefix_matches = prefix in binding.get("condition", {}).get("expression", "")
-        if role_matches and member_matches and prefix_matches:
-            # a user should be a member of no more than one conditional download binding
-            # if they do, warn - but use the last one because this isn't breaking
-            if (
-                user_binding_index is not None
-                or binding.get("condition", {}).get("expression", "").count(prefix) > 1
-            ):
-                warnings.warn(
-                    f"Found multiple conditional bindings for {user_email} on {prefix} role {role}. This is an invariant violation - "
-                    "check out permissions on the CIDC GCS buckets to debug."
-                )
+    for i, test_binding in enumerate(policy.bindings):
+        role_matches = test_binding.get("role") == role
+        member_matches = test_binding.get("members") == {user_member(user_email)}
+        if role_matches and member_matches:
             user_binding_index = i
+            break
 
-        # return the last policy binding if it doesn't have
-        elif (
-            return_next
-            and role_matches
-            and member_matches
-            and _can_add_more_conditions(binding)
-        ):
-            if extendable_index is not None:
-                warnings.warn(
-                    f"Found multiple extendable bindings for {user_email} role {role}"
-                )
-            extendable_index = i
-
-    binding = (
+    popped_binding = (
         policy.bindings.pop(user_binding_index)
         if user_binding_index is not None
-        else (
-            policy.bindings.pop(extendable_index)
-            if extendable_index is not None
-            else None
-        )
+        else None
     )
 
-    # if it's an expiring permission, it'll be in the form: (prefix or prefix2) and time
-    # # old permissions are in the form: time and prefix
-    prefix_conditions = (
-        binding.get("condition", {}).get("expression", "") if binding else ""
-    )
-    if GOOGLE_AND_OPERATOR in prefix_conditions:
-        # clean up parentheses
-        prefix_conditions = prefix_conditions.split(GOOGLE_AND_OPERATOR)
-        if "resource.name.startsWith" in prefix_conditions[1]:
-            # old-style: time and prefix
-            prefix_conditions = prefix_conditions[1]
-        else:
-            # (prefix or prefix2) and time
-            prefix_conditions = prefix_conditions[0].strip("()")
-
-    remaining_conditions = [
-        condition
-        for condition in prefix_conditions.split(GOOGLE_OR_OPERATOR)
-        if prefix and prefix not in condition and len(condition)
-    ]
-
-    return binding, remaining_conditions
+    return popped_binding
 
 
 def get_signed_url(
     object_name: str,
-    bucket_name: str = GOOGLE_DATA_BUCKET,
+    bucket_name: str = GOOGLE_ACL_DATA_BUCKET,
     method: str = "GET",
     expiry_mins: int = 30,
 ) -> str:
