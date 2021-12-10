@@ -21,7 +21,7 @@ from .models import (
     Column,
 )
 from ..shared.gcloud_client import publish_artifact_upload
-from ..config.settings import GOOGLE_DATA_BUCKET, GOOGLE_UPLOAD_BUCKET
+from ..config.settings import GOOGLE_ACL_DATA_BUCKET, GOOGLE_UPLOAD_BUCKET
 
 
 class PieceOfWork(NamedTuple):
@@ -196,6 +196,7 @@ def _run_metadata_migration(
             )[1]
 
             # If the GCS URI has changed, rename the blob
+            # makes call to bucket.rename_blob 
             new_gcs_uri = artifact["object_url"]
             if old_gcs_uri != new_gcs_uri:
                 print(
@@ -203,10 +204,10 @@ def _run_metadata_migration(
                 )
                 renamer = PieceOfWork(
                     partial(
-                        rename_gcs_blob, GOOGLE_DATA_BUCKET, old_gcs_uri, new_gcs_uri
+                        rename_gcs_blob, GOOGLE_ACL_DATA_BUCKET, old_gcs_uri, new_gcs_uri
                     ),
                     partial(
-                        rename_gcs_blob, GOOGLE_DATA_BUCKET, new_gcs_uri, old_gcs_uri
+                        rename_gcs_blob, GOOGLE_ACL_DATA_BUCKET, new_gcs_uri, old_gcs_uri
                     ),
                 )
                 gcs_tasks.schedule(renamer)

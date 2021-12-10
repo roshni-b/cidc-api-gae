@@ -701,6 +701,23 @@ class Permissions(CommonColumns):
         # Regrant all of the user's intake bucket upload permissions, if they have any
         refresh_intake_access(user.email)
 
+    @classmethod
+    @with_default_session
+    def grant_download_permissions_for_upload_job(
+        cls, upload: "UploadJobs", session: Session
+    ):
+        perms = (
+            session.query(cls)
+            .filter_by(trial_id=upload.trial_id, upload_type=upload.upload_type)
+            .all()
+        )
+        for perm in perms:
+            user = Users.find_by_id(perm.granted_to_user, session=session)
+            if user.is_admin() or user.is_nci_user() or user.disabled:
+                continue
+
+            grant_download_access(user.email, perm.trial_id, perm.upload_type)
+
     @staticmethod
     @with_default_session
     def grant_all_download_permissions(session: Session):

@@ -217,7 +217,7 @@ def grant_download_access(
     storage_client = _get_storage_client()
     for prefix in prefixes:
         for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
-            blob.acl.grant_reader(user_email)
+            blob.acl.user(user_email).grant_reader()
 
 
 def revoke_download_access(
@@ -238,9 +238,10 @@ def revoke_download_access(
     removed_from = []
     for prefix in prefixes:
         for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
-            blob.acl.revoke_owner(user_email)
-            blob.acl.revoke_writer(user_email)
-            blob.acl.revoke_reader(user_email)
+            blob_user = blob.acl.user(user_email)
+            blob_user.revoke_owner()
+            blob_user.revoke_writer()
+            blob_user.revoke_reader()
             removed_from.append(f"gs://{blob.name}")
 
 
@@ -310,13 +311,13 @@ def grant_gcs_access(
         try:
             if role == "owner":
                 logger.warning("Granting OWNER on {obj} to {user_email}")
-                obj.acl.grant_owner(user_email)
+                obj.acl.user(user_email).grant_owner()
             elif role == "writer":
                 logger.info("Granting WRITER on {obj} to {user_email}")
                 obj.acl.grant_writer(user_email)
             else:  # role == "reader"
                 logger.info("Granting READER on {obj} to {user_email}")
-                obj.acl.grant_reader(user_email)
+                obj.acl.user(user_email).grant_reader()
         except Exception as e:
             logger.error(str(e))
             raise e
@@ -359,9 +360,10 @@ def revoke_all_download_access(user_email: str):
     # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
     storage_client = _get_storage_client()
     for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET):
-        blob.acl.revoke_owner(user_email)
-        blob.acl.revoke_writer(user_email)
-        blob.acl.revoke_reader(user_email)
+        blob_user = blob.acl.user(user_email)
+        blob_user.revoke_owner()
+        blob_user.revoke_writer()
+        blob_user.revoke_reader()
 
 
 user_member = lambda email: f"user:{email}"
