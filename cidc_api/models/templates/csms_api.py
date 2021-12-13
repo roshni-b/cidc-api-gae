@@ -42,6 +42,9 @@ from .trial_metadata import (
     Shipment,
 )
 from .utils import insert_record_batch
+from ...config.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class NewManifestError(Exception):
@@ -238,6 +241,7 @@ def _convert_samples(
             "plasma": "Plasma",
             "normal_tissue_dna": "Tissue Scroll",
             "h_and_e": "H&E-Stained Fixed Tissue Slide Specimen",
+            "pbmc": "PBMC",
         }
         if sample["processed_sample_type"] in processed_sample_type_map:
             sample["processed_sample_type"] = processed_sample_type_map[
@@ -292,10 +296,15 @@ def _convert_samples(
 
 @with_default_session
 def insert_manifest_into_blob(
-    manifest: Dict[str, Any], uploader_email: str, *, session: Session
+    manifest: Dict[str, Any],
+    uploader_email: str,
+    *,
+    dry_run: bool = False,
+    session: Session,
 ) -> None:
     """
     Given a CSMS-style manifest, add it into the JSON metadata blob
+    If `dry_run`, calls `session.rollback` instead of `session.commit`
     
     Exceptions Raised
     -----------------
@@ -345,7 +354,9 @@ def insert_manifest_into_blob(
     patch = {
         "protocol_identifier": trial_id,
         "shipments": [
-            _get_all_values(target=Shipment, old=manifest, drop=["json_data"])
+            _get_all_values(
+                target=Shipment, old=manifest, drop=["excluded", "json_data"]
+            )
         ],
         "participants": [],
     }
@@ -365,18 +376,25 @@ def insert_manifest_into_blob(
             **_get_all_values(
                 target=Participant,
                 old=partic_samples[0],
-                drop=["json_data", "trial_participant_id"],
+                drop=[
+                    "cimac_participant_id",
+                    "excluded",
+                    "json_data",
+                    "participant_id",
+                    "trial_participant_id",
+                ],
             ),
         )
         partic["samples"] = [
             _get_all_values(
-                target=Sample, old=sample, drop=["json_data", "manifest_id"]
+                target=Sample, old=sample, drop=["excluded", "json_data", "manifest_id"]
             )
             for sample in partic_samples
         ]
 
         patch["participants"].append(partic)
 
+    logger.info(f"Patch for {trial_id} manifest {manifest_id}:\n{patch}")
     # merge and validate the data
     # the existence of the correct cohort and collection_event names are checked here
     merged, errs = merge_clinical_trial_metadata(patch, trial_md.metadata_json)
@@ -384,7 +402,7 @@ def insert_manifest_into_blob(
         raise Exception({"prism errors": [str(e) for e in errs]})
 
     # save it
-    trial_md.update(changes={"metadata_json": merged}, session=session)
+    trial_md.update(changes={"metadata_json": merged}, commit=False, session=session)
 
     # create pseudo-UploadJobs
     UploadJobs(
@@ -394,15 +412,26 @@ def insert_manifest_into_blob(
         metadata_patch=patch,
         upload_type=_get_upload_type(samples),
         uploader_email=uploader_email,
-    ).insert(session=session)
+    ).insert(commit=False, session=session)
+
+    if dry_run:
+        session.flush()
+        session.rollback()
+    else:
+        session.commit()
 
 
 @with_default_session
 def insert_manifest_from_json(
-    manifest: Dict[str, Any], uploader_email: str, *, session: Session
+    manifest: Dict[str, Any],
+    uploader_email: str,
+    *,
+    dry_run: bool = False,
+    session: Session,
 ) -> None:
     """
     Given a CSMS-style manifest, validate and add it into the relational tables.
+    If `dry_run`, calls `session.rollback` instead of `session.commit`
     
     Exceptions Raised
     -----------------
@@ -453,9 +482,25 @@ def insert_manifest_from_json(
 
     # need to insert Shipment and Participants before Samples
     ordered_records = OrderedDict()
-    ordered_records[Shipment] = [
-        Shipment(trial_id=trial_id, **_get_all_values(target=Shipment, old=manifest))
-    ]
+    try:
+        ordered_records[Shipment] = [
+            Shipment(
+                trial_id=trial_id,
+                **_get_all_values(
+                    target=Shipment, old=manifest, drop=["excluded", "trial_id"]
+                ),
+            )
+        ]
+    except Exception as e:
+        logger.error(str(e))
+        logger.info("Trial? " + str("trial_id" in dir()))
+        if "trial_id" in dir():
+            logger.info("Trial: " + str(trial_id))
+        logger.info(
+            "New CIDC manifest: "
+            + str(_get_all_values(target=Shipment, old=manifest, drop=["excluded"]))
+        )
+        raise e
 
     # sort samples by participants
     sample_map: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
@@ -463,6 +508,7 @@ def insert_manifest_from_json(
         trial_id, manifest_id, samples, existing_cimac_ids
     ):
         sample_map[cimac_id_to_cimac_participant_id(cimac_id, None)].append(sample)
+    del cimac_id, sample
 
     # each participant has a list of samples
     ordered_records[Participant] = []
@@ -480,16 +526,13 @@ def insert_manifest_from_json(
             new_partic = Participant(
                 trial_id=trial_id,
                 cimac_participant_id=cimac_participant_id,
-                **_get_all_values(target=Participant, old=partic_samples[0]),
+                **_get_all_values(
+                    target=Participant,
+                    old=partic_samples[0],
+                    drop=["cimac_participant_id", "excluded", "trial_id"],
+                ),
             )
             ordered_records[Participant].append(new_partic)
-        elif partic is None:
-            # we're good to add it!
-            partic = [
-                partic
-                for partic in ordered_records[Participant]
-                if partic.cimac_participant_id == cimac_participant_id
-            ][0]
 
         for sample in partic_samples:
             # explicitly make sure the CollectionEvent exists
@@ -505,13 +548,19 @@ def insert_manifest_from_json(
                 is None
             ):
                 raise Exception(
-                    f"No Collection event with trial_id, event_name = {trial_id}, {event_name}; needed for sample {cimac_id} on manifest {manifest_id}"
+                    f"No Collection event with trial_id, event_name = {trial_id}, {event_name}; needed for sample {sample['cimac_id']} on manifest {manifest_id}"
                 )
 
             new_sample = Sample(
                 trial_id=trial_id,
-                cimac_participant_id=cimac_id_to_cimac_participant_id(cimac_id, {}),
-                **_get_all_values(target=Sample, old=sample),
+                cimac_participant_id=cimac_id_to_cimac_participant_id(
+                    sample["cimac_id"], {}
+                ),
+                **_get_all_values(
+                    target=Sample,
+                    old=sample,
+                    drop=["cimac_participant_id", "excluded", "trial_id"],
+                ),
             )
             ordered_records[Sample].append(new_sample)
 
@@ -530,7 +579,7 @@ def insert_manifest_from_json(
 
     # add and validate the data
     # the existence of the correct cohort names are checked here
-    errs = insert_record_batch(ordered_records, session=session)
+    errs = insert_record_batch(ordered_records, dry_run=dry_run, session=session)
     if len(errs):
         raise Exception("Multiple errors: [" + "\n".join(str(e) for e in errs) + "]")
 
@@ -580,15 +629,22 @@ def _calc_difference(
         "barcode",
         "biobank_id",
         "entry_number",
+        "event",
+        "excluded",
         "json_data",
         "modified_time",
         "modified_timestamp",
+        "protocol_identifier",
         "qc_comments",
+        "reason",
         "sample_approved",
         "sample_manifest_type",
         "samples",
         "status",
+        "status_log",
+        "study_encoding",
         "submitter",
+        "trial_id",
     ],
 ) -> Dict[str, Tuple[Any, Any]]:
     """
@@ -606,21 +662,22 @@ def _calc_difference(
         for k, v in cidc.items()
         if k not in ignore
     }
-    csms1 = {
-        "trial_id" if k == "protocol_identifier" else k: v
-        for k, v in csms.items()
-        if k not in ignore
-    }
+    csms1 = {k: v for k, v in csms.items() if k not in ignore}
 
     # take difference by using symmetric set difference on the items
     # use set to not get same key multiple times if values differ
-    diff_keys = {k for k, _ in set(cidc1.items()) ^ set(csms1.items())}
+    diff_keys = {
+        k
+        for k in set(cidc1.keys()).union(set(csms1.keys()))
+        # guaranteed to be in one or the other, so never None == None
+        if cidc1.get(k) != csms1.get(k)
+    }
     # then get both values once per key to return
     changes = {k: (cidc.get(k), csms.get(k)) for k in diff_keys}
 
     return Change(
         entity_type,
-        trial_id=csms["trial_id"],
+        trial_id=cidc["trial_id"],
         manifest_id=cidc["manifest_id"]
         if entity_type == "sample"
         else csms["shipment_manifest_id" if entity_type == "upload" else "manifest_id"],
@@ -670,7 +727,17 @@ def _get_csms_sample_map(
             cimac_participant_id=cimac_id_to_cimac_participant_id(csms_cimac_id, {}),
             sample_manifest_type=csms_sample.get("sample_manifest_type"),
             # the rest of the values
-            **_get_all_values(target=Sample, old=csms_sample),
+            **_get_all_values(
+                target=Sample,
+                old=csms_sample,
+                drop=[
+                    "cimac_participant_id",
+                    "cohort_name",
+                    "participant_id",
+                    "sample_manifest_type",
+                    "trial_id",
+                ],
+            ),
         )
         for csms_cimac_id, csms_sample in _convert_samples(
             trial_id, manifest_id, csms_samples
@@ -713,7 +780,6 @@ def _initial_manifest_validation(csms_manifest: Dict[str, Any], *, session: Sess
     """
     trial_id, manifest_id, csms_samples = _extract_info_from_manifest(csms_manifest)
     # ----- Get all our information together -----
-    csms_manifest["trial_id"] = trial_id
     # validate that trial exists in the JSON json or error otherwise
     _ = TrialMetadata.select_for_update_by_trial_id(trial_id, session=session)
 
@@ -787,7 +853,12 @@ def _handle_shipment_differences(
     )
     if change:
         # since insert_record_batch is a merge, we can just generate a new object
-        return Shipment(**_get_all_values(target=Shipment, old=csms_manifest)), change
+        return (
+            Shipment(
+                **_get_all_values(target=Shipment, old=csms_manifest, drop=["excluded"])
+            ),
+            change,
+        )
     else:
         return None, None
 
@@ -824,7 +895,11 @@ def _handle_sample_differences(
                 # since insert_record_batch is a merge, we can just generate a new object
                 new_partic = Participant(
                     trial_participant_id=csms_sample["participant_id"],
-                    **_get_all_values(target=Participant, old=csms_sample),
+                    **_get_all_values(
+                        target=Participant,
+                        old=csms_sample,
+                        drop=["excluded", "trial_participant_id"],
+                    ),
                 )
                 ret0[Participant].append(new_partic)
 
@@ -834,7 +909,9 @@ def _handle_sample_differences(
                 for k in change.changes
             ):
                 # since insert_record_batch is a merge, we can just generate a new object
-                new_sample = Sample(**_get_all_values(target=Sample, old=csms_sample))
+                new_sample = Sample(
+                    **_get_all_values(target=Sample, old=csms_sample, drop=["excluded"])
+                )
                 ret0[Sample].append(new_sample)
 
     # drop unneeded keys

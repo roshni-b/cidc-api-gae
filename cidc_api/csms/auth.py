@@ -69,7 +69,7 @@ def get_with_paging(
         url should be fully valid or begin with `/` to be prefixed with CSMS_BASE_URL
     limit: int = None
         the number of records to return on each page
-        default: 5000 for samples, 50 for manifests
+        default: 5000 for samples, 50 for manifests, 1 otherwise
     offset: int = 0
         which page to return, 0-indexed
         increments as needed to continue returning
@@ -85,13 +85,16 @@ def get_with_paging(
             limit = 5000
         elif "manifests" in url:
             limit = 50
+        else:
+            limit = 1
+
     kwargs.update(dict(limit=limit, offset=offset))
 
     res = get_with_authorization(url, params=kwargs)
     while res.status_code < 300 and len(res.json().get("data", [])) > 0:
         # if there's not an error and we're still returning
         yield from res.json()["data"]
-        offset += 1  # get the next page
+        kwargs["offset"] += 1  # get the next page
         res = get_with_authorization(url, params=kwargs)
     else:
         res.raise_for_status()

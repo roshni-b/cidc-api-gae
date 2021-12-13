@@ -19,9 +19,8 @@ from cidc_api.models.templates.csms_api import *
 from cidc_api.models.templates.file_metadata import Upload
 from cidc_api.models.templates.trial_metadata import Participant
 
-from tests.csms.data import manifests
-from tests.csms.utils import validate_json_blob, validate_relational
-
+from ...csms.data import manifests
+from ...csms.utils import validate_json_blob, validate_relational
 
 from ...resources.test_trial_metadata import setup_user
 
@@ -52,8 +51,12 @@ def manifest_change_setup(cidc_api, monkeypatch):
         "protocol_identifier": "test_trial",
         "participants": [],
         "shipments": [],
-        "allowed_cohort_names": [],
-        "allowed_collection_event_names": [],
+        "allowed_cohort_names": ["Arm_A", "Arm_Z"],
+        "allowed_collection_event_names": [
+            "Baseline",
+            "Pre_Day_1_Cycle_2",
+            "On_Treatment",
+        ],
     }
     TrialMetadata(trial_id="test_trial", metadata_json=metadata_json).insert()
     # need a second valid trial
@@ -68,15 +71,18 @@ def manifest_change_setup(cidc_api, monkeypatch):
 
         # insert manifest before we check for changes
         insert_manifest_from_json(deepcopy(manifest), uploader_email="test@email.com")
+        insert_manifest_into_blob(deepcopy(manifest), uploader_email="test@email.com")
         # should check out, but let's make sure
+        validate_json_blob(
+            TrialMetadata.select_for_update_by_trial_id("test_trial").metadata_json
+        )
         validate_relational("test_trial")
 
 
 def test_detect_changes_when_excluded(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         manifest_change_setup(cidc_api, monkeypatch)
-        manifest = manifests[-1]
-        assert manifest.get("excluded")
+        manifest = [m for m in manifests if m.get("excluded")][0]
 
         assert detect_manifest_changes(manifest, uploader_email="test@email.com") == (
             {},
@@ -88,7 +94,9 @@ def test_change_protocol_identifier_error(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         manifest_change_setup(cidc_api, monkeypatch)
         for manifest in manifests:
-            if manifest.get("status") not in (None, "qc_complete"):
+            if manifest.get("status") not in (None, "qc_complete") or manifest.get(
+                "excluded"
+            ):
                 continue
 
             # Test critical changes throws Exception on samples
@@ -123,8 +131,10 @@ def test_change_protocol_identifier_error(cidc_api, clean_db, monkeypatch):
 def test_change_manifest_id_error(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         manifest_change_setup(cidc_api, monkeypatch)
-        for manifest in manifests:
-            if manifest.get("status") not in (None, "qc_complete"):
+        for n, manifest in enumerate(manifests):
+            if manifest.get("status") not in (None, "qc_complete") or manifest.get(
+                "excluded"
+            ):
                 continue
 
             # manifest_id has no such complication, but is also on the samples
@@ -143,7 +153,9 @@ def test_change_cimac_id_error(cidc_api, clean_db, monkeypatch):
     with cidc_api.app_context():
         manifest_change_setup(cidc_api, monkeypatch)
         for manifest in manifests:
-            if manifest.get("status") not in (None, "qc_complete"):
+            if manifest.get("status") not in (None, "qc_complete") or manifest.get(
+                "excluded"
+            ):
                 continue
 
             # Changing a cimac_id is adding/removing a Sample
@@ -178,16 +190,29 @@ def test_manifest_non_critical_changes(cidc_api, clean_db, monkeypatch):
         # Test non-critical changes on the manifest itself
         keys = {k for manifest in manifests for k in manifest.keys()}
         for key in keys:
-            # ignore list from calc_diff + criticals
             if key in [
+                # changing manifest_id would throw NewManifestError
+                "manifest_id",
+                # ignored by _calc_differences
                 "barcode",
                 "biobank_id",
-                "manifest_id",
+                "entry_number",
+                "excluded",
+                "json_data",
                 "modified_time",
                 "modified_timestamp",
+                "qc_comments",
+                "sample_approved",
+                "sample_manifest_type",
                 "samples",
                 "status",
                 "submitter",
+                # ignore ignored CSMS fields
+                "submitter",
+                "reason",
+                "event",
+                "study_encoding",
+                "status_log",
             ]:
                 continue
 
@@ -195,6 +220,7 @@ def test_manifest_non_critical_changes(cidc_api, clean_db, monkeypatch):
             for manifest in manifests:
                 if (
                     manifest.get("status") not in (None, "qc_complete")
+                    or manifest.get("excluded")
                     or key not in manifest
                 ):
                     continue
@@ -245,11 +271,12 @@ def test_manifest_non_critical_changes_on_samples(cidc_api, clean_db, monkeypatc
         manifest_change_setup(cidc_api, monkeypatch)
         # grab a completed manifest
         for manifest in manifests:
-            if manifest.get("status") not in (None, "qc_complete"):
+            if manifest.get("status") not in (None, "qc_complete") or manifest.get(
+                "excluded"
+            ):
                 continue
             # Test non-critical changes for the manifest but stored on the samples
             for key in ["assay_priority", "assay_type", "sample_manifest_type"]:
-                # ignore list from calc_diff + criticals
                 if key not in manifest["samples"][0]:
                     continue
 
@@ -319,35 +346,48 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
         manifest_change_setup(cidc_api, monkeypatch)
         # grab a completed manifest
         for manifest in manifests:
-            if manifest.get("status") not in (None, "qc_complete"):
+            if manifest.get("status") not in (None, "qc_complete") or manifest.get(
+                "excluded"
+            ):
                 continue
             # Test non-critical changes on the samples
             for key in manifest["samples"][0].keys():
-                # ignore list from calc_diff + criticals
                 if key in [
-                    "assay_priority",
-                    "assay_type",
-                    "barcode",
-                    "biobank_id",
+                    # ignore critical changes
                     "cimac_id",
                     "collection_event_name",
-                    "entry_number",
                     "manifest_id",
-                    "modified_time",
-                    "modified_timestamp",
+                    "protocol_identifier",
+                    "recorded_collection_event_name",
+                    "sample_key",
+                    # ignore non-sample level changes
+                    # see test_manifest_non_critical_changes_on_samples
+                    "assay_priority",
+                    "assay_type",
+                    *manifest,
                     "processed_sample_derivative",
                     "processed_sample_type",
-                    "protocol_identifier",
+                    "receiving_party",
+                    "trial_participant_id",
+                    "type_of_sample",
+                    # ignore list from calc_diff
+                    "barcode",
+                    "biobank_id",
+                    "entry_number",
+                    "event",
+                    "excluded",
+                    "json_data",
+                    "modified_time",
+                    "modified_timestamp",
                     "qc_comments",
-                    "recorded_collection_event_name",
+                    "reason",
                     "sample_approved",
-                    "sample_key",
                     "sample_manifest_type",
                     "samples",
                     "status",
+                    "status_log",
+                    "study_encoding",
                     "submitter",
-                    "trial_participant_id",
-                    "type_of_sample",
                 ]:
                     continue
 
@@ -379,6 +419,10 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
                     key = "fixation_stabilization_type"
 
                 if key not in ["cohort_name", "participant_id"]:
+                    if not len(records) == 1:
+                        print(key)
+                        print(manifest)
+                        print(new_manifest)
                     assert (
                         len(records) == 1
                         and Sample in records
@@ -444,7 +488,7 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
                                     and "standardized_collection_event_name"
                                     in manifest["samples"][0]
                                     else (
-                                        "fixation_or_stabilization_type"
+                                        "fixation_stabilization_type"
                                         if key == "fixation_stabilization_type"
                                         else key
                                     )
@@ -459,7 +503,11 @@ def test_sample_non_critical_changes(cidc_api, clean_db, monkeypatch):
 def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
     """test that insertion of manifest into blob works as expected"""
     # grab a completed manifest
-    manifest = [m for m in manifests if m.get("status") in [None, "qc_complete"]][0]
+    manifest = [
+        m
+        for m in manifests
+        if m.get("status") in (None, "qc_complete") and not m.get("excluded")
+    ][0]
 
     with cidc_api.app_context():
         setup_user(cidc_api, monkeypatch)
@@ -504,7 +552,11 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
             changes={"metadata_json": metadata_json}
         )
 
-        insert_manifest_into_blob(manifest, uploader_email="test@email.com")
+        target = deepcopy(manifest)
+        with pytest.raises(NewManifestError):
+            detect_manifest_changes(target, uploader_email="test@email.com")
+
+        insert_manifest_into_blob(target, uploader_email="test@email.com")
 
         md_json = TrialMetadata.select_for_update_by_trial_id(
             "test_trial"
@@ -514,7 +566,7 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
         for other_manifest in [
             m
             for m in manifests
-            if m.get("status") in [None, "qc_complete"]
+            if m.get("status") in [None, "qc_complete"] and not m.get("excluded")
             if m != manifest
         ]:
             insert_manifest_into_blob(other_manifest, uploader_email="test@email.com")
@@ -531,7 +583,11 @@ def test_insert_manifest_into_blob(cidc_api, clean_db, monkeypatch):
 def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
     """test that insertion of manifest from json works as expected"""
     # grab a completed manifest
-    manifest = [m for m in manifests if m.get("status") in [None, "qc_complete"]][0]
+    manifest = [
+        m
+        for m in manifests
+        if m.get("status") in [None, "qc_complete"] and not m.get("excluded")
+    ][0]
 
     with cidc_api.app_context():
         setup_user(cidc_api, monkeypatch)
@@ -592,7 +648,11 @@ def test_insert_manifest_from_json(cidc_api, clean_db, monkeypatch):
         )
         assert len(errs) == 0
 
-        insert_manifest_from_json(deepcopy(manifest), uploader_email="test@email.com")
+        target = deepcopy(manifest)
+        with pytest.raises(NewManifestError):
+            detect_manifest_changes(target, uploader_email="test@email.com")
+
+        insert_manifest_from_json(target, uploader_email="test@email.com")
         validate_relational("test_trial")
 
         for other_manifest in [

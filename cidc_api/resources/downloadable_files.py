@@ -24,7 +24,7 @@ from ..shared import gcloud_client
 from ..shared.auth import get_current_user, requires_auth
 from ..shared.rest_utils import with_lookup, marshal_response, use_args_with_pagination
 from ..config.settings import (
-    GOOGLE_DATA_BUCKET,
+    GOOGLE_ACL_DATA_BUCKET,
     GOOGLE_EPHEMERAL_BUCKET,
     MAX_THREADPOOL_WORKERS,
 )
@@ -141,7 +141,7 @@ def create_compressed_batch(args):
             f"batch too large: can't directly download a batch with more than {MAX_BUNDLE_BYTES} bytes"
         )
 
-    data_bucket = gcloud_client._get_bucket(GOOGLE_DATA_BUCKET)
+    data_bucket = gcloud_client._get_bucket(GOOGLE_ACL_DATA_BUCKET)
     # Using a temporary directory allows us to avoid collisions
     # with other possible concurrent requests to this endpoint
     # and to get automatic cleanup of all data we write once we're
@@ -192,7 +192,7 @@ def generate_filelist(args):
     tsv = b""
     for url in urls:
         flat_url = url.replace("/", "_")
-        full_gcs_uri = f"gs://{GOOGLE_DATA_BUCKET}/{url}"
+        full_gcs_uri = f"gs://{GOOGLE_ACL_DATA_BUCKET}/{url}"
         tsv += bytes(f"{full_gcs_uri}\t{flat_url}\n", "utf-8")
 
     buffer = BytesIO(tsv)

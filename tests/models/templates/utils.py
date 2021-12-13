@@ -34,8 +34,9 @@ def set_up_example_trial(clean_db, cidc_api, insert: bool = True):
         )
         to_insert[CollectionEvent] = [baseline, preday1cycle2]
 
-        errors = insert_record_batch(to_insert, session=clean_db)
-        assert len(errors) == 0, "\n".join(str(e) for e in errors)
+        if insert:
+            errors = insert_record_batch(to_insert)
+            assert len(errors) == 0, "\n".join(str(e) for e in errors)
 
     return to_insert
 
@@ -110,10 +111,7 @@ def setup_example(clean_db, cidc_api):
         ]
         to_insert[Sample] = samples
 
-        errors = insert_record_batch(to_insert, session=clean_db)
+        errors = insert_record_batch(to_insert)
         assert len(errors) == 0, "\n".join(str(e) for e in errors)
-
-        to_insert.move_to_end(Cohort, last=False)
-        to_insert.move_to_end(ClinicalTrial, last=False)
 
     return to_insert

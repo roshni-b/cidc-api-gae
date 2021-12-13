@@ -88,16 +88,13 @@ from ..config.settings import (
     MAX_PAGINATION_PAGE_SIZE,
     TESTING,
     INACTIVE_USER_DAYS,
-    GOOGLE_MAX_DOWNLOAD_CONDITIONS,
 )
 from ..shared import emails
 from ..shared.gcloud_client import (
     publish_artifact_upload,
     grant_download_access,
-    grant_lister_access,
     refresh_intake_access,
     revoke_download_access,
-    revoke_lister_access,
 )
 from ..config.logging import get_logger
 
@@ -161,7 +158,7 @@ class CommonColumns(BaseModel):  # type: ignore
         `changes` should be a dictionary mapping column names to updated values.
         """
         # Ensure the record exists in the database
-        if not self.find_by_id(self.id):
+        if not self.find_by_id(self.id, session=session):
             raise NoResultFound()
 
         # Update this record's fields if changes were provided
@@ -522,7 +519,7 @@ class Permissions(CommonColumns):
         if self.upload_type == self.EVERY and self.trial_id == self.EVERY:
             raise ValueError("A permission must have a trial id or upload type.")
 
-        grantee = Users.find_by_id(self.granted_to_user)
+        grantee = Users.find_by_id(self.granted_to_user, session=session)
         if grantee is None:
             raise IntegrityError(
                 params=None,
@@ -532,7 +529,7 @@ class Permissions(CommonColumns):
 
         grantor = None
         if self.granted_by_user is not None:
-            grantor = Users.find_by_id(self.granted_by_user)
+            grantor = Users.find_by_id(self.granted_by_user, session=session)
         else:
             raise IntegrityError(
                 params=None,
@@ -547,19 +544,6 @@ class Permissions(CommonColumns):
             )
 
         is_network_viewer = grantee.role == CIDCRole.NETWORK_VIEWER.value
-
-        # A user can only have 20 granular permissions at a time, due to GCS constraints
-        # (with the exception of Network Viewers, who can't download data from GCS and aren't
-        # subject to this constraint.)
-        if not is_network_viewer and (
-            len(Permissions.find_for_user(self.granted_to_user))
-            >= GOOGLE_MAX_DOWNLOAD_CONDITIONS
-        ):
-            raise IntegrityError(
-                params=None,
-                statement=None,
-                orig=f"{grantee.email} has greater than or equal to the maximum number of allowed granular permissions ({GOOGLE_MAX_DOWNLOAD_CONDITIONS}). Remove unused permissions to add others.",
-            )
 
         logger.info(
             f"admin-action: {grantor.email} gave {grantee.email} the permission {self.upload_type or 'all assays'} on {self.trial_id or 'all trials'}"
@@ -601,9 +585,7 @@ class Permissions(CommonColumns):
             return
 
         try:
-            # if they have any download permissions, they need the CIDC Lister role
-            grant_lister_access(grantee.email)
-            # Grant IAM permission in GCS only if db insert worked
+            # Grant ACL download permissions in GCS
             grant_download_access(grantee.email, self.trial_id, self.upload_type)
             # Remove permissions staged for deletion, if any
             for perm in perms_to_delete:
@@ -614,6 +596,8 @@ class Permissions(CommonColumns):
                 perm.insert(session=session)
             # Delete the just-created permissions record
             super().delete(session=session)
+
+            logger.warning(str(e))
             raise IAMException("IAM grant failed.") from e
 
     @with_default_session
@@ -626,28 +610,22 @@ class Permissions(CommonColumns):
 
         NOTE: values provided to the `commit` argument will be ignored. This method always commits.
         """
-        grantee = Users.find_by_id(self.granted_to_user)
+        grantee = Users.find_by_id(self.granted_to_user, session=session)
         if grantee is None:
             raise NoResultFound(f"no user with id {self.granted_to_user}")
 
         if not isinstance(deleted_by, Users):
-            deleted_by_user = Users.find_by_id(deleted_by)
+            deleted_by_user = Users.find_by_id(deleted_by, session=session)
         else:
             deleted_by_user = deleted_by
         if deleted_by_user is None:
             raise NoResultFound(f"no user with id {deleted_by}")
 
-        # Only make GCS IAM changes if this user has download access
+        # Only make GCS ACL changes if this user has download access
         if grantee.role != CIDCRole.NETWORK_VIEWER.value:
             try:
-                # Revoke IAM permission in GCS
+                # Revoke ACL permission in GCS
                 revoke_download_access(grantee.email, self.trial_id, self.upload_type)
-
-                # If the permission to delete is the last one, also revoke Lister access
-                filter_ = lambda q: q.filter(Permissions.granted_to_user == grantee.id)
-                if Permissions.count(session=session, filter_=filter_) <= 1:
-                    # this one hasn't been deleted yet, so 1 means this is the last one
-                    revoke_lister_access(grantee.email)
 
             except Exception as e:
                 raise IAMException(
@@ -712,9 +690,6 @@ class Permissions(CommonColumns):
             filter_=filter_for_user,
             session=session,
         )
-        # if they have any download permissions, they need the CIDC Lister role
-        if len(perms):
-            grant_lister_access(user.email)
         for perm in perms:
             # Regrant each permission to reset the TTL for this permission to
             # `settings.INACTIVE_USER_DAYS` from today.
@@ -728,36 +703,27 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def grant_all_iam_permissions(session: Session):
-        Permissions._change_all_iam_permissions(grant=True, session=session)
+    def grant_all_download_permissions(session: Session):
+        Permissions._change_all_download_permissions(grant=True, session=session)
 
     @staticmethod
     @with_default_session
-    def revoke_all_iam_permissions(session: Session):
-        Permissions._change_all_iam_permissions(grant=False, session=session)
+    def revoke_all_download_permissions(session: Session):
+        Permissions._change_all_download_permissions(grant=False, session=session)
 
     @staticmethod
     @with_default_session
-    def _change_all_iam_permissions(grant: bool, session: Session):
+    def _change_all_download_permissions(grant: bool, session: Session):
         perms = Permissions.list(page_size=Permissions.count(), session=session)
         for perm in perms:
-            user = Users.find_by_id(perm.granted_to_user)
+            user = Users.find_by_id(perm.granted_to_user, session=session)
             if user.is_admin() or user.is_nci_user() or user.disabled:
                 continue
 
             if grant:
-                grant_lister_access(user.email)
                 grant_download_access(user.email, perm.trial_id, perm.upload_type)
             else:
                 revoke_download_access(user.email, perm.trial_id, perm.upload_type)
-
-        # if un-granting things, revoke_lister_access as needed
-        if not grant:
-            for user in session.query(Users).all():
-                if user.is_admin() or user.is_nci_user() or user.disabled:
-                    continue
-                else:
-                    revoke_lister_access(user.email)
 
 
 class ValidationMultiError(Exception):

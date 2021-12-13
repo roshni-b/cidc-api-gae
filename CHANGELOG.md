@@ -9,7 +9,71 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.34` - this
+## Version `0.25.48` - 08 Dec 2021
+
+- `add` error logging in Permission.insert
+
+## Version `0.25.47` - 08 Dec 2021
+
+- `remove` all gcloud client logic associated with download logic ie conditional IAM permissions
+- `add` ACL gcloud client logic for downloads instead
+- `remove` all lister permission as no longer needed with ACL instead of IAM
+- `add` admin endpoint to call already existing function to grant all download permissions
+
+## Version `0.25.46` - 30 Nov 2021
+
+- `changed` schemas dependency (bump) for WES pipeline updates
+
+## Version `0.25.45` - 23 Nov 2021
+
+- `changed` schemas dependency for WES paired analysis comments field
+
+## Version `0.25.44` - 22 Nov 2021
+
+- `added` dry_run option for both CSMS insert functions
+
+## Version `0.25.43` - 22 Nov 2021
+
+- `added` conversion for CSMS value 'pbmc' for processed sample type
+- `added` handling in shipments dashboard for no shipment assay_type
+
+## Version `0.25.42` - 15 Nov 2021
+
+- `fixed` correctly pass session in more places
+
+## Version `0.25.41` - 15 Nov 2021
+
+- `added` logging to see if `insert_manifest_into_blob` is called as expected
+
+## Version `0.25.40` - 12 Nov 2021
+
+- `fixed` bug in iterating offset in `csms.auth.get_with_paging`
+
+## Version `0.25.39` - 12 Nov 2021
+
+- `fixed` CSMS bug from chaining `detect_manifest_changes` and `insert_manifest_...`
+
+## Version `0.25.38` - 11 Nov 2021
+
+- `added` excluded property to CSMS test data and tests
+  - `fixed` trying to add CSMS properties to CIDC entries
+- `added` de-identified whole manifest from CSMS directly to test data
+  - `fixed` reference to CIMAC ID in sample creation within models.templates.csms_api.insert_manifest_from_json()
+  - `fixed` dict.items() is unhashable, so use dict.keys() to generate a set to check for _calc_difference()
+
+## Version `0.25.37` - 08 Nov 2021
+
+- `changed` bump schemas dependencies for mIF DM bug fix
+
+## Version `0.25.36` - 08 Nov 2021
+
+- `added` logging around error in CSMS testing (`deprecated`)
+
+## Version `0.25.35` - 04 Nov 2021
+
+- `changed` version for schemas dependency, for tweak to mIF template
+
+## Version `0.25.34` - 03 Nov 2021
 
 - `add` unstructured JSONB json_data column for shipments, participants, samples
 - `add` copy of original JSON or CSMS data into json_data column

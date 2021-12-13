@@ -41,7 +41,7 @@ def get_manifest_samples(trial_id: str, manifest_id: str) -> Optional[pd.DataFra
     samples_df = pd.json_normalize(
         metadata_patch["participants"], "samples", meta=["cohort_name"]
     )
-    samples_df["assay_type"] = metadata_patch["shipments"][0]["assay_type"]
+    samples_df["assay_type"] = metadata_patch["shipments"][0].get("assay_type", "")
     samples_df["cimac_participant_id"] = samples_df.cimac_id.apply(lambda x: x[0:7])
     samples_df["manifest_id"] = manifest_id
     samples_df["cidc_received"] = upload_record._created
