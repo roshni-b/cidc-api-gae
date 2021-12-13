@@ -314,7 +314,7 @@ def grant_gcs_access(
                 obj.acl.user(user_email).grant_owner()
             elif role == "writer":
                 logger.info("Granting WRITER on {obj} to {user_email}")
-                obj.acl.grant_writer(user_email)
+                obj.acl.user(user_email).grant_writer()
             else:  # role == "reader"
                 logger.info("Granting READER on {obj} to {user_email}")
                 obj.acl.user(user_email).grant_reader()
