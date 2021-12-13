@@ -456,7 +456,10 @@ ALL_UPLOAD_TYPES = set(
     ]
 )
 
-
+# see also: https://github.com/CIMAC-CIDC/cidc-cloud-functions/blob/2e27faca1062adf8143a7c33e0c382e833fd0726/functions/uploads.py#L173
+# # there is a separate permissions system that applies the expiring IAM role
+# # `CIDC_biofx` to the `cidc-dfci-biofx-[wes/rna]@ds` emails using a `trial/assay` prefix
+# # while removing any existing perm for the same prefix
 class Permissions(CommonColumns):
     __tablename__ = "permissions"
     __table_args__ = (

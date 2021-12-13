@@ -9,7 +9,7 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.49` - 09 Dec 2021
+## Version `0.25.49` - 13 Dec 2021
 
 - `fixed` ACL syntax
 - `added` function to call to add permissions for particular upload job
