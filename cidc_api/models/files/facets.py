@@ -287,7 +287,7 @@ assay_facets: Facets = {
         "Microbiome": FacetConfig(["/rna/analysis/microbiome/addSample_report.txt"]),
         "Immune-Repertoire": FacetConfig(["/rna/analysis/trust4/trust4_report.tsv"]),
         "Fusion": FacetConfig(["/rna/analysis/fusion/fusion_predictions.tsv"]),
-        "MSI": FacetConfig(["/rna/analysis/msisensor/msisensor.txt"]),
+        "MSI": FacetConfig(["/rna/analysis/msisensor/msisensor_report.txt"]),
         "HLA": FacetConfig(["/rna/analysis/neoantigen/genotype.json"]),
     },
     "mIF": {
