@@ -456,7 +456,10 @@ ALL_UPLOAD_TYPES = set(
     ]
 )
 
-
+# see also: https://github.com/CIMAC-CIDC/cidc-cloud-functions/blob/2e27faca1062adf8143a7c33e0c382e833fd0726/functions/uploads.py#L173
+# # there is a separate permissions system that applies the expiring IAM role
+# # `CIDC_biofx` to the `cidc-dfci-biofx-[wes/rna]@ds` emails using a `trial/assay` prefix
+# # while removing any existing perm for the same prefix
 class Permissions(CommonColumns):
     __tablename__ = "permissions"
     __table_args__ = (
@@ -700,6 +703,23 @@ class Permissions(CommonColumns):
 
         # Regrant all of the user's intake bucket upload permissions, if they have any
         refresh_intake_access(user.email)
+
+    @classmethod
+    @with_default_session
+    def grant_download_permissions_for_upload_job(
+        cls, upload: "UploadJobs", session: Session
+    ):
+        perms = (
+            session.query(cls)
+            .filter_by(trial_id=upload.trial_id, upload_type=upload.upload_type)
+            .all()
+        )
+        for perm in perms:
+            user = Users.find_by_id(perm.granted_to_user, session=session)
+            if user.is_admin() or user.is_nci_user() or user.disabled:
+                continue
+
+            grant_download_access(user.email, perm.trial_id, perm.upload_type)
 
     @staticmethod
     @with_default_session

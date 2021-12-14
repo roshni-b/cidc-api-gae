@@ -89,6 +89,13 @@ def _mock_gcloud_storage_client(
         MagicMock(),
     ]
 
+    mock_client.blob_users = [
+        MagicMock(),
+        MagicMock(),
+    ]
+    mock_client.blobs[0].acl.user.return_value = mock_client.blob_users[0]
+    mock_client.blobs[1].acl.user.return_value = mock_client.blob_users[1]
+
     def mock_list_blobs(*a, prefix: str = "", **kw):
         if prefix == "10021/wes":
             return [mock_client.blobs[0]]
@@ -220,30 +227,31 @@ def test_grant_download_access(monkeypatch):
     """Check that grant_download_access makes ACL calls as expected"""
     client = _mock_gcloud_storage_client(monkeypatch)
     grant_download_access(EMAIL, "10021", "wes_analysis")
-    client.blobs[0].acl.grant_reader.assert_called_with(EMAIL)
-    client.blobs[1].acl.grant_reader.assert_not_called()
+    client.blobs[0].acl.user.assert_called_once_with(EMAIL)
+    client.blob_users[0].grant_reader.assert_called_once()
+    client.blobs[1].acl.user.assert_not_called()
 
 
 def test_revoke_download_access(monkeypatch):
     """Check that revoke_download_access makes ACL calls as expected"""
     client = _mock_gcloud_storage_client(monkeypatch)
     revoke_download_access(EMAIL, "10021", "wes_analysis")
-    client.blobs[0].acl.revoke_owner.assert_called_with(EMAIL)
-    client.blobs[0].acl.revoke_reader.assert_called_with(EMAIL)
-    client.blobs[0].acl.revoke_writer.assert_called_with(EMAIL)
-    client.blobs[1].acl.revoke_owner.assert_not_called()
-    client.blobs[1].acl.revoke_reader.assert_not_called()
-    client.blobs[1].acl.revoke_writer.assert_not_called()
+    client.blobs[0].acl.user.assert_called_once_with(EMAIL)
+    client.blob_users[0].revoke_owner.assert_called_once()
+    client.blob_users[0].revoke_reader.assert_called_once()
+    client.blob_users[0].revoke_writer.assert_called_once()
+    client.blobs[1].acl.user.assert_not_called()
 
 
 def test_revoke_all_download_access(monkeypatch):
     """Check that revoke_all_download_access makes ACL calls as expected against ALL blobs"""
     client = _mock_gcloud_storage_client(monkeypatch)
     revoke_all_download_access(EMAIL)
-    for b in client.blobs:
-        b.acl.revoke_owner.assert_called_with(EMAIL)
-        b.acl.revoke_reader.assert_called_with(EMAIL)
-        b.acl.revoke_writer.assert_called_with(EMAIL)
+    for blob, blob_user in zip(client.blobs, client.blob_users):
+        blob.acl.user.assert_called_once_with(EMAIL)
+        blob_user.revoke_owner.assert_called_once()
+        blob_user.revoke_reader.assert_called_once()
+        blob_user.revoke_writer.assert_called_once()
 
 
 def test_xlsx_gcs_uri_format(monkeypatch):
