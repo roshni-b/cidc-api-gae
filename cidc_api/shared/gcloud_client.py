@@ -223,7 +223,7 @@ def grant_download_access(
     storage_client = _get_storage_client()
     for prefix in prefixes:
         for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
-            blob.acl.user(user_email).grant_reader()
+            blob.acl.user(user_email).grant_read()
 
 
 def revoke_download_access(
@@ -320,10 +320,10 @@ def grant_gcs_access(
                 obj.acl.user(user_email).grant_owner()
             elif role == "writer":
                 logger.info("Granting WRITER on {obj} to {user_email}")
-                obj.acl.user(user_email).grant_writer()
+                obj.acl.user(user_email).grant_write()
             else:  # role == "reader"
                 logger.info("Granting READER on {obj} to {user_email}")
-                obj.acl.user(user_email).grant_reader()
+                obj.acl.user(user_email).grant_read()
         except Exception as e:
             logger.error(str(e))
             raise e

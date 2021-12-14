@@ -228,7 +228,7 @@ def test_grant_download_access(monkeypatch):
     client = _mock_gcloud_storage_client(monkeypatch)
     grant_download_access(EMAIL, "10021", "wes_analysis")
     client.blobs[0].acl.user.assert_called_once_with(EMAIL)
-    client.blob_users[0].grant_reader.assert_called_once()
+    client.blob_users[0].grant_read.assert_called_once()
     client.blobs[1].acl.user.assert_not_called()
 
 
