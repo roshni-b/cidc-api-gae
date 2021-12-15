@@ -21,6 +21,7 @@ from ..config.settings import (
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_UPLOAD_TOPIC,
     GOOGLE_ACL_DATA_BUCKET,
+    GOOGLE_LISTER_ROLE,
     GOOGLE_CLOUD_PROJECT,
     GOOGLE_EMAILS_TOPIC,
     GOOGLE_PATIENT_SAMPLE_TOPIC,
@@ -116,6 +117,26 @@ def upload_xlsx_to_gcs(
 # # there is a separate permissions system that applies the expiring IAM role
 # # `CIDC_biofx` to the `cidc-dfci-biofx-[wes/rna]@ds` emails using a `trial/assay` prefix
 # # while removing any existing perm for the same prefix
+
+
+def grant_lister_access(user_email: str):
+    """
+    Grant a user list access to the GOOGLE_ACL_DATA_BUCKET. List access is
+    required for the user to download or read objects from this bucket.
+    """
+    logger.info(f"granting list to {user_email}")
+    bucket = _get_bucket(GOOGLE_ACL_DATA_BUCKET)
+    grant_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email, iam=True)
+
+
+def revoke_lister_access(user_email: str):
+    """
+    Revoke a user's list access to the GOOGLE_ACL_DATA_BUCKET. List access is
+    required for the user to download or read objects from this bucket.
+    """
+    logger.info(f"revoking list to {user_email}")
+    bucket = _get_bucket(GOOGLE_ACL_DATA_BUCKET)
+    revoke_iam_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email)
 
 
 def grant_upload_access(user_email: str):
@@ -224,6 +245,7 @@ def grant_download_access(
     for prefix in prefixes:
         for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
             blob.acl.user(user_email).grant_read()
+            blob.acl.save()
 
 
 def revoke_download_access(
@@ -249,6 +271,7 @@ def revoke_download_access(
             blob_user.revoke_writer()
             blob_user.revoke_reader()
             removed_from.append(f"gs://{blob.name}")
+            blob.acl.save()
 
 
 def _build_trial_upload_prefixes(
@@ -327,6 +350,8 @@ def grant_gcs_access(
         except Exception as e:
             logger.error(str(e))
             raise e
+        else:
+            obj.acl.save()
 
 
 # Arbitrary upper bound on the number of GCS IAM bindings we expect a user to have for uploads
@@ -370,6 +395,7 @@ def revoke_all_download_access(user_email: str):
         blob_user.revoke_owner()
         blob_user.revoke_writer()
         blob_user.revoke_reader()
+        blob.acl.save()
 
 
 user_member = lambda email: f"user:{email}"
