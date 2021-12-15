@@ -1075,6 +1075,7 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
         == f"admin-action: {user.email} gave {user.email} the permission wes_bam on {trial.trial_id}"
         for log_record in caplog.records
     )
+    gcloud_client.grant_lister_access.assert_called_once()
     gcloud_client.grant_download_access.assert_called_once()
 
     # If granting a permission to a "network-viewer", no GCS IAM actions are taken
@@ -1090,6 +1091,7 @@ def test_permissions_insert(clean_db, monkeypatch, caplog):
     )
     perm.insert()
     _insert.assert_called_once()
+    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
 
 
@@ -1174,7 +1176,9 @@ def test_permissions_delete(clean_db, monkeypatch, caplog):
     gcloud_client.reset_mocks()
     with caplog.at_level(logging.DEBUG):
         perm.delete(deleted_by=user.id)
+    gcloud_client.revoke_lister_access.assert_called_once()
     gcloud_client.revoke_download_access.assert_called_once()
+    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
     assert any(
         log_record.message.strip()
@@ -1185,14 +1189,18 @@ def test_permissions_delete(clean_db, monkeypatch, caplog):
     # Deleting an already-deleted record is idempotent
     gcloud_client.reset_mocks()
     perm.delete(deleted_by=user)
+    gcloud_client.revoke_lister_access.assert_called_once()
     gcloud_client.revoke_download_access.assert_called_once()
     gcloud_client.grant_download_access.assert_not_called()
+    gcloud_client.grant_lister_access.assert_not_called()
 
     # Deleting a record whose user doesn't exist leads to an error
     gcloud_client.reset_mocks()
     with pytest.raises(NoResultFound, match="no user with id"):
         Permissions(granted_to_user=999999).delete(deleted_by=user)
 
+    gcloud_client.revoke_lister_access.assert_not_called()
+    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
 
@@ -1208,6 +1216,7 @@ def test_permissions_delete(clean_db, monkeypatch, caplog):
     )
     perm.insert()
     perm.delete(deleted_by=user)
+    gcloud_client.revoke_lister_access.assert_not_called()
     gcloud_client.revoke_download_access.assert_not_called()
 
 
@@ -1238,11 +1247,13 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
 
     # IAM permissions not granted to network viewers
     Permissions.grant_iam_permissions(user=user)
+    gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
 
     # IAM permissions should be granted for any other role
     user.role = CIDCRole.CIMAC_USER.value
     Permissions.grant_iam_permissions(user=user)
+    gcloud_client.grant_lister_access.assert_called_once_with(user.email)
     gcloud_client.grant_download_access.assert_has_calls(
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types],
         any_order=True,
@@ -1301,6 +1312,9 @@ def test_permissions_grant_download_permissions_for_upload_job(clean_db, monkeyp
     Permissions.grant_download_permissions_for_upload_job(
         assay_upload, session=clean_db
     )
+    gcloud_client.grant_lister_access.assert_has_calls(
+        [call(user.email), call(user2.email)]
+    )
     gcloud_client.grant_download_access.assert_has_calls(
         [
             call(user.email, assay_upload.trial_id, assay_upload.upload_type),
@@ -1330,6 +1344,9 @@ def test_permissions_grant_all_download_permissions(clean_db, monkeypatch):
         ).insert()
 
     Permissions.grant_all_download_permissions()
+    gcloud_client.grant_lister_access.assert_has_calls(
+        [call(user.email)] * len(upload_types)  # one for each insert call
+    )
     gcloud_client.grant_download_access.assert_has_calls(
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
     )
@@ -1364,6 +1381,7 @@ def test_permissions_revoke_all_download_permissions(clean_db, monkeypatch):
         ).insert()
 
     Permissions.revoke_all_download_permissions()
+    gcloud_client.revoke_lister_access.assert_called_once_with(user.email)
     gcloud_client.revoke_download_access.assert_has_calls(
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
     )
@@ -1374,6 +1392,7 @@ def test_permissions_revoke_all_download_permissions(clean_db, monkeypatch):
         user.role = role
         user.update()
         Permissions.revoke_all_download_permissions()
+        gcloud_client.revoke_lister_access.assert_not_called()
         gcloud_client.revoke_download_access.assert_not_called()
 
 
