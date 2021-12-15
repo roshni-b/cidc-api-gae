@@ -536,7 +536,7 @@ details_dict = {
         "fusion analysis report file",
         "This report file contains valiated fusion gene pairs found in all samples including their gene expression.",
     ),
-    "/rna/analysis/msisensor/msisensor.txt": FileDetails(
+    "/rna/analysis/msisensor/msisensor_report.txt": FileDetails(
         "miscellaneous",
         "msisensor report file",
         "This report file contains MSI score this report file contains MSI score.",
