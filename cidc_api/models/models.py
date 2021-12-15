@@ -22,6 +22,7 @@ __all__ = [
     "with_default_session",
 ]
 
+from collections import defaultdict
 import re
 import hashlib
 import os
@@ -91,10 +92,12 @@ from ..config.settings import (
 )
 from ..shared import emails
 from ..shared.gcloud_client import (
-    publish_artifact_upload,
+    grant_lister_access,
     grant_download_access,
+    publish_artifact_upload,
     refresh_intake_access,
     revoke_download_access,
+    revoke_lister_access,
 )
 from ..config.logging import get_logger
 
@@ -589,6 +592,8 @@ class Permissions(CommonColumns):
 
         try:
             # Grant ACL download permissions in GCS
+            # if they have any download permissions, they need the CIDC Lister role
+            grant_lister_access(grantee.email)
             grant_download_access(grantee.email, self.trial_id, self.upload_type)
             # Remove permissions staged for deletion, if any
             for perm in perms_to_delete:
@@ -629,6 +634,12 @@ class Permissions(CommonColumns):
             try:
                 # Revoke ACL permission in GCS
                 revoke_download_access(grantee.email, self.trial_id, self.upload_type)
+
+                # If the permission to delete is the last one, also revoke Lister access
+                filter_ = lambda q: q.filter(Permissions.granted_to_user == grantee.id)
+                if Permissions.count(session=session, filter_=filter_) <= 1:
+                    # this one hasn't been deleted yet, so 1 means this is the last one
+                    revoke_lister_access(grantee.email)
 
             except Exception as e:
                 raise IAMException(
@@ -693,6 +704,9 @@ class Permissions(CommonColumns):
             filter_=filter_for_user,
             session=session,
         )
+        # if they have any download permissions, they need the CIDC Lister role
+        if len(perms):
+            grant_lister_access(user.email)
         for perm in perms:
             # Regrant each permission to reset the TTL for this permission to
             # `settings.INACTIVE_USER_DAYS` from today.
@@ -734,16 +748,35 @@ class Permissions(CommonColumns):
     @staticmethod
     @with_default_session
     def _change_all_download_permissions(grant: bool, session: Session):
+        already_listed = []
+        user_store = {}
+
         perms = Permissions.list(page_size=Permissions.count(), session=session)
         for perm in perms:
-            user = Users.find_by_id(perm.granted_to_user, session=session)
+            user = user_store.get(perm.granted_to_user)
+            if user is None:
+                user = Users.find_by_id(perm.granted_to_user, session=session)
+                user_store[perm.granted_to_user] = user
+
             if user.is_admin() or user.is_nci_user() or user.disabled:
                 continue
 
             if grant:
+                if user.email not in already_listed:
+                    grant_lister_access(user.email)
+                    already_listed.append(user.email)
+
                 grant_download_access(user.email, perm.trial_id, perm.upload_type)
             else:
                 revoke_download_access(user.email, perm.trial_id, perm.upload_type)
+
+        # if un-granting things, revoke_lister_access as needed
+        if not grant:
+            for user in user_store.values():
+                if user.is_admin() or user.is_nci_user() or user.disabled:
+                    continue
+                else:
+                    revoke_lister_access(user.email)
 
 
 class ValidationMultiError(Exception):

@@ -9,6 +9,11 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.51` - 15 Dec 2021
+
+- `added` calls to ACL save, and smoketests
+- `added` back calls for adding/removing lister permissions, and smoketests
+
 ## Version `0.25.50` - 14 Dec 2021
 
 - `fixed` ACL syntax again; see https://googleapis.dev/python/storage/latest/acl.html#google.cloud.storage.acl.ACL
