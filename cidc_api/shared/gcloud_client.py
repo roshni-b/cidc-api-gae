@@ -123,16 +123,18 @@ def grant_lister_access(user_email: str):
     """
     Grant a user list access to the GOOGLE_ACL_DATA_BUCKET. List access is
     required for the user to download or read objects from this bucket.
+    As lister is an IAM permission on an ACL-controlled bucket, can't have conditions. 
     """
     logger.info(f"granting list to {user_email}")
     bucket = _get_bucket(GOOGLE_ACL_DATA_BUCKET)
-    grant_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email, iam=True)
+    grant_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email, iam=True, expiring=False)
 
 
 def revoke_lister_access(user_email: str):
     """
     Revoke a user's list access to the GOOGLE_ACL_DATA_BUCKET. List access is
     required for the user to download or read objects from this bucket.
+    Unlike grant_lister_access, revoking doesn't care if the binding is expiring or not so we don't need to specify.
     """
     logger.info(f"revoking list to {user_email}")
     bucket = _get_bucket(GOOGLE_ACL_DATA_BUCKET)
@@ -306,11 +308,13 @@ def grant_gcs_access(
     role: str,
     user_email: str,
     iam: bool = True,
+    expiring: bool = True,
 ):
     """
     Grant `user_email` the provided `role` on a storage object `obj`.
     `iam` access assumes `obj` is a bucket and will expire after `INACTIVE_USER_DAYS` days have elapsed.
     if not `iam`, assumes ACL and therefore asserts role in ["owner", "reader", "writer"]
+    `expiring` only matters if `iam`, set to False for IAM permissions on ACL-controlled buckets
     """
     if iam:
         # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
@@ -320,7 +324,11 @@ def grant_gcs_access(
         # remove the existing binding if one exists so that we can recreate it with an updated TTL.
         _find_and_pop_iam_binding(policy, role, user_email)
 
-        binding = _build_iam_binding(obj.name, role, user_email,)
+        if not expiring:
+            # special value -1 for non-expiring
+            binding = _build_iam_binding(obj.name, role, user_email, ttl_days=-1)
+        else:
+            binding = _build_iam_binding(obj.name, role, user_email)
         # insert the binding into the policy
         policy.bindings.append(binding)
 
@@ -421,6 +429,7 @@ def _build_iam_binding(
         the email of the user to build the binding for
     ttl_days: int = INACTIVE_USER_DAYS
         the number of days until this permission should expire
+        pass -1 for non-expiring
 
     Returns
     -------
@@ -431,17 +440,20 @@ def _build_iam_binding(
     expiry_date = (timestamp + datetime.timedelta(ttl_days)).date()
 
     # going to add the expiration after, so don't return directly
-    return {
+    ret = {
         "role": role,
         "members": {user_member(user_email)},  # convert format
         "condition": {
             "title": f"{role} access on {bucket}",
             "description": f"Auto-updated by the CIDC API on {timestamp}",
-            # since this is expiring, all operators are OR
-            # if there are no entries here, we don't need brackets; so we'll deal with it later
-            "expression": f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")',
         },
     }
+    if ttl_days >= 0:
+        # special value -1 doesn't expire
+        ret["condition"]["expression"] = (
+            f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")',
+        )
+    return ret
 
 
 def _find_and_pop_iam_binding(
