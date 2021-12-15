@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.52` - 15 Dec 2021
+
+- `removed` all conditional IAMs on data bucket
+
 ## Version `0.25.51` - 15 Dec 2021
 
 - `added` calls to ACL save, and smoketests
