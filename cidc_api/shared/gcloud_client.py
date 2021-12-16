@@ -439,20 +439,18 @@ def _build_iam_binding(
     timestamp = datetime.datetime.now()
     expiry_date = (timestamp + datetime.timedelta(ttl_days)).date()
 
-    # going to add the expiration after, so don't return directly
+    # going to add the expiration condition after, so don't return directly
     ret = {
         "role": role,
         "members": {user_member(user_email)},  # convert format
-        "condition": {
-            "title": f"{role} access on {bucket}",
-            "description": f"Auto-updated by the CIDC API on {timestamp}",
-        },
     }
     if ttl_days >= 0:
         # special value -1 doesn't expire
-        ret["condition"]["expression"] = (
-            f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")',
-        )
+        ret["condition"] = {
+            "title": f"{role} access on {bucket}",
+            "description": f"Auto-updated by the CIDC API on {timestamp}",
+            "expression": f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")',
+        }
     return ret
 
 
