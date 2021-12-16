@@ -140,6 +140,7 @@ def test_grant_lister_access(monkeypatch):
         assert all(b["role"] == GOOGLE_LISTER_ROLE for b in policy.bindings)
         assert any("user:rando" in b["members"] for b in policy.bindings)
         assert any(f"user:{EMAIL}" in b["members"] for b in policy.bindings)
+        assert all("condition" not in b for b in policy.bindings)
 
     _mock_gcloud_storage_client(
         monkeypatch,
@@ -161,6 +162,7 @@ def test_revoke_lister_access(monkeypatch):
         assert all(b["role"] == GOOGLE_LISTER_ROLE for b in policy.bindings)
         assert any("user:rando" in b["members"] for b in policy.bindings)
         assert all(f"user:{EMAIL}" not in b["members"] for b in policy.bindings)
+        assert all("condition" not in b for b in policy.bindings)
 
     _mock_gcloud_storage_client(
         monkeypatch,
