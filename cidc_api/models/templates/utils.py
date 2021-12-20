@@ -225,11 +225,25 @@ def insert_record_batch(
     if len(errors):
         session.rollback()
     elif hold_commit:
-        session.flush()
+        try:
+            session.flush()
+        except Exception as e:
+            errors.append(_handle_postgres_error(e, model))
+            session.rollback()
+
     elif dry_run:
+        try:
+            session.flush()
+        except Exception as e:
+            errors.append(_handle_postgres_error(e, model))
         session.rollback()
+
     else:
-        session.commit()
+        try:
+            session.commit()
+        except Exception as e:
+            errors.append(_handle_postgres_error(e, model))
+            session.rollback()
 
     return errors
 

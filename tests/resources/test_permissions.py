@@ -13,7 +13,6 @@ from cidc_api.models import (
     TrialMetadata,
     CIDCRole,
 )
-from cidc_api.config.settings import GOOGLE_MAX_DOWNLOAD_PERMISSIONS
 
 from ..utils import mock_current_user, make_admin, mock_gcloud_client
 
@@ -206,29 +205,6 @@ def test_create_permission(cidc_api, clean_db, monkeypatch):
         clean_db.query(Permissions).delete()
         clean_db.commit()
 
-    # # ----- This subtest has become unwieldy as GOOGLE_MAX_DOWNLOAD_PERMISSIONS is so large -----
-    # # The permission grantee must have <= GOOGLE_MAX_DOWNLOAD_PERMISSIONS
-    # perm["granted_to_user"] = current_user_id
-    # inserts_fail_eventually = False
-    # upload_types = list(ALL_UPLOAD_TYPES)
-    # for i in range(GOOGLE_MAX_DOWNLOAD_PERMISSIONS + 1):
-    #     gcloud_client.reset_mocks()
-    #     perm["upload_type"] = upload_types[i % len(upload_types)]
-    #     res = client.post("permissions", json=perm)
-    #     if res.status_code != 201:
-    #         assert res.status_code == 400
-    #         assert (
-    #             "greater than or equal to the maximum number of allowed granular permissions"
-    #             in res.json["_error"]["message"]
-    #         )
-    #         gcloud_client.grant_lister_access.assert_not_called()
-    #         gcloud_client.grant_download_access.assert_not_called()
-    #         gcloud_client.revoke_lister_access.assert_not_called()
-    #         gcloud_client.revoke_download_access.assert_not_called()
-    #         inserts_fail_eventually = True
-    #         break
-    # assert inserts_fail_eventually
-
 
 def test_delete_permission(cidc_api, clean_db, monkeypatch):
     """Check that deleting a permission works as expected."""
@@ -236,7 +212,7 @@ def test_delete_permission(cidc_api, clean_db, monkeypatch):
     current_user_id, other_user_id = setup_permissions(cidc_api, monkeypatch)
 
     with cidc_api.app_context():
-        perm = Permissions.find_for_user(current_user_id)[0]
+        perm, perm2 = Permissions.find_for_user(current_user_id)
 
     client = cidc_api.test_client()
 
@@ -299,8 +275,19 @@ def test_delete_permission(cidc_api, clean_db, monkeypatch):
     assert res.status_code == 204
     with cidc_api.app_context():
         assert Permissions.find_by_id(perm.id) is None
-
     gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
-    gcloud_client.revoke_lister_access.assert_not_called()  # there's a second permission still
+    gcloud_client.revoke_lister_access.assert_not_called()  # still perm2
+    gcloud_client.revoke_download_access.assert_called_once()
+
+    # Removing the final permission also removes lister access
+    gcloud_client.reset_mock()
+    headers["If-Match"] = perm2._etag
+    res = client.delete(f"permissions/{perm2.id}", headers=headers)
+    assert res.status_code == 204
+    with cidc_api.app_context():
+        assert Permissions.find_by_id(perm2.id) is None
+    gcloud_client.grant_lister_access.assert_not_called()
+    gcloud_client.grant_download_access.assert_not_called()
+    gcloud_client.revoke_lister_access.assert_called_once()
     gcloud_client.revoke_download_access.assert_called_once()

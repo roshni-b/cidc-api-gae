@@ -1,10 +1,7 @@
 from cidc_api.models.models import CommonColumns
-from jsonschema.validators import validate
 import pandas as pd
-from cidc_api.models.schemas import TrialMetadataListSchema
 import io
 import logging
-from copy import deepcopy
 from functools import wraps
 
 import os
@@ -19,7 +16,6 @@ from sqlalchemy.orm.exc import NoResultFound
 
 from cidc_api.app import app
 from cidc_api.models import (
-    BaseModel,
     Users,
     TrialMetadata,
     UploadJobs,
@@ -39,7 +35,7 @@ from cidc_api.config.settings import (
 from cidc_schemas.prism import PROTOCOL_ID_FIELD_NAME
 from cidc_schemas import prism
 
-from ..utils import make_admin, make_role, mock_gcloud_client
+from ..utils import mock_gcloud_client
 
 
 def db_test(test):
@@ -1257,7 +1253,7 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
     # IAM permissions should be granted for any other role
     user.role = CIDCRole.CIMAC_USER.value
     Permissions.grant_iam_permissions(user=user)
-    gcloud_client.grant_lister_access.assert_called_with(user.email)
+    gcloud_client.grant_lister_access.assert_called_once_with(user.email)
     gcloud_client.grant_download_access.assert_has_calls(
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types],
         any_order=True,
@@ -1267,9 +1263,70 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
 
 
 @db_test
-def test_permissions_grant_all_iam_permissions(clean_db, monkeypatch):
+def test_permissions_grant_download_permissions_for_upload_job(clean_db, monkeypatch):
     """
-    Smoke test that Permissions.grant_all_iam_permissions calls grant_download_access with the right arguments.
+    Smoke test that Permissions.grant_download_permissions_for_upload_job calls grant_download_access with the right arguments.
+    """
+    #  copied from
+    gcloud_client = mock_gcloud_client(monkeypatch)
+    user = Users(email="test@user.com")
+    user.insert()
+    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
+    trial.insert()
+
+    upload_types = ["wes_bam", "ihc", "rna_fastq", "plasma"]
+    for upload_type in upload_types:
+        Permissions(
+            granted_to_user=user.id,
+            trial_id=trial.trial_id,
+            upload_type=upload_type,
+            granted_by_user=user.id,
+        ).insert()
+
+    # Add second user for testing multiple users
+    user2 = Users(email="test2@user.com")
+    user2.insert()
+    # Set up UploadJobs for testing
+    # copied from test_assay_upload_ingestion_success
+    assay_upload = UploadJobs.create(
+        upload_type="ihc",
+        uploader_email=user.email,
+        gcs_file_map={},
+        metadata={PROTOCOL_ID_FIELD_NAME: trial.trial_id},
+        gcs_xlsx_uri="",
+        commit=False,
+    )
+    # Add extra perm on a different user for trial / ihc
+    Permissions(
+        granted_to_user=user2.id,
+        trial_id=trial.trial_id,
+        upload_type=assay_upload.upload_type,
+        granted_by_user=user.id,
+    ).insert()
+    clean_db.commit()
+
+    # Update assay_upload status to simulate a completed but not ingested upload
+    assay_upload.status = UploadJobStatus.UPLOAD_COMPLETED.value
+    assay_upload.ingestion_success(trial)
+
+    Permissions.grant_download_permissions_for_upload_job(
+        assay_upload, session=clean_db
+    )
+    gcloud_client.grant_lister_access.assert_has_calls(
+        [call(user.email), call(user2.email)]
+    )
+    gcloud_client.grant_download_access.assert_has_calls(
+        [
+            call(user.email, assay_upload.trial_id, assay_upload.upload_type),
+            call(user2.email, assay_upload.trial_id, assay_upload.upload_type),
+        ]
+    )
+
+
+@db_test
+def test_permissions_grant_all_download_permissions(clean_db, monkeypatch):
+    """
+    Smoke test that Permissions.grant_all_download_permissions calls grant_download_access with the right arguments.
     """
     gcloud_client = mock_gcloud_client(monkeypatch)
     user = Users(email="test@user.com")
@@ -1286,8 +1343,10 @@ def test_permissions_grant_all_iam_permissions(clean_db, monkeypatch):
             granted_by_user=user.id,
         ).insert()
 
-    Permissions.grant_all_iam_permissions()
-    gcloud_client.grant_lister_access.assert_called_with(user.email)
+    Permissions.grant_all_download_permissions()
+    gcloud_client.grant_lister_access.assert_has_calls(
+        [call(user.email)] * len(upload_types)  # one for each insert call
+    )
     gcloud_client.grant_download_access.assert_has_calls(
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
     )
@@ -1297,15 +1356,14 @@ def test_permissions_grant_all_iam_permissions(clean_db, monkeypatch):
     for role in [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]:
         user.role = role
         user.update()
-        Permissions.grant_all_iam_permissions()
-        gcloud_client.grant_lister_access.assert_not_called()
+        Permissions.grant_all_download_permissions()
         gcloud_client.grant_download_access.assert_not_called()
 
 
 @db_test
-def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
+def test_permissions_revoke_all_download_permissions(clean_db, monkeypatch):
     """
-    Smoke test that Permissions.revoke_all_iam_permissions calls revoke_download_access the right arguments.
+    Smoke test that Permissions.revoke_all_download_permissions calls revoke_download_access the right arguments.
     """
     gcloud_client = mock_gcloud_client(monkeypatch)
     user = Users(email="test@user.com")
@@ -1322,8 +1380,8 @@ def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
             granted_by_user=user.id,
         ).insert()
 
-    Permissions.revoke_all_iam_permissions()
-    gcloud_client.revoke_lister_access.assert_called_once()
+    Permissions.revoke_all_download_permissions()
+    gcloud_client.revoke_lister_access.assert_called_once_with(user.email)
     gcloud_client.revoke_download_access.assert_has_calls(
         [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
     )
@@ -1333,7 +1391,7 @@ def test_permissions_revoke_all_iam_permissions(clean_db, monkeypatch):
     for role in [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]:
         user.role = role
         user.update()
-        Permissions.revoke_all_iam_permissions()
+        Permissions.revoke_all_download_permissions()
         gcloud_client.revoke_lister_access.assert_not_called()
         gcloud_client.revoke_download_access.assert_not_called()
 

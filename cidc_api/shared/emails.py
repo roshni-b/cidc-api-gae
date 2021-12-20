@@ -6,7 +6,7 @@ from functools import wraps
 from cidc_schemas.prism import generate_analysis_configs_from_upload_patch
 
 from . import gcloud_client
-from ..config.settings import ENV, GOOGLE_DATA_BUCKET
+from ..config.settings import ENV, GOOGLE_ACL_DATA_BUCKET
 
 CIDC_MAILING_LIST = "cidc@jimmy.harvard.edu"
 
@@ -77,7 +77,7 @@ def new_user_registration(email: str) -> dict:
 def new_upload_alert(upload, full_metadata) -> dict:
     """Alert the CIDC administrators that an upload succeeded."""
     pipeline_configs = generate_analysis_configs_from_upload_patch(
-        full_metadata, upload.metadata_patch, upload.upload_type, GOOGLE_DATA_BUCKET
+        full_metadata, upload.metadata_patch, upload.upload_type, GOOGLE_ACL_DATA_BUCKET
     )
 
     subject = (

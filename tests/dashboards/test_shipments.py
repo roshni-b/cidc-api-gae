@@ -35,6 +35,7 @@ num_participants = 3
 
 def setup_data(cidc_api, clean_db):
     user = Users(email="test@email.com", approval_date=datetime.now())
+
     shipment = {
         "courier": "FEDEX",
         "ship_to": "",
@@ -50,7 +51,7 @@ def setup_data(cidc_api, clean_db):
         "shipping_condition": "Frozen_Dry_Ice",
         "quality_of_shipment": "Specimen shipment received in good condition",
     }
-    metadata = {
+    patch1 = {
         "protocol_identifier": trial_id,
         "shipments": [
             # we get duplicate shipment uploads sometimes
@@ -79,26 +80,80 @@ def setup_data(cidc_api, clean_db):
         "allowed_cohort_names": [""],
         "allowed_collection_event_names": [""],
     }
-    trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata)
     upload_job = UploadJobs(
         uploader_email=user.email,
-        trial_id=trial.trial_id,
+        trial_id=trial_id,
         upload_type="pbmc",
         gcs_xlsx_uri="",
-        metadata_patch=metadata,
+        metadata_patch=patch1,
         multifile=False,
     )
     upload_job._set_status_no_validation(UploadJobStatus.MERGE_COMPLETED.value)
+
+    shipment2 = {
+        "courier": "FEDEX",
+        "manifest_id": "test_trial-H&E",
+        "account_number": "X",
+        "receiving_party": "MSSM_Rahman",
+        "shipping_condition": "Ambient",
+        "quality_of_shipment": "Specimen shipment received in good condition",
+    }
+    patch2 = {
+        "protocol_identifier": trial_id,
+        "shipments": [shipment2,],
+        "participants": [
+            {
+                "cimac_participant_id": f"CTTTP2{p}",
+                "participant_id": "x",
+                "cohort_name": "",
+                "samples": [
+                    {
+                        "cimac_id": f"CTTTPP{p}S2.0{s}",
+                        "sample_location": "",
+                        "type_of_primary_container": "Other",
+                        "type_of_sample": "Other",
+                        "collection_event_name": "",
+                        "parent_sample_id": "",
+                    }
+                    for s in range(num_samples[p])
+                ],
+            }
+            for p in range(num_participants)
+        ],
+        "allowed_cohort_names": [""],
+        "allowed_collection_event_names": [""],
+    }
+    upload_job2 = UploadJobs(
+        uploader_email=user.email,
+        trial_id=trial_id,
+        upload_type="pbmc",
+        gcs_xlsx_uri="",
+        metadata_patch=patch2,
+        multifile=False,
+    )
+    upload_job2._set_status_no_validation(UploadJobStatus.MERGE_COMPLETED.value)
+
+    metadata = {
+        "protocol_identifier": trial_id,
+        "shipments": patch1["shipments"] + patch2["shipments"],
+        "participants": patch1["participants"] + patch2["participants"],
+        "allowed_cohort_names": [""],
+        "allowed_collection_event_names": [""],
+    }
+    trial = TrialMetadata(trial_id=trial_id, metadata_json=metadata)
+
     with cidc_api.app_context():
         user.insert()
         trial.insert()
         upload_job.insert()
+        upload_job2.insert()
 
         clean_db.refresh(user)
         clean_db.refresh(upload_job)
+        clean_db.refresh(upload_job2)
         clean_db.refresh(trial)
 
-    return user, upload_job, trial
+    return user, (upload_job, upload_job2), trial
 
 
 def test_shipments_dashboard(cidc_api, clean_db, monkeypatch, dash_duo: DashComposite):
@@ -152,12 +207,13 @@ def test_get_manifest_samples(cidc_api, clean_db):
 
 def test_get_trial_shipments(cidc_api, clean_db):
     """Test the helper function used for getting a list of shipments for a given trial."""
-    _, upload_job, _ = setup_data(cidc_api, clean_db)
+    _, upload_jobs, _ = setup_data(cidc_api, clean_db)
 
     with cidc_api.app_context():
         shipments = get_trial_shipments(trial_id)
-        assert len(shipments) == 1
-        shipment = shipments[0]
-        assert shipment["cidc_received"] == upload_job._created
-        assert shipment["participant_count"] == num_participants
-        assert shipment["sample_count"] == sum(num_samples)
+        assert len(shipments) == 2
+
+        for shipment in shipments:
+            assert shipment["cidc_received"] in [u._created for u in upload_jobs]
+            assert shipment["participant_count"] == num_participants
+            assert shipment["sample_count"] == sum(num_samples)

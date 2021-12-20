@@ -1,7 +1,6 @@
 import os
 
 os.environ["TZ"] = "UTC"
-import cidc_api
 from datetime import datetime
 import json
 import os

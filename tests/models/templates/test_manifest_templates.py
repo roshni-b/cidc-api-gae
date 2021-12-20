@@ -90,7 +90,9 @@ def assert_pbmc_worked(cidc_api, clean_db):
         assert shipment.json_data["ship_to"] == "ship to"
 
         assert len(participants) == 2
-        for i, partic in enumerate(participants):
+        for i, partic in enumerate(
+            sorted(participants, key=lambda p: p.cimac_participant_id[-1])
+        ):
             assert partic.trial_id == "test_trial"
             assert partic.cimac_participant_id == f"CTTTP0{i+1}"
             assert partic.trial_participant_id == f"TTTP0{i+1}"
@@ -113,7 +115,7 @@ def assert_pbmc_worked(cidc_api, clean_db):
                 assert partic.json_data["ethnicity"] == "Unknown"
 
         assert len(samples) == 6
-        for i, sample in enumerate(samples):
+        for i, sample in enumerate(sorted(samples, key=lambda s: s.cimac_id[-6:-3])):
             partic = participants[i // 3]
 
             assert sample.trial_id == "test_trial"

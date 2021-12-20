@@ -30,7 +30,7 @@ env_variables:
   CLOUD_SQL_INSTANCE_NAME: "cidc-dfci:us-east1:cidc-postgresql-prod"
   CLOUD_SQL_DB_USER: "cidcuser"
   CLOUD_SQL_DB_NAME: "cidc-prod"
-  GOOGLE_DATA_BUCKET: "cidc-data-prod"
+  GOOGLE_ACL_DATA_BUCKET: "cidc-data-prod-acl"
   GOOGLE_SECRETS_BUCKET: "cidc-secrets-prod"
   GOOGLE_INTAKE_BUCKET: "cidc-intake-prod"
   GOOGLE_UPLOAD_BUCKET: "cidc-uploads-prod"
