@@ -1231,8 +1231,11 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
     )
 
     gcloud_client = mock_gcloud_client(monkeypatch)
-    user = Users(email="test@user.com", role=CIDCRole.NETWORK_VIEWER.value)
-    user.insert()
+    user, user2 = (
+        Users(email="test@user.com", role=CIDCRole.NETWORK_VIEWER.value),
+        Users(email="foo@bar.com"),
+    )
+    user.insert(), user2.insert()
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
 
@@ -1244,6 +1247,12 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
             upload_type=upload_type,
             granted_by_user=user.id,
         ).insert()
+    Permissions(
+        granted_to_user=user2.id,
+        trial_id=trial.trial_id,
+        upload_type="ihc",
+        granted_by_user=user.id,
+    )
 
     # IAM permissions not granted to network viewers
     Permissions.grant_iam_permissions(user=user)
@@ -1255,7 +1264,10 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
     Permissions.grant_iam_permissions(user=user)
     gcloud_client.grant_lister_access.assert_called_once_with(user.email)
     gcloud_client.grant_download_access.assert_has_calls(
-        [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types],
+        [
+            call(user.email, trial.trial_id, upload_type,)
+            for upload_type in upload_types
+        ],
         any_order=True,
     )
 
@@ -1329,8 +1341,8 @@ def test_permissions_grant_all_download_permissions(clean_db, monkeypatch):
     Smoke test that Permissions.grant_all_download_permissions calls grant_download_access with the right arguments.
     """
     gcloud_client = mock_gcloud_client(monkeypatch)
-    user = Users(email="test@user.com")
-    user.insert()
+    user, user2 = Users(email="test@user.com"), Users(email="foo@bar.com")
+    user.insert(), user2.insert()
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
 
@@ -1342,22 +1354,38 @@ def test_permissions_grant_all_download_permissions(clean_db, monkeypatch):
             upload_type=upload_type,
             granted_by_user=user.id,
         ).insert()
+    Permissions(
+        granted_to_user=user2.id,
+        trial_id=trial.trial_id,
+        upload_type="ihc",
+        granted_by_user=user.id,
+    ).insert()
 
     Permissions.grant_all_download_permissions()
     gcloud_client.grant_lister_access.assert_has_calls(
-        [call(user.email)] * len(upload_types)  # one for each insert call
+        [call(user.email), call(user2.email)]
     )
     gcloud_client.grant_download_access.assert_has_calls(
-        [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
+        [
+            call(
+                [user.email, user2.email] if upload_type == "ihc" else [user.email],
+                trial.trial_id,
+                upload_type,
+            )
+            for upload_type in upload_types
+        ]
     )
 
     # not called on admins or nci biobank users
-    gcloud_client.reset_mocks()
     for role in [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]:
+        gcloud_client.reset_mocks()
         user.role = role
         user.update()
         Permissions.grant_all_download_permissions()
-        gcloud_client.grant_download_access.assert_not_called()
+        gcloud_client.grant_lister_access.assert_called_once_with(user2.email)
+        gcloud_client.grant_download_access.assert_called_once_with(
+            [user2.email], trial.trial_id, "ihc"
+        )
 
 
 @db_test
@@ -1366,8 +1394,8 @@ def test_permissions_revoke_all_download_permissions(clean_db, monkeypatch):
     Smoke test that Permissions.revoke_all_download_permissions calls revoke_download_access the right arguments.
     """
     gcloud_client = mock_gcloud_client(monkeypatch)
-    user = Users(email="test@user.com")
-    user.insert()
+    user, user2 = Users(email="test@user.com"), Users(email="foo@bar.com")
+    user.insert(), user2.insert()
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
 
@@ -1380,20 +1408,38 @@ def test_permissions_revoke_all_download_permissions(clean_db, monkeypatch):
             granted_by_user=user.id,
         ).insert()
 
+    Permissions(
+        granted_to_user=user2.id,
+        trial_id=trial.trial_id,
+        upload_type="ihc",
+        granted_by_user=user.id,
+    ).insert()
+
     Permissions.revoke_all_download_permissions()
-    gcloud_client.revoke_lister_access.assert_called_once_with(user.email)
+    gcloud_client.revoke_lister_access.assert_has_calls(
+        [call(user.email), call(user2.email)]
+    )
     gcloud_client.revoke_download_access.assert_has_calls(
-        [call(user.email, trial.trial_id, upload_type) for upload_type in upload_types]
+        [
+            call(
+                [user.email, user2.email] if upload_type == "ihc" else [user.email],
+                trial.trial_id,
+                upload_type,
+            )
+            for upload_type in upload_types
+        ]
     )
 
     # not called on admins or nci biobank users
-    gcloud_client.reset_mocks()
     for role in [CIDCRole.ADMIN.value, CIDCRole.NCI_BIOBANK_USER.value]:
+        gcloud_client.reset_mocks()
         user.role = role
         user.update()
         Permissions.revoke_all_download_permissions()
-        gcloud_client.revoke_lister_access.assert_not_called()
-        gcloud_client.revoke_download_access.assert_not_called()
+        gcloud_client.revoke_lister_access.assert_called_once_with("foo@bar.com")
+        gcloud_client.revoke_download_access.assert_called_once_with(
+            ["foo@bar.com"], trial.trial_id, "ihc"
+        )
 
 
 @db_test

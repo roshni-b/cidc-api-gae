@@ -748,10 +748,11 @@ class Permissions(CommonColumns):
     @staticmethod
     @with_default_session
     def _change_all_download_permissions(grant: bool, session: Session):
-        already_listed = []
-        user_store = {}
-
         perms = Permissions.list(page_size=Permissions.count(), session=session)
+
+        user_store = {}
+        already_listed = []
+        perm_dict = defaultdict(lambda: defaultdict(list))
         for perm in perms:
             user = user_store.get(perm.granted_to_user)
             if user is None:
@@ -761,22 +762,25 @@ class Permissions(CommonColumns):
             if user.is_admin() or user.is_nci_user() or user.disabled:
                 continue
 
-            if grant:
-                if user.email not in already_listed:
-                    grant_lister_access(user.email)
-                    already_listed.append(user.email)
+            # if granting things, grant_lister_access on every user
+            elif grant and user.email not in already_listed:
+                grant_lister_access(user.email)
+                already_listed.append(user.email)
 
-                grant_download_access(user.email, perm.trial_id, perm.upload_type)
-            else:
-                revoke_download_access(user.email, perm.trial_id, perm.upload_type)
+            # if un-granting things, revoke_lister_access on every user
+            elif not grant and user.email not in already_listed:
+                revoke_lister_access(user.email)
+                already_listed.append(user.email)
 
-        # if un-granting things, revoke_lister_access as needed
-        if not grant:
-            for user in user_store.values():
-                if user.is_admin() or user.is_nci_user() or user.disabled:
-                    continue
+            perm_dict[perm.trial_id][perm.upload_type].append(user.email)
+        del perm, perms  # to prevent mispointing
+
+        for trial_id, trial_perms in perm_dict.items():
+            for upload_type, users in trial_perms.items():
+                if grant:
+                    grant_download_access(users, trial_id, upload_type)
                 else:
-                    revoke_lister_access(user.email)
+                    revoke_download_access(users, trial_id, upload_type)
 
 
 class ValidationMultiError(Exception):

@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.54` - 22 Dec 2021
+
+- `changed` admin grant all download permissions to run through cloud function
+
 ## Version `0.25.53` - 16 Dec 2021
 
 - `removed` all IAM conditions on data bucket

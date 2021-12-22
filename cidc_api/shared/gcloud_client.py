@@ -226,10 +226,13 @@ def upload_xlsx_to_intake_bucket(
 
 
 def grant_download_access(
-    user_email: str, trial_id: Optional[str], upload_type: Optional[str]
+    user_email: Union[str, List[str]],
+    trial_id: Optional[str],
+    upload_type: Optional[str],
 ):
     """
     Give a user download access to all objects in a trial of a particular upload type.
+    Also handles a list of users
 
     If trial_id is None, then grant access to all trials.
 
@@ -246,15 +249,23 @@ def grant_download_access(
     storage_client = _get_storage_client()
     for prefix in prefixes:
         for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
-            blob.acl.user(user_email).grant_read()
+            if isinstance(user_email, list):
+                for user in user_email:
+                    blob.acl.user(user).grant_read()
+            else:
+                blob.acl.user(user_email).grant_read()
+
             blob.acl.save()
 
 
 def revoke_download_access(
-    user_email: str, trial_id: Optional[str], upload_type: Optional[str]
+    user_email: Union[str, List[str]],
+    trial_id: Optional[str],
+    upload_type: Optional[str],
 ):
     """
     Revoke a user's download access to all objects in a trial of a particular upload type.
+    Also handles a list of users
 
     Return the GCS URIs from which access has been revoked.
     Download access is controlled by ACL.
@@ -268,10 +279,19 @@ def revoke_download_access(
     removed_from = []
     for prefix in prefixes:
         for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
-            blob_user = blob.acl.user(user_email)
-            blob_user.revoke_owner()
-            blob_user.revoke_writer()
-            blob_user.revoke_reader()
+
+            def revoke(user):
+                blob_user = blob.acl.user(user)
+                blob_user.revoke_owner()
+                blob_user.revoke_writer()
+                blob_user.revoke_reader()
+
+            if isinstance(user_email, list):
+                for user in user_email:
+                    revoke(user)
+            else:
+                revoke(user_email)
+
             removed_from.append(f"gs://{blob.name}")
             blob.acl.save()
 

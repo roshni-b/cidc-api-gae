@@ -92,6 +92,9 @@ GOOGLE_DOWNLOAD_ROLE = "roles/storage.objectViewer"  # same across environments
 GOOGLE_PATIENT_SAMPLE_TOPIC = environ["GOOGLE_PATIENT_SAMPLE_TOPIC"]
 GOOGLE_EMAILS_TOPIC = environ["GOOGLE_EMAILS_TOPIC"]
 GOOGLE_ARTIFACT_UPLOAD_TOPIC = environ["GOOGLE_ARTIFACT_UPLOAD_TOPIC"]
+GOOGLE_GRANT_DOWNLOAD_PERMISSIONS_TOPIC = environ[
+    "GOOGLE_GRANT_DOWNLOAD_PERMISSIONS_TOPIC"
+]
 
 ### File paths ###
 this_directory = path.dirname(path.abspath(__file__))
