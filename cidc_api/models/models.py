@@ -22,6 +22,7 @@ __all__ = [
     "with_default_session",
 ]
 
+from collections import defaultdict
 import re
 import hashlib
 import os
@@ -91,10 +92,12 @@ from ..config.settings import (
 )
 from ..shared import emails
 from ..shared.gcloud_client import (
-    publish_artifact_upload,
+    grant_lister_access,
     grant_download_access,
+    publish_artifact_upload,
     refresh_intake_access,
     revoke_download_access,
+    revoke_lister_access,
 )
 from ..config.logging import get_logger
 
@@ -456,7 +459,10 @@ ALL_UPLOAD_TYPES = set(
     ]
 )
 
-
+# see also: https://github.com/CIMAC-CIDC/cidc-cloud-functions/blob/2e27faca1062adf8143a7c33e0c382e833fd0726/functions/uploads.py#L173
+# # there is a separate permissions system that applies the expiring IAM role
+# # `CIDC_biofx` to the `cidc-dfci-biofx-[wes/rna]@ds` emails using a `trial/assay` prefix
+# # while removing any existing perm for the same prefix
 class Permissions(CommonColumns):
     __tablename__ = "permissions"
     __table_args__ = (
@@ -586,6 +592,8 @@ class Permissions(CommonColumns):
 
         try:
             # Grant ACL download permissions in GCS
+            # if they have any download permissions, they need the CIDC Lister role
+            grant_lister_access(grantee.email)
             grant_download_access(grantee.email, self.trial_id, self.upload_type)
             # Remove permissions staged for deletion, if any
             for perm in perms_to_delete:
@@ -626,6 +634,12 @@ class Permissions(CommonColumns):
             try:
                 # Revoke ACL permission in GCS
                 revoke_download_access(grantee.email, self.trial_id, self.upload_type)
+
+                # If the permission to delete is the last one, also revoke Lister access
+                filter_ = lambda q: q.filter(Permissions.granted_to_user == grantee.id)
+                if Permissions.count(session=session, filter_=filter_) <= 1:
+                    # this one hasn't been deleted yet, so 1 means this is the last one
+                    revoke_lister_access(grantee.email)
 
             except Exception as e:
                 raise IAMException(
@@ -690,6 +704,9 @@ class Permissions(CommonColumns):
             filter_=filter_for_user,
             session=session,
         )
+        # if they have any download permissions, they need the CIDC Lister role
+        if len(perms):
+            grant_lister_access(user.email)
         for perm in perms:
             # Regrant each permission to reset the TTL for this permission to
             # `settings.INACTIVE_USER_DAYS` from today.
@@ -700,6 +717,23 @@ class Permissions(CommonColumns):
 
         # Regrant all of the user's intake bucket upload permissions, if they have any
         refresh_intake_access(user.email)
+
+    @classmethod
+    @with_default_session
+    def grant_download_permissions_for_upload_job(
+        cls, upload: "UploadJobs", session: Session
+    ):
+        perms = (
+            session.query(cls)
+            .filter_by(trial_id=upload.trial_id, upload_type=upload.upload_type)
+            .all()
+        )
+        for perm in perms:
+            user = Users.find_by_id(perm.granted_to_user, session=session)
+            if user.is_admin() or user.is_nci_user() or user.disabled:
+                continue
+
+            grant_download_access(user.email, perm.trial_id, perm.upload_type)
 
     @staticmethod
     @with_default_session
@@ -715,15 +749,38 @@ class Permissions(CommonColumns):
     @with_default_session
     def _change_all_download_permissions(grant: bool, session: Session):
         perms = Permissions.list(page_size=Permissions.count(), session=session)
+
+        user_store = {}
+        already_listed = []
+        perm_dict = defaultdict(lambda: defaultdict(list))
         for perm in perms:
-            user = Users.find_by_id(perm.granted_to_user, session=session)
+            user = user_store.get(perm.granted_to_user)
+            if user is None:
+                user = Users.find_by_id(perm.granted_to_user, session=session)
+                user_store[perm.granted_to_user] = user
+
             if user.is_admin() or user.is_nci_user() or user.disabled:
                 continue
 
-            if grant:
-                grant_download_access(user.email, perm.trial_id, perm.upload_type)
-            else:
-                revoke_download_access(user.email, perm.trial_id, perm.upload_type)
+            # if granting things, grant_lister_access on every user
+            elif grant and user.email not in already_listed:
+                grant_lister_access(user.email)
+                already_listed.append(user.email)
+
+            # if un-granting things, revoke_lister_access on every user
+            elif not grant and user.email not in already_listed:
+                revoke_lister_access(user.email)
+                already_listed.append(user.email)
+
+            perm_dict[perm.trial_id][perm.upload_type].append(user.email)
+        del perm, perms  # to prevent mispointing
+
+        for trial_id, trial_perms in perm_dict.items():
+            for upload_type, users in trial_perms.items():
+                if grant:
+                    grant_download_access(users, trial_id, upload_type)
+                else:
+                    revoke_download_access(users, trial_id, upload_type)
 
 
 class ValidationMultiError(Exception):

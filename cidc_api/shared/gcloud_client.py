@@ -21,6 +21,7 @@ from ..config.settings import (
     GOOGLE_UPLOAD_BUCKET,
     GOOGLE_UPLOAD_TOPIC,
     GOOGLE_ACL_DATA_BUCKET,
+    GOOGLE_LISTER_ROLE,
     GOOGLE_CLOUD_PROJECT,
     GOOGLE_EMAILS_TOPIC,
     GOOGLE_PATIENT_SAMPLE_TOPIC,
@@ -112,6 +113,34 @@ def upload_xlsx_to_gcs(
     return final_object
 
 
+# see also: https://github.com/CIMAC-CIDC/cidc-cloud-functions/blob/2e27faca1062adf8143a7c33e0c382e833fd0726/functions/uploads.py#L173
+# # there is a separate permissions system that applies the expiring IAM role
+# # `CIDC_biofx` to the `cidc-dfci-biofx-[wes/rna]@ds` emails using a `trial/assay` prefix
+# # while removing any existing perm for the same prefix
+
+
+def grant_lister_access(user_email: str):
+    """
+    Grant a user list access to the GOOGLE_ACL_DATA_BUCKET. List access is
+    required for the user to download or read objects from this bucket.
+    As lister is an IAM permission on an ACL-controlled bucket, can't have conditions. 
+    """
+    logger.info(f"granting list to {user_email}")
+    bucket = _get_bucket(GOOGLE_ACL_DATA_BUCKET)
+    grant_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email, iam=True, expiring=False)
+
+
+def revoke_lister_access(user_email: str):
+    """
+    Revoke a user's list access to the GOOGLE_ACL_DATA_BUCKET. List access is
+    required for the user to download or read objects from this bucket.
+    Unlike grant_lister_access, revoking doesn't care if the binding is expiring or not so we don't need to specify.
+    """
+    logger.info(f"revoking list to {user_email}")
+    bucket = _get_bucket(GOOGLE_ACL_DATA_BUCKET)
+    revoke_iam_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email)
+
+
 def grant_upload_access(user_email: str):
     """
     Grant a user upload access to the GOOGLE_UPLOAD_BUCKET. Upload access
@@ -197,10 +226,13 @@ def upload_xlsx_to_intake_bucket(
 
 
 def grant_download_access(
-    user_email: str, trial_id: Optional[str], upload_type: Optional[str]
+    user_email: Union[str, List[str]],
+    trial_id: Optional[str],
+    upload_type: Optional[str],
 ):
     """
     Give a user download access to all objects in a trial of a particular upload type.
+    Also handles a list of users
 
     If trial_id is None, then grant access to all trials.
 
@@ -217,14 +249,23 @@ def grant_download_access(
     storage_client = _get_storage_client()
     for prefix in prefixes:
         for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
-            blob.acl.grant_reader(user_email)
+            if isinstance(user_email, list):
+                for user in user_email:
+                    blob.acl.user(user).grant_read()
+            else:
+                blob.acl.user(user_email).grant_read()
+
+            blob.acl.save()
 
 
 def revoke_download_access(
-    user_email: str, trial_id: Optional[str], upload_type: Optional[str]
+    user_email: Union[str, List[str]],
+    trial_id: Optional[str],
+    upload_type: Optional[str],
 ):
     """
     Revoke a user's download access to all objects in a trial of a particular upload type.
+    Also handles a list of users
 
     Return the GCS URIs from which access has been revoked.
     Download access is controlled by ACL.
@@ -238,10 +279,21 @@ def revoke_download_access(
     removed_from = []
     for prefix in prefixes:
         for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix):
-            blob.acl.revoke_owner(user_email)
-            blob.acl.revoke_writer(user_email)
-            blob.acl.revoke_reader(user_email)
+
+            def revoke(user):
+                blob_user = blob.acl.user(user)
+                blob_user.revoke_owner()
+                blob_user.revoke_writer()
+                blob_user.revoke_reader()
+
+            if isinstance(user_email, list):
+                for user in user_email:
+                    revoke(user)
+            else:
+                revoke(user_email)
+
             removed_from.append(f"gs://{blob.name}")
+            blob.acl.save()
 
 
 def _build_trial_upload_prefixes(
@@ -276,11 +328,13 @@ def grant_gcs_access(
     role: str,
     user_email: str,
     iam: bool = True,
+    expiring: bool = True,
 ):
     """
     Grant `user_email` the provided `role` on a storage object `obj`.
     `iam` access assumes `obj` is a bucket and will expire after `INACTIVE_USER_DAYS` days have elapsed.
     if not `iam`, assumes ACL and therefore asserts role in ["owner", "reader", "writer"]
+    `expiring` only matters if `iam`, set to False for IAM permissions on ACL-controlled buckets
     """
     if iam:
         # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
@@ -290,7 +344,11 @@ def grant_gcs_access(
         # remove the existing binding if one exists so that we can recreate it with an updated TTL.
         _find_and_pop_iam_binding(policy, role, user_email)
 
-        binding = _build_iam_binding(obj.name, role, user_email,)
+        if not expiring:
+            # special value -1 for non-expiring
+            binding = _build_iam_binding(obj.name, role, user_email, ttl_days=-1)
+        else:
+            binding = _build_iam_binding(obj.name, role, user_email)
         # insert the binding into the policy
         policy.bindings.append(binding)
 
@@ -310,16 +368,18 @@ def grant_gcs_access(
         try:
             if role == "owner":
                 logger.warning("Granting OWNER on {obj} to {user_email}")
-                obj.acl.grant_owner(user_email)
+                obj.acl.user(user_email).grant_owner()
             elif role == "writer":
                 logger.info("Granting WRITER on {obj} to {user_email}")
-                obj.acl.grant_writer(user_email)
+                obj.acl.user(user_email).grant_write()
             else:  # role == "reader"
                 logger.info("Granting READER on {obj} to {user_email}")
-                obj.acl.grant_reader(user_email)
+                obj.acl.user(user_email).grant_read()
         except Exception as e:
             logger.error(str(e))
             raise e
+        else:
+            obj.acl.save()
 
 
 # Arbitrary upper bound on the number of GCS IAM bindings we expect a user to have for uploads
@@ -359,9 +419,11 @@ def revoke_all_download_access(user_email: str):
     # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
     storage_client = _get_storage_client()
     for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET):
-        blob.acl.revoke_owner(user_email)
-        blob.acl.revoke_writer(user_email)
-        blob.acl.revoke_reader(user_email)
+        blob_user = blob.acl.user(user_email)
+        blob_user.revoke_owner()
+        blob_user.revoke_writer()
+        blob_user.revoke_reader()
+        blob.acl.save()
 
 
 user_member = lambda email: f"user:{email}"
@@ -387,6 +449,7 @@ def _build_iam_binding(
         the email of the user to build the binding for
     ttl_days: int = INACTIVE_USER_DAYS
         the number of days until this permission should expire
+        pass -1 for non-expiring
 
     Returns
     -------
@@ -396,18 +459,19 @@ def _build_iam_binding(
     timestamp = datetime.datetime.now()
     expiry_date = (timestamp + datetime.timedelta(ttl_days)).date()
 
-    # going to add the expiration after, so don't return directly
-    return {
+    # going to add the expiration condition after, so don't return directly
+    ret = {
         "role": role,
         "members": {user_member(user_email)},  # convert format
-        "condition": {
+    }
+    if ttl_days >= 0:
+        # special value -1 doesn't expire
+        ret["condition"] = {
             "title": f"{role} access on {bucket}",
             "description": f"Auto-updated by the CIDC API on {timestamp}",
-            # since this is expiring, all operators are OR
-            # if there are no entries here, we don't need brackets; so we'll deal with it later
             "expression": f'request.time < timestamp("{expiry_date.isoformat()}T00:00:00Z")',
-        },
-    }
+        }
+    return ret
 
 
 def _find_and_pop_iam_binding(

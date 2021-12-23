@@ -13,12 +13,14 @@ from cidc_api.shared import gcloud_client
 from cidc_api.config import settings
 from cidc_api.shared.gcloud_client import (
     create_intake_bucket,
-    grant_upload_access,
     grant_download_access,
+    grant_lister_access,
+    grant_upload_access,
     refresh_intake_access,
-    revoke_upload_access,
-    revoke_download_access,
     revoke_all_download_access,
+    revoke_download_access,
+    revoke_lister_access,
+    revoke_upload_access,
     upload_xlsx_to_gcs,
     upload_xlsx_to_intake_bucket,
     _build_iam_binding,
@@ -89,6 +91,13 @@ def _mock_gcloud_storage_client(
         MagicMock(),
     ]
 
+    mock_client.blob_users = [
+        MagicMock(),
+        MagicMock(),
+    ]
+    mock_client.blobs[0].acl.user.return_value = mock_client.blob_users[0]
+    mock_client.blobs[1].acl.user.return_value = mock_client.blob_users[1]
+
     def mock_list_blobs(*a, prefix: str = "", **kw):
         if prefix == "10021/wes":
             return [mock_client.blobs[0]]
@@ -121,6 +130,50 @@ def test_build_trial_upload_prefixes(monkeypatch):
     )
     assert _build_trial_upload_prefixes("foo", None) == ["foo"]
     assert _build_trial_upload_prefixes("foo", "rna_bam") == ["foo/rna"]
+
+
+def test_grant_lister_access(monkeypatch):
+    """Check that grant_lister_access adds policy bindings as expected"""
+
+    def set_iam_policy(policy):
+        assert len(policy.bindings) == 2, str(policy.bindings)
+        assert all(b["role"] == GOOGLE_LISTER_ROLE for b in policy.bindings)
+        assert any("user:rando" in b["members"] for b in policy.bindings)
+        assert any(f"user:{EMAIL}" in b["members"] for b in policy.bindings)
+        assert all("condition" not in b for b in policy.bindings)
+
+    _mock_gcloud_storage_client(
+        monkeypatch,
+        [
+            {"role": GOOGLE_LISTER_ROLE, "members": ["user:rando"]},
+            {"role": GOOGLE_LISTER_ROLE, "members": [f"user:{EMAIL}"]},
+        ],
+        set_iam_policy,
+    )
+
+    grant_lister_access(EMAIL)
+
+
+def test_revoke_lister_access(monkeypatch):
+    """Check that grant_lister_access adds policy bindings as expected"""
+
+    def set_iam_policy(policy):
+        assert len(policy.bindings) == 1
+        assert all(b["role"] == GOOGLE_LISTER_ROLE for b in policy.bindings)
+        assert any("user:rando" in b["members"] for b in policy.bindings)
+        assert all(f"user:{EMAIL}" not in b["members"] for b in policy.bindings)
+        assert all("condition" not in b for b in policy.bindings)
+
+    _mock_gcloud_storage_client(
+        monkeypatch,
+        [
+            {"role": GOOGLE_LISTER_ROLE, "members": ["user:rando"]},
+            {"role": GOOGLE_LISTER_ROLE, "members": [f"user:{EMAIL}"]},
+        ],
+        set_iam_policy,
+    )
+
+    revoke_lister_access(EMAIL)
 
 
 def test_grant_upload_access(monkeypatch):
@@ -220,30 +273,36 @@ def test_grant_download_access(monkeypatch):
     """Check that grant_download_access makes ACL calls as expected"""
     client = _mock_gcloud_storage_client(monkeypatch)
     grant_download_access(EMAIL, "10021", "wes_analysis")
-    client.blobs[0].acl.grant_reader.assert_called_with(EMAIL)
-    client.blobs[1].acl.grant_reader.assert_not_called()
+    client.blobs[0].acl.user.assert_called_once_with(EMAIL)
+    client.blob_users[0].grant_read.assert_called_once()
+    client.blobs[0].acl.save.assert_called_once()
+    client.blobs[1].acl.user.assert_not_called()
+    client.blobs[1].acl.save.assert_not_called()
 
 
 def test_revoke_download_access(monkeypatch):
     """Check that revoke_download_access makes ACL calls as expected"""
     client = _mock_gcloud_storage_client(monkeypatch)
     revoke_download_access(EMAIL, "10021", "wes_analysis")
-    client.blobs[0].acl.revoke_owner.assert_called_with(EMAIL)
-    client.blobs[0].acl.revoke_reader.assert_called_with(EMAIL)
-    client.blobs[0].acl.revoke_writer.assert_called_with(EMAIL)
-    client.blobs[1].acl.revoke_owner.assert_not_called()
-    client.blobs[1].acl.revoke_reader.assert_not_called()
-    client.blobs[1].acl.revoke_writer.assert_not_called()
+    client.blobs[0].acl.user.assert_called_once_with(EMAIL)
+    client.blob_users[0].revoke_owner.assert_called_once()
+    client.blob_users[0].revoke_reader.assert_called_once()
+    client.blob_users[0].revoke_writer.assert_called_once()
+    client.blobs[0].acl.save.assert_called_once()
+    client.blobs[1].acl.user.assert_not_called()
+    client.blobs[1].acl.save.assert_not_called()
 
 
 def test_revoke_all_download_access(monkeypatch):
     """Check that revoke_all_download_access makes ACL calls as expected against ALL blobs"""
     client = _mock_gcloud_storage_client(monkeypatch)
     revoke_all_download_access(EMAIL)
-    for b in client.blobs:
-        b.acl.revoke_owner.assert_called_with(EMAIL)
-        b.acl.revoke_reader.assert_called_with(EMAIL)
-        b.acl.revoke_writer.assert_called_with(EMAIL)
+    for blob, blob_user in zip(client.blobs, client.blob_users):
+        blob.acl.user.assert_called_once_with(EMAIL)
+        blob_user.revoke_owner.assert_called_once()
+        blob_user.revoke_reader.assert_called_once()
+        blob_user.revoke_writer.assert_called_once()
+        blob.acl.save.assert_called_once()
 
 
 def test_xlsx_gcs_uri_format(monkeypatch):

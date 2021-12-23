@@ -10,7 +10,7 @@ from cidc_api.models.migrations import (
     run_metadata_migration,
 )
 from cidc_api.models import UploadJobs, DownloadableFiles
-from cidc_api.config.settings import GOOGLE_DATA_BUCKET
+from cidc_api.config.settings import GOOGLE_ACL_DATA_BUCKET
 
 
 def test_rollbackable_queue():
@@ -147,8 +147,8 @@ def test_migrations_failures(use_upload_jobs_table, monkeypatch):
     assert df_record.additional_metadata == {"some_assay.extra": "metadata"}
     # Ensure we renamed the right objects
     assert rename_gcs_obj.call_args_list == [
-        call(GOOGLE_DATA_BUCKET, "a_old_url", "a_new_url"),
-        call(GOOGLE_DATA_BUCKET, "b_old_url", "b_new_url"),
+        call(GOOGLE_ACL_DATA_BUCKET, "a_old_url", "a_new_url"),
+        call(GOOGLE_ACL_DATA_BUCKET, "b_old_url", "b_new_url"),
     ]
 
 

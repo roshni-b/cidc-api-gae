@@ -536,7 +536,7 @@ details_dict = {
         "fusion analysis report file",
         "This report file contains valiated fusion gene pairs found in all samples including their gene expression.",
     ),
-    "/rna/analysis/msisensor/msisensor.txt": FileDetails(
+    "/rna/analysis/msisensor/msisensor_report.txt": FileDetails(
         "miscellaneous",
         "msisensor report file",
         "This report file contains MSI score this report file contains MSI score.",
@@ -716,17 +716,17 @@ details_dict = {
         "comma-separated two-column table with cell counts for each profiled subset of assigned cell types",
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the broad compartment of the called cell types, and 'N', the number of cells within that profiled subset seen in the sample.",
     ),
-    f"/cytof_analysis/combined_cell_counts_assignment.csv": FileDetails(
+    "csv|cell counts assignment": FileDetails(
         "analysis",
         "comma-separated two-column table with cell counts for each assigned cell type",
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the called cell type, and 'N', the number of cells of that type seen in the sample.",
     ),
-    f"/cytof_analysis/combined_cell_counts_compartment.csv": FileDetails(
+    f"csv|cell counts compartment": FileDetails(
         "analysis",
         "comma-separated two-column table with cell counts for each broad compartment assigned",
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the broad compartment of the called cell types, and 'N', the number of cells within that compartment seen in the sample.",
     ),
-    f"/cytof_analysis/combined_cell_counts_profiling.csv": FileDetails(
+    f"csv|cell counts profiling": FileDetails(
         "analysis",
         "comma-separated two-column table with cell counts for each profiled subset of all assigned cell types",
         "A plain-text, comma-separated table with a numbered index column, the 'CellSubset' as the profiled subset of the assigned cell types, and 'N', the number of cells within that profiled subset seen in the sample.",

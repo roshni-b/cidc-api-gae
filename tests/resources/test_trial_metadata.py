@@ -190,7 +190,6 @@ def test_list_trials(cidc_api, clean_db, monkeypatch):
     assert res.json["_items"][0]
     [trial_json_1, trial_json_2] = res.json["_items"]
     assert set(trial_json_1["file_bundle"]["CyTOF"]["source"]) == set([0, 1])
-    assert trial_json_1["file_bundle"]["CyTOF"]["analysis"] == [2]
     assert trial_json_1["file_bundle"]["WES"]["source"] == [3]
     assert trial_json_1["num_samples"] == 1
     assert trial_json_1["num_participants"] == 1
