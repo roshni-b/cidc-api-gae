@@ -1,4 +1,3 @@
-from io import BytesIO
 from unittest.mock import MagicMock
 
 from cidc_api.models import Users, UploadJobs
