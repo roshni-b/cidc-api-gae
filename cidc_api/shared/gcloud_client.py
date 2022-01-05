@@ -2,11 +2,6 @@
 import json
 import os
 
-from build.lib.cidc_api.config.settings import (
-    GOOGLE_MAX_DOWNLOAD_CONDITIONS,
-    GOOGLE_MAX_DOWNLOAD_PERMISSIONS,
-)
-
 os.environ["TZ"] = "UTC"
 import datetime
 import warnings
@@ -36,6 +31,8 @@ from ..config.settings import (
     GOOGLE_PATIENT_SAMPLE_TOPIC,
     GOOGLE_ARTIFACT_UPLOAD_TOPIC,
     GOOGLE_MAX_CONDITIONAL_OPERATORS,
+    GOOGLE_MAX_DOWNLOAD_CONDITIONS,
+    GOOGLE_MAX_DOWNLOAD_PERMISSIONS,
     TESTING,
     ENV,
     DEV_CFUNCTIONS_SERVER,
