@@ -1,11 +1,10 @@
 import os
 
 os.environ["TZ"] = "UTC"
-from cidc_api.models.models import ALL_UPLOAD_TYPES
-from unittest.mock import MagicMock
 from datetime import datetime
 from typing import Tuple
 
+from cidc_api.config.settings import GOOGLE_MAX_DOWNLOAD_PERMISSIONS
 from cidc_api.models import (
     Users,
     Permissions,
@@ -13,6 +12,7 @@ from cidc_api.models import (
     TrialMetadata,
     CIDCRole,
 )
+from cidc_api.models.models import ALL_UPLOAD_TYPES
 
 from ..utils import mock_current_user, make_admin, mock_gcloud_client
 

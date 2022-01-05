@@ -85,10 +85,12 @@ from .files import (
 
 from ..config.db import BaseModel
 from ..config.settings import (
+    ENV,
     PAGINATION_PAGE_SIZE,
     MAX_PAGINATION_PAGE_SIZE,
     TESTING,
     INACTIVE_USER_DAYS,
+    GOOGLE_MAX_DOWNLOAD_PERMISSIONS,
 )
 from ..shared import emails
 from ..shared.gcloud_client import (
@@ -550,6 +552,24 @@ class Permissions(CommonColumns):
             )
 
         is_network_viewer = grantee.role == CIDCRole.NETWORK_VIEWER.value
+
+        # IAM on prod
+        # A user can only have 20 granular permissions at a time, due to GCS constraints
+        # (with the exception of Network Viewers, who can't download data from GCS and aren't
+        # subject to this constraint.)
+        if (
+            ENV == "prod"
+            and not is_network_viewer
+            and (
+                len(Permissions.find_for_user(self.granted_to_user, session=session))
+                >= GOOGLE_MAX_DOWNLOAD_PERMISSIONS
+            )
+        ):
+            raise IntegrityError(
+                params=None,
+                statement=None,
+                orig=f"{grantee.email} has greater than or equal to the maximum number of allowed granular permissions ({GOOGLE_MAX_DOWNLOAD_PERMISSIONS}). Remove unused permissions to add others.",
+            )
 
         logger.info(
             f"admin-action: {grantor.email} gave {grantee.email} the permission {self.upload_type or 'all assays'} on {self.trial_id or 'all trials'}"

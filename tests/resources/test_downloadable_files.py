@@ -13,7 +13,7 @@ from cidc_api.models import (
     Permissions,
     CIDCRole,
 )
-from cidc_api.config.settings import GOOGLE_ACL_DATA_BUCKET
+from cidc_api.config.settings import GOOGLE_ACL_DATA_BUCKET, GOOGLE_DATA_BUCKET
 from cidc_api.resources.upload_jobs import log_multiple_errors
 
 from ..utils import mock_current_user, make_admin, make_role, mock_gcloud_client
@@ -231,6 +231,48 @@ def test_get_related_files(cidc_api, clean_db, monkeypatch):
     res = client.get(f"/downloadable_files/{file_id_2}/related_files")
     assert res.status_code == 200
     assert len(res.json["_items"]) == 0  # file 2 has 0 related file
+
+
+def test_get_filelist_prod(cidc_api, clean_db, monkeypatch):
+    """Check that getting a filelist.tsv works as expected"""
+    from cidc_api.resources import downloadable_files
+
+    monkeypatch.setattr(downloadable_files, "ENV", "prod")
+    user_id = setup_user(cidc_api, monkeypatch)
+    file_id_1, file_id_2 = setup_downloadable_files(cidc_api)
+
+    client = cidc_api.test_client()
+
+    url = "/downloadable_files/filelist"
+
+    # Give the user one permission
+    with cidc_api.app_context():
+        perm = Permissions(
+            granted_to_user=user_id,
+            trial_id=trial_id_1,
+            upload_type=upload_types[0],
+            granted_by_user=user_id,
+        )
+        perm.insert()
+
+    # User has one permission, so the filelist should contain a single file
+    short_file_list = {"file_ids": [file_id_1, file_id_2]}
+    res = client.post(url, json=short_file_list)
+    assert res.status_code == 200
+    assert "text/tsv" in res.headers["Content-Type"]
+    assert "filename=filelist.tsv" in res.headers["Content-Disposition"]
+    assert res.data.decode("utf-8") == (
+        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id_1}/wes/.../reads_123.bam\t{trial_id_1}_wes_..._reads_123.bam\n"
+    )
+
+    # Admins don't need permissions to get files
+    make_admin(user_id, cidc_api)
+    res = client.post(url, json=short_file_list)
+    assert res.status_code == 200
+    assert res.data.decode("utf-8") == (
+        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id_1}/wes/.../reads_123.bam\t{trial_id_1}_wes_..._reads_123.bam\n"
+        f"gs://{GOOGLE_DATA_BUCKET}/{trial_id_2}/cytof/.../analysis.zip\t{trial_id_2}_cytof_..._analysis.zip\n"
+    )
 
 
 def test_get_filelist(cidc_api, clean_db, monkeypatch):

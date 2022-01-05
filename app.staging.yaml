@@ -23,6 +23,7 @@ env_variables:
   CLOUD_SQL_DB_USER: "cidcuser"
   CLOUD_SQL_DB_NAME: "cidc-staging"
   GOOGLE_ACL_DATA_BUCKET: "cidc-data-staging-acl"
+  GOOGLE_DATA_BUCKET: "cidc-data-staging"
   GOOGLE_SECRETS_BUCKET: "cidc-secrets-staging"
   GOOGLE_INTAKE_BUCKET: "cidc-intake-staging"
   GOOGLE_UPLOAD_BUCKET: "cidc-uploads-staging"

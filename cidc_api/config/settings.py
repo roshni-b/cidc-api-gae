@@ -83,6 +83,7 @@ GOOGLE_CLOUD_PROJECT = environ["GOOGLE_CLOUD_PROJECT"]
 GOOGLE_INTAKE_BUCKET = environ["GOOGLE_INTAKE_BUCKET"]
 GOOGLE_UPLOAD_BUCKET = environ["GOOGLE_UPLOAD_BUCKET"]
 GOOGLE_UPLOAD_TOPIC = environ["GOOGLE_UPLOAD_TOPIC"]
+GOOGLE_DATA_BUCKET = environ["GOOGLE_DATA_BUCKET"]
 GOOGLE_ACL_DATA_BUCKET = environ["GOOGLE_ACL_DATA_BUCKET"]
 GOOGLE_EPHEMERAL_BUCKET = environ["GOOGLE_EPHEMERAL_BUCKET"]
 GOOGLE_UPLOAD_ROLE = environ["GOOGLE_UPLOAD_ROLE"]
@@ -95,6 +96,21 @@ GOOGLE_ARTIFACT_UPLOAD_TOPIC = environ["GOOGLE_ARTIFACT_UPLOAD_TOPIC"]
 GOOGLE_GRANT_DOWNLOAD_PERMISSIONS_TOPIC = environ[
     "GOOGLE_GRANT_DOWNLOAD_PERMISSIONS_TOPIC"
 ]
+# This is a limit set by GCP - there will never be more than this many
+# conditional bindings for a single member-role combo.
+# See: https://cloud.google.com/iam/docs/conditions-overview
+GOOGLE_MAX_DOWNLOAD_PERMISSIONS = 20
+# This is a limit set by GCP - there can never be more than this many
+# conditional operators in a single binding.
+# See: https://cloud.google.com/iam/docs/conditions-overview#cel
+GOOGLE_MAX_CONDITIONAL_OPERATORS = 12
+# As 1 permission is used for the expiring Lister permission, there can
+# never be more than this many total conditions assigned to a user.
+GOOGLE_MAX_DOWNLOAD_CONDITIONS = (GOOGLE_MAX_CONDITIONAL_OPERATORS + 1) * (
+    GOOGLE_MAX_DOWNLOAD_PERMISSIONS - 1
+)
+GOOGLE_AND_OPERATOR = " && "
+GOOGLE_OR_OPERATOR = " || "
 
 ### File paths ###
 this_directory = path.dirname(path.abspath(__file__))
