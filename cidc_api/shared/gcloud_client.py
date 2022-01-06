@@ -739,8 +739,9 @@ def _find_and_pop_iam_binding(
             user_binding_index = i
 
         # return the last policy binding if it doesn't have
-        elif ENV == "prod"(
-            return_next
+        elif (
+            ENV == "prod"
+            and return_next
             and role_matches
             and member_matches
             and _can_add_more_conditions(binding)
