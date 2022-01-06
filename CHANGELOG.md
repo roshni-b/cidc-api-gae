@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.57` - 06 Jan 2022
+
+- `fixed` can't apply expiry condition to upload buckets as they are ACL-controlled
+
 ## Version `0.25.56` - 06 Jan 2022
 
 - `fixed` typo by adding missing `and`

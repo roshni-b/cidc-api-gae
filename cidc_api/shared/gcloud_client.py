@@ -134,7 +134,7 @@ def grant_lister_access(user_email: str):
     Grant a user list access to the GOOGLE_ACL_DATA_BUCKET. List access is
     required for the user to download or read objects from this bucket.
     As lister is an IAM permission on an ACL-controlled bucket, can't have conditions.
-    GOOGLE_ACL_DATA_BUCKET on prod.
+    GOOGLE_DATA_BUCKET on prod.
     """
     logger.info(f"granting list to {user_email}")
     bucket = _get_bucket(
@@ -148,7 +148,7 @@ def revoke_lister_access(user_email: str):
     Revoke a user's list access to the GOOGLE_ACL_DATA_BUCKET. List access is
     required for the user to download or read objects from this bucket.
     Unlike grant_lister_access, revoking doesn't care if the binding is expiring or not so we don't need to specify.
-    GOOGLE_ACL_DATA_BUCKET on prod.
+    GOOGLE_DATA_BUCKET on prod.
     """
     logger.info(f"revoking list to {user_email}")
     bucket = _get_bucket(
@@ -162,10 +162,11 @@ def grant_upload_access(user_email: str):
     Grant a user upload access to the GOOGLE_UPLOAD_BUCKET. Upload access
     means a user can write objects to the bucket but cannot delete,
     overwrite, or read objects from this bucket.
+    Non-expiring as GOOGLE_UPLOAD_BUCKET is subject to ACL.
     """
     logger.info(f"granting upload to {user_email}")
     bucket = _get_bucket(GOOGLE_UPLOAD_BUCKET)
-    grant_gcs_access(bucket, GOOGLE_UPLOAD_ROLE, user_email, iam=True)
+    grant_gcs_access(bucket, GOOGLE_UPLOAD_ROLE, user_email, iam=True, expiring=False)
 
 
 def revoke_upload_access(user_email: str):
@@ -180,7 +181,7 @@ def revoke_upload_access(user_email: str):
 def get_intake_bucket_name(user_email: str) -> str:
     """
     Get the name for an intake bucket associated with the given user.
-    Bucket names will have a structure like <intake
+    Bucket names will have a structure like GOOGLE_INTAKE_BUCKET-<hash>
     """
     # 10 characters should be plenty, given that we only expect
     # a handful of unique data uploaders - we get 16^10 possible hashes.
@@ -194,6 +195,7 @@ def create_intake_bucket(user_email: str) -> storage.Bucket:
     Create a new data intake bucket for this user, or get the existing one.
     Grant the user GCS object admin permissions on the bucket, or refresh those
     permissions if they've already been granted.
+    Created with uniform bucket-level IAM access, so expiring permission.
     """
     storage_client = _get_storage_client()
     bucket_name = get_intake_bucket_name(user_email)
