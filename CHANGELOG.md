@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.56` - 06 Jan 2022
+
+- `fixed` typo by adding missing `and`
+
 ## Version `0.25.55` - 05 Jan 2022
 
 - `added` back IAM download functionality for production environment only, partially reverting commit 7504926685dcd00b0c20b41911ec8aba7f8b98b0
