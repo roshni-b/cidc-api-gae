@@ -757,17 +757,22 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def grant_all_download_permissions(session: Session):
-        Permissions._change_all_download_permissions(grant=True, session=session)
+    def grant_all_download_permissions(session: Session, trial_id: str = None):
+        Permissions._change_all_download_permissions(
+            trial_id=trial_id, grant=True, session=session
+        )
 
     @staticmethod
     @with_default_session
     def revoke_all_download_permissions(session: Session):
-        Permissions._change_all_download_permissions(grant=False, session=session)
+        Permissions._change_all_download_permissions(
+            trial_id=None, grant=False, session=session
+        )
 
     @staticmethod
     @with_default_session
-    def _change_all_download_permissions(grant: bool, session: Session):
+    def _change_all_download_permissions(trial_id: str, grant: bool, session: Session):
+        """if not trial_id, all trials"""
         perms = Permissions.list(page_size=Permissions.count(), session=session)
 
         user_store = {}
@@ -794,6 +799,11 @@ class Permissions(CommonColumns):
 
             perm_dict[perm.trial_id][perm.upload_type].append(user.email)
         del perm, perms  # to prevent mispointing
+
+        if trial_id:
+            trial_perms = perm_dict.get(trial_id, {})
+            trial_perms.update(perm_dict.get(None, {}))
+            perm_dict = {trial_id: trial_perms}
 
         for trial_id, trial_perms in perm_dict.items():
             for upload_type, users in trial_perms.items():

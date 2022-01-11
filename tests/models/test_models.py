@@ -1343,24 +1343,39 @@ def test_permissions_grant_all_download_permissions(clean_db, monkeypatch):
     gcloud_client = mock_gcloud_client(monkeypatch)
     user, user2 = Users(email="test@user.com"), Users(email="foo@bar.com")
     user.insert(), user2.insert()
-    trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
-    trial.insert()
 
-    upload_types = ["wes_bam", "ihc", "rna_fastq", "plasma"]
+    trial2_id = f"{TRIAL_ID}2"
+    trial, trial2 = (
+        TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA),
+        TrialMetadata(trial_id=trial2_id, metadata_json=METADATA),
+    )
+    trial.insert(), trial2.insert()
+
+    upload_types = ["wes_bam", "rna_fastq", "plasma", "ihc"]
     for upload_type in upload_types:
         Permissions(
             granted_to_user=user.id,
-            trial_id=trial.trial_id,
+            trial_id=None if upload_type == "ihc" else trial.trial_id,
             upload_type=upload_type,
             granted_by_user=user.id,
         ).insert()
     Permissions(
         granted_to_user=user2.id,
-        trial_id=trial.trial_id,
+        trial_id=None,
         upload_type="ihc",
         granted_by_user=user.id,
     ).insert()
 
+    gcloud_client.reset_mocks()
+    Permissions.grant_all_download_permissions(trial_id=trial2_id)
+    gcloud_client.grant_lister_access.assert_has_calls(
+        [call(user.email), call(user2.email)]
+    )
+    gcloud_client.grant_download_access.assert_called_once_with(
+        [user.email, user2.email], trial2_id, "ihc",
+    )
+
+    gcloud_client.reset_mocks()
     Permissions.grant_all_download_permissions()
     gcloud_client.grant_lister_access.assert_has_calls(
         [call(user.email), call(user2.email)]
@@ -1369,7 +1384,7 @@ def test_permissions_grant_all_download_permissions(clean_db, monkeypatch):
         [
             call(
                 [user.email, user2.email] if upload_type == "ihc" else [user.email],
-                trial.trial_id,
+                None if upload_type == "ihc" else trial.trial_id,
                 upload_type,
             )
             for upload_type in upload_types
@@ -1384,7 +1399,7 @@ def test_permissions_grant_all_download_permissions(clean_db, monkeypatch):
         Permissions.grant_all_download_permissions()
         gcloud_client.grant_lister_access.assert_called_once_with(user2.email)
         gcloud_client.grant_download_access.assert_called_once_with(
-            [user2.email], trial.trial_id, "ihc"
+            [user2.email], None, "ihc"
         )
 
 
