@@ -118,6 +118,9 @@ def with_default_session(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
         if "session" not in kwargs:
+            logger.info(
+                f"with_default_session for {f.__name__}\nargs: {args}\nkwargs: {kwargs}"
+            )
             kwargs["session"] = app.extensions["sqlalchemy"].db.session
         return f(*args, **kwargs)
 
@@ -757,7 +760,7 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def grant_all_download_permissions(session: Session, trial_id: str = None):
+    def grant_all_download_permissions(trial_id: str, session: Session):
         Permissions._change_all_download_permissions(
             trial_id=trial_id, grant=True, session=session
         )

@@ -9,9 +9,18 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
-## Version `0.25.58` - 10 Jan 2022
+## Version `0.25.60` - 12 Jan 2022
+
+- `fixed` `attempt` made grant_all_download_permissions mimic grant_iam_permissions
+- `added` logging for with_default_session failures
+
+## Version `0.25.59` - 10 Jan 2022
 
 - `added` trial_id kwarg to grant_all_download_permissions
+
+## Version `0.25.58` - 07 Jan 2022
+
+- `changed` schema version bump to add comments to biofx analysis templates
 
 ## Version `0.25.57` - 06 Jan 2022
 
