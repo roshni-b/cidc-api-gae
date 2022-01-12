@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.61` - 12 Jan 2022
+
+- `fixed` passed session to solve ACL-blocking KeyError
+
 ## Version `0.25.60` - 12 Jan 2022
 
 - `fixed` `attempt` made grant_all_download_permissions mimic grant_iam_permissions

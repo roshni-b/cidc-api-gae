@@ -776,7 +776,9 @@ class Permissions(CommonColumns):
     @with_default_session
     def _change_all_download_permissions(trial_id: str, grant: bool, session: Session):
         """if not trial_id, all trials"""
-        perms = Permissions.list(page_size=Permissions.count(), session=session)
+        perms = Permissions.list(
+            page_size=Permissions.count(session=session), session=session
+        )
 
         user_store = {}
         already_listed = []
