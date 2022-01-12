@@ -1376,7 +1376,7 @@ def test_permissions_grant_all_download_permissions(clean_db, monkeypatch):
     )
 
     gcloud_client.reset_mocks()
-    Permissions.grant_all_download_permissions()
+    Permissions.grant_all_download_permissions(None)
     gcloud_client.grant_lister_access.assert_has_calls(
         [call(user.email), call(user2.email)]
     )
@@ -1396,7 +1396,7 @@ def test_permissions_grant_all_download_permissions(clean_db, monkeypatch):
         gcloud_client.reset_mocks()
         user.role = role
         user.update()
-        Permissions.grant_all_download_permissions()
+        Permissions.grant_all_download_permissions(None)
         gcloud_client.grant_lister_access.assert_called_once_with(user2.email)
         gcloud_client.grant_download_access.assert_called_once_with(
             [user2.email], None, "ihc"
