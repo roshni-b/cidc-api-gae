@@ -9,6 +9,12 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.62` - 13 Jan 2022
+
+- `changed` \*_all_download_permissions to \*_download_permissions, including endpoint address
+- `added` upload_type kwarg to grant_download_permissions
+- `added` trial_id and upload_type kwargs to revoke_download_permissions
+
 ## Version `0.25.61` - 12 Jan 2022
 
 - `fixed` passed session to solve ACL-blocking KeyError

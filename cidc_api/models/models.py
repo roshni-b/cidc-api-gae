@@ -760,62 +760,102 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def grant_all_download_permissions(trial_id: str, session: Session):
-        Permissions._change_all_download_permissions(
-            trial_id=trial_id, grant=True, session=session
+    def grant_download_permissions(trial_id: str, upload_type: str, session: Session):
+        Permissions._change_download_permissions(
+            trial_id=trial_id, upload_type=upload_type, grant=True, session=session
         )
 
     @staticmethod
     @with_default_session
-    def revoke_all_download_permissions(session: Session):
-        Permissions._change_all_download_permissions(
-            trial_id=None, grant=False, session=session
+    def revoke_download_permissions(trial_id: str, upload_type: str, session: Session):
+        Permissions._change_download_permissions(
+            trial_id=trial_id, upload_type=upload_type, grant=False, session=session
         )
 
     @staticmethod
     @with_default_session
-    def _change_all_download_permissions(trial_id: str, grant: bool, session: Session):
-        """if not trial_id, all trials"""
-        perms = Permissions.list(
-            page_size=Permissions.count(session=session), session=session
-        )
+    def _change_download_permissions(
+        trial_id: str, upload_type: str, grant: bool, session: Session
+    ):
+        """
+        Allows for widespread granting/revoking of existing download permissions in GCS ACL
+        Optionally filtered for specific trials and upload types
+        If granting, also adds lister IAM permission for each user
+        If revoking, DOES NOT remove lister IAM permission from any user
 
-        user_store = {}
-        already_listed = []
-        perm_dict = defaultdict(lambda: defaultdict(list))
-        for perm in perms:
-            user = user_store.get(perm.granted_to_user)
-            if user is None:
-                user = Users.find_by_id(perm.granted_to_user, session=session)
-                user_store[perm.granted_to_user] = user
+        Parameters
+        ----------
+        trial_id: str
+            only affect permissions for this trial
+            None for all trials
+        upload_type: str
+            only affect permissions for this upload type 
+            None for all upload types
+        grant: bool
+            whether to grant or remove the (filtered) permissions
+            if True, adds lister IAM permission
+        session: Session
+            filled by @with_default_session if not provided
+        """
+        filters = [
+            # set the condition for the join
+            Permissions.granted_to_user == Users.id,
+            # admins have blanket access via IAM
+            Users.role != CIDCRole.ADMIN.value,
+        ]
+        if grant:
+            # NCI users and disable aren't granted download permissions
+            # but we should be able to un-grant ie revoke them
+            filters.extend(
+                [
+                    Users.role != CIDCRole.NCI_BIOBANK_USER.value,
+                    Users.disabled == False,
+                ]
+            )
+        if trial_id:
+            filters.append(
+                or_(
+                    Permissions.trial_id == trial_id, Permissions.trial_id == None
+                ),  # null for cross-trial
+            )
+        if upload_type:
+            filters.append(
+                or_(
+                    Permissions.upload_type == upload_type,
+                    Permissions.upload_type == None,
+                ),  # null for cross-assay
+            )
 
-            if user.is_admin() or user.is_nci_user() or user.disabled:
-                continue
+        # List[Tuple[Permissions, Users]]
+        perms_and_users = session.query(Permissions, Users).filter(*filters).all()
+
+        # group by trial and upload type
+        # Dict[str, Dict[str, List[str]]] = {trial_id: {upload_type: [user_email, ...], ...}, ...}
+        sorted_permissions = defaultdict(lambda: defaultdict(list))
+        # also handle user lister IAM permission if granting
+        already_listed: List[str] = []
+        for perm, user in perms_and_users:
+            # make sure we put it only for the desired scope
+            sorted_permissions[trial_id if trial_id else perm.trial_id][
+                upload_type if upload_type else perm.upload_type
+            ].append(user.email)
 
             # if granting things, grant_lister_access on every user
-            elif grant and user.email not in already_listed:
+            # idempotent, amounting to "add or refresh"
+            if grant and user.email not in already_listed:
                 grant_lister_access(user.email)
                 already_listed.append(user.email)
+            # if un-granting ie revoking things, don't call revoke_lister_access
+            # with the filtering, we don't know if the users have any other
+            # ACL permissions remaining that weren't affected here
 
-            # if un-granting things, revoke_lister_access on every user
-            elif not grant and user.email not in already_listed:
-                revoke_lister_access(user.email)
-                already_listed.append(user.email)
-
-            perm_dict[perm.trial_id][perm.upload_type].append(user.email)
-        del perm, perms  # to prevent mispointing
-
-        if trial_id:
-            trial_perms = perm_dict.get(trial_id, {})
-            trial_perms.update(perm_dict.get(None, {}))
-            perm_dict = {trial_id: trial_perms}
-
-        for trial_id, trial_perms in perm_dict.items():
+        # now that we've filtered and separated, just do them all
+        # new values will override passed args
+        for trial_id, trial_perms in sorted_permissions.items():
             for upload_type, users in trial_perms.items():
-                if grant:
-                    grant_download_access(users, trial_id, upload_type)
-                else:
-                    revoke_download_access(users, trial_id, upload_type)
+                (grant_download_access if grant else revoke_download_access)(
+                    users, trial_id, upload_type
+                )
 
 
 class ValidationMultiError(Exception):
