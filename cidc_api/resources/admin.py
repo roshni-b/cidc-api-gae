@@ -29,9 +29,9 @@ def load_from_blobs():
         return res
 
 
-@admin_bp.route("/grant_all_download_permissions", methods=["GET"])
+@admin_bp.route("/grant_download_permissions", methods=["GET"])
 @requires_auth("admin", CIDCRole.ADMIN.value)
-def grant_all_download_permissions():
+def grant_download_permissions():
 
     report = _encode_and_publish(str({}), GOOGLE_GRANT_DOWNLOAD_PERMISSIONS_TOPIC)
 
