@@ -797,7 +797,21 @@ class Permissions(CommonColumns):
         session: Session
             filled by @with_default_session if not provided
         """
-        filters = []
+        filters = [
+            # set the condition for the join
+            Permissions.granted_to_user == Users.id,
+            # admins have blanket access via IAM
+            Users.role != CIDCRole.ADMIN.value,
+        ]
+        if grant:
+            # NCI users and disable aren't granted download permissions
+            # but we should be able to un-grant ie revoke them
+            filters.extend(
+                [
+                    Users.role != CIDCRole.NCI_BIOBANK_USER.value,
+                    Users.disabled == False,
+                ]
+            )
         if trial_id:
             filters.append(
                 or_(
@@ -811,48 +825,37 @@ class Permissions(CommonColumns):
                     Permissions.upload_type == None,
                 ),  # null for cross-assay
             )
-        filtered_permissions = session.query(Permissions).filter(*filters).all()
+
+        # List[Tuple[Permissions, Users]]
+        perms_and_users = session.query(Permissions, Users).filter(*filters).all()
 
         # group by trial and upload type
-        # also handle user lister IAM permission if granting
-        user_store = {}
-        already_listed = []
+        # Dict[str, Dict[str, List[str]]] = {trial_id: {upload_type: [user_email, ...], ...}, ...}
         sorted_permissions = defaultdict(lambda: defaultdict(list))
-        for perm in filtered_permissions:
-            user = user_store.get(perm.granted_to_user)
-            if user is None:
-                user = Users.find_by_id(perm.granted_to_user, session=session)
-                user_store[perm.granted_to_user] = user
-
-            # Admins have blanket access via IAM
-            # NCI users and disable aren't granted download permissions
-            # # but we should be able to un-grant ie revoke them
-            if user.is_admin() or grant and (user.is_nci_user() or user.disabled):
-                continue
-
-            # if granting things, grant_lister_access on every user
-            # idempotent, amounting to "add or refresh"
-            elif grant and user.email not in already_listed:
-                grant_lister_access(user.email)
-                already_listed.append(user.email)
-
-            # if un-granting ie revoking things, don't call revoke_lister_access
-            # with the filtering, we don't know if the users have any other
-            # ACL permissions remaining that weren't affected here
-
+        # also handle user lister IAM permission if granting
+        already_listed: List[str] = []
+        for perm, user in perms_and_users:
             # make sure we put it only for the desired scope
             sorted_permissions[trial_id if trial_id else perm.trial_id][
                 upload_type if upload_type else perm.upload_type
             ].append(user.email)
 
-        # now that we've filtered, just do them all
+            # if granting things, grant_lister_access on every user
+            # idempotent, amounting to "add or refresh"
+            if grant and user.email not in already_listed:
+                grant_lister_access(user.email)
+                already_listed.append(user.email)
+            # if un-granting ie revoking things, don't call revoke_lister_access
+            # with the filtering, we don't know if the users have any other
+            # ACL permissions remaining that weren't affected here
+
+        # now that we've filtered and separated, just do them all
         # new values will override passed args
         for trial_id, trial_perms in sorted_permissions.items():
             for upload_type, users in trial_perms.items():
-                if grant:
-                    grant_download_access(users, trial_id, upload_type)
-                else:
-                    revoke_download_access(users, trial_id, upload_type)
+                (grant_download_access if grant else revoke_download_access)(
+                    users, trial_id, upload_type
+                )
 
 
 class ValidationMultiError(Exception):
