@@ -265,17 +265,10 @@ def _execute_multiblob_acl_change(
     """
     # https://googleapis.dev/python/storage/latest/_modules/google/cloud/storage/batch.html#Batch
     # Only storage.Batch._MAX_BATCH_SIZE = 1000 requests can be deferred
-    # for each blob, need 1 request to save plus 1 per user
+    # for each blob, need 2 requests: one to get the initial ACL and one to save the changed one
 
-    # using integer divide so we only handle blobs in each batch without going over
-    # will be 0 iff so many users are passed that a single blob can't be finished in a single batch
-    max_blobs_per_batch: int = storage.Batch._MAX_BATCH_SIZE // (
-        len(user_email_list) + 1
-    )
-    if max_blobs_per_batch == 0:
-        raise ValueError(
-            f"Too many users given: {len(user_email_list)}, max {storage.Batch._MAX_BATCH_SIZE - 1}"
-        )
+    # using integer divide so we only handle entire blobs
+    max_blobs_per_batch: int = storage.Batch._MAX_BATCH_SIZE // 2
 
     # modified from https://stackoverflow.com/questions/312443/how-do-you-split-a-list-or-iterable-into-evenly-sized-chunks/312464#312464
     def chunks(lst, n=max_blobs_per_batch) -> Generator:
