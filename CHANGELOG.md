@@ -9,6 +9,10 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.63` - 18 Jan 2022
+
+- `added` storage client batching for ACL-based download permission granting/revoking
+
 ## Version `0.25.62` - 13 Jan 2022
 
 - `changed` \*_all_download_permissions to \*_download_permissions, including endpoint address
