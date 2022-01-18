@@ -355,20 +355,26 @@ def grant_download_access(
 
     else:
 
-        # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
-        storage_client = _get_storage_client()
-        blob_list = []
-        for prefix in prefixes:
-            blob_list.extend(
-                storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix)
-            )
+        try:
+            # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
+            storage_client = _get_storage_client()
+            blob_list = []
+            for prefix in prefixes:
+                blob_list.extend(
+                    storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix)
+                )
 
-        _execute_multiblob_acl_change(
-            user_email_list=[user_email] if isinstance(user_email, str) else user_email,
-            blob_list=blob_list,
-            callback_fn=lambda obj: obj.grant_read(),
-            storage_client=storage_client,
-        )
+            _execute_multiblob_acl_change(
+                user_email_list=[user_email]
+                if isinstance(user_email, str)
+                else user_email,
+                blob_list=blob_list,
+                callback_fn=lambda obj: obj.grant_read(),
+                storage_client=storage_client,
+            )
+        except Exception as e:
+            logger.error(str(e), exc_info=True)
+            raise e
 
 
 def revoke_download_access(
