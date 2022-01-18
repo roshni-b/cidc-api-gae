@@ -8,7 +8,7 @@ import warnings
 import hashlib
 from collections import namedtuple
 from concurrent.futures import Future
-from typing import BinaryIO, List, Optional, Tuple, Union
+from typing import BinaryIO, Callable, Generator, List, Optional, Tuple, Union
 
 import requests
 from google.cloud import storage, pubsub
@@ -243,6 +243,61 @@ def upload_xlsx_to_intake_bucket(
     return f"https://console.cloud.google.com/storage/browser/_details/{bucket_name}/{blob_name}"
 
 
+def _execute_multiblob_acl_change(
+    user_email_list: List[str],
+    blob_list: List[storage.Blob],
+    callback_fn: Callable[[storage.acl._ACLEntity], None],
+    storage_client: storage.Client,
+):
+    """
+    Batch HTTP requests into groups and then process all together
+    Handles batching and saving blobs, requiring only the changes in permissions to be provided.
+        See see https://googleapis.dev/python/storage/latest/acl.html
+    After processing all of the users for each blob, blob.acl.save() is called.
+
+    Parameters
+    ----------
+    user_email_list : List[str]
+    blob_list: List[google.cloud.storage.Blob]
+        used to generate blob / user ACL entries
+    callback_fun : Callable[google.cloud.storage.acl._ACLEntity]
+        each blob / user ACL entry is passed in turn
+    """
+    # https://googleapis.dev/python/storage/latest/_modules/google/cloud/storage/batch.html#Batch
+    # Only storage.Batch._MAX_BATCH_SIZE = 1000 requests can be deferred
+    # for each blob, need 2 requests: one to get the initial ACL and one to save the changed one
+
+    # using integer divide so we only handle entire blobs
+    max_blobs_per_batch: int = storage.Batch._MAX_BATCH_SIZE // 2
+
+    # modified from https://stackoverflow.com/questions/312443/how-do-you-split-a-list-or-iterable-into-evenly-sized-chunks/312464#312464
+    def chunks(lst, n=max_blobs_per_batch) -> Generator:
+        """
+        Yield successive n-sized chunks from lst.
+        Graceful ending by returning shorter final chunk.
+        """
+        for i in range(0, len(lst), n):
+            if i + n >= len(lst):
+                # handle end condition gracefully
+                yield lst[i:]
+            else:
+                yield lst[i : i + n]
+
+    for blob_list_chunk in chunks(blob_list):
+        with storage_client.batch():
+            # if more than _MAX_BATCH_SIZE requests are made before __exit__ is called,
+            # the next request raises ValueError("Too many deferred requests (max {%d})" % _MAX_BATCH_SIZE)
+
+            # see https://stackoverflow.com/questions/45100483/batch-request-with-google-cloud-storage-python-client
+            # and https://googleapis.dev/python/storage/latest/_modules/google/cloud/storage/batch.html#Batch
+            for blob in blob_list_chunk:
+                for user_email in user_email_list:
+                    blob_user = blob.acl.user(user_email)
+                    callback_fn(blob_user)
+
+                blob.acl.save()
+
+
 def grant_download_access(
     user_email: Union[str, List[str]],
     trial_id: Optional[str],
@@ -250,14 +305,14 @@ def grant_download_access(
 ):
     """
     Give a user download access to all objects in a trial of a particular upload type.
-    Also handles a list of users
+    Also handles a list of users except on production.
 
     If trial_id is None, then grant access to all trials.
 
     If upload_type is None, then grant access to all upload_types.
 
     If the user already has download access for this trial and upload type, idempotent.
-    Download access is controlled by ACL.
+    Download access is controlled by IAM on production and ACL elsewhere.
     """
     prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
 
@@ -269,8 +324,7 @@ def grant_download_access(
         policy = bucket.get_iam_policy(requested_policy_version=3)
         policy.version = 3
 
-        # remove the existing binding if one exists so that we can recreate it with
-        # an updated TTL.
+        # remove the existing binding if one exists to prevent duplicates
         all_other_conditions = []
         for prefix in prefixes:
             _, other_conditions = _find_and_pop_iam_binding(
@@ -300,19 +354,21 @@ def grant_download_access(
             raise e
 
     else:
+
         # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
         storage_client = _get_storage_client()
+        blob_list = []
         for prefix in prefixes:
-            for blob in storage_client.list_blobs(
-                GOOGLE_ACL_DATA_BUCKET, prefix=prefix
-            ):
-                if isinstance(user_email, list):
-                    for user in user_email:
-                        blob.acl.user(user).grant_read()
-                else:
-                    blob.acl.user(user_email).grant_read()
+            blob_list.extend(
+                storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix)
+            )
 
-                blob.acl.save()
+        _execute_multiblob_acl_change(
+            user_email_list=[user_email] if isinstance(user_email, str) else user_email,
+            blob_list=blob_list,
+            callback_fn=lambda obj: obj.grant_read(),
+            storage_client=storage_client,
+        )
 
 
 def revoke_download_access(
@@ -375,26 +431,23 @@ def revoke_download_access(
     else:
         # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
         storage_client = _get_storage_client()
-        removed_from = []
+        blob_list = []
         for prefix in prefixes:
-            for blob in storage_client.list_blobs(
-                GOOGLE_ACL_DATA_BUCKET, prefix=prefix
-            ):
+            blob_list.extend(
+                storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix)
+            )
 
-                def revoke(user):
-                    blob_user = blob.acl.user(user)
-                    blob_user.revoke_owner()
-                    blob_user.revoke_writer()
-                    blob_user.revoke_reader()
+        def revoke(blob_user: storage.acl._ACLEntity):
+            blob_user.revoke_owner()
+            blob_user.revoke_writer()
+            blob_user.revoke_reader()
 
-                if isinstance(user_email, list):
-                    for user in user_email:
-                        revoke(user)
-                else:
-                    revoke(user_email)
-
-                removed_from.append(f"gs://{blob.name}")
-                blob.acl.save()
+        _execute_multiblob_acl_change(
+            user_email_list=[user_email] if isinstance(user_email, str) else user_email,
+            blob_list=blob_list,
+            callback_fn=revoke,
+            storage_client=storage_client,
+        )
 
 
 def _build_trial_upload_prefixes(
