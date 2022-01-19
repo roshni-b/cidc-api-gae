@@ -1162,13 +1162,13 @@ def test_permissions_broad_perms(clean_db, monkeypatch):
         upload_type="olink",
         granted_by_user=user.id,
     ).insert()
-    perm_list = Permissions.get_user_list_for_trial_type(trial.trial_id, "ihc")
+    perm_list = Permissions.get_for_trial_type(trial.trial_id, "ihc")
     assert (
         len(perm_list) == 1
         and perm_list[0].upload_type is None
         and perm_list[0].granted_to_user == user.id
     )
-    perm_list = Permissions.get_user_list_for_trial_type("some random trial", "olink")
+    perm_list = Permissions.get_for_trial_type("some random trial", "olink")
     print([p.granted_to_user == user.id for p in perm_list])
     assert len(perm_list) == 2 and all(perm.trial_id is None for perm in perm_list)
     assert all(

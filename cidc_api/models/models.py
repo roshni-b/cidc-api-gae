@@ -681,7 +681,7 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def get_user_list_for_trial_type(
+    def get_for_trial_type(
         trial_id: str, upload_type: str, session: Session
     ) -> List["Permissions"]:
         """
