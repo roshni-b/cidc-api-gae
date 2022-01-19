@@ -31,7 +31,7 @@ os.environ["TZ"] = "UTC"
 from datetime import datetime, timedelta
 from enum import Enum as EnumBaseClass
 from functools import wraps
-from typing import BinaryIO, Dict, Optional, List, Union, Callable, Tuple
+from typing import Any, BinaryIO, Dict, Optional, List, Union, Callable, Tuple
 
 import pandas as pd
 from flask import current_app as app
@@ -118,9 +118,6 @@ def with_default_session(f):
     @wraps(f)
     def wrapped(*args, **kwargs):
         if "session" not in kwargs:
-            logger.info(
-                f"with_default_session for {f.__name__}\nargs: {args}\nkwargs: {kwargs}"
-            )
             kwargs["session"] = app.extensions["sqlalchemy"].db.session
         return f(*args, **kwargs)
 
@@ -508,13 +505,15 @@ class Permissions(CommonColumns):
     EVERY = None
 
     @validates("upload_type")
-    def validate_upload_type(self, key, value):
+    def validate_upload_type(self, key, value: Any) -> Any:
         if value not in ALL_UPLOAD_TYPES and value != self.EVERY:
             raise ValueError(f"cannot grant permission on invalid upload type: {value}")
         return value
 
     @with_default_session
-    def insert(self, session: Session, commit: bool = True, compute_etag: bool = True):
+    def insert(
+        self, session: Session, commit: bool = True, compute_etag: bool = True
+    ) -> None:
         """
         Insert this permission record into the database and add a corresponding IAM policy binding
         on the GCS data bucket.
@@ -634,7 +633,7 @@ class Permissions(CommonColumns):
     @with_default_session
     def delete(
         self, deleted_by: Union[Users, int], session: Session, commit: bool = True
-    ):
+    ) -> None:
         """
         Delete this permission record from the database and revoke the corresponding IAM policy binding
         on the GCS data bucket.
@@ -676,15 +675,44 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def find_for_user(user_id: int, session: Session) -> List:
+    def find_for_user(user_id: int, session: Session) -> List["Permissions"]:
         """Find all Permissions granted to the given user."""
         return session.query(Permissions).filter_by(granted_to_user=user_id).all()
 
     @staticmethod
     @with_default_session
+    def get_for_trial_type(
+        trial_id: str, upload_type: str, session: Session
+    ) -> List["Permissions"]:
+        """
+        Check if a Permissions record exists for the given user, trial, and type.
+        The result may be a trial- or assay-level permission that encompasses the 
+        given trial id or upload type.
+        """
+        return (
+            session.query(Permissions)
+            .filter(
+                (
+                    (Permissions.trial_id == trial_id)
+                    & (Permissions.upload_type == upload_type)
+                )
+                | (
+                    (Permissions.trial_id == Permissions.EVERY)
+                    & (Permissions.upload_type == upload_type)
+                )
+                | (
+                    (Permissions.trial_id == trial_id)
+                    & (Permissions.upload_type == Permissions.EVERY)
+                ),
+            )
+            .all()
+        )
+
+    @staticmethod
+    @with_default_session
     def find_for_user_trial_type(
         user_id: int, trial_id: str, upload_type: str, session: Session
-    ):
+    ) -> Optional["Permissions"]:
         """
         Check if a Permissions record exists for the given user, trial, and type.
         The result may be a trial- or assay-level permission that encompasses the 
@@ -712,7 +740,7 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def grant_iam_permissions(user: Users, session: Session):
+    def grant_iam_permissions(user: Users, session: Session) -> None:
         """
         Grant each of the given `user`'s IAM permissions. If the permissions
         have already been granted, calling this will extend their expiry date.
@@ -745,7 +773,7 @@ class Permissions(CommonColumns):
     @with_default_session
     def grant_download_permissions_for_upload_job(
         cls, upload: "UploadJobs", session: Session
-    ):
+    ) -> None:
         perms = (
             session.query(cls)
             .filter_by(trial_id=upload.trial_id, upload_type=upload.upload_type)
@@ -760,14 +788,18 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def grant_download_permissions(trial_id: str, upload_type: str, session: Session):
+    def grant_download_permissions(
+        trial_id: str, upload_type: str, session: Session
+    ) -> None:
         Permissions._change_download_permissions(
             trial_id=trial_id, upload_type=upload_type, grant=True, session=session
         )
 
     @staticmethod
     @with_default_session
-    def revoke_download_permissions(trial_id: str, upload_type: str, session: Session):
+    def revoke_download_permissions(
+        trial_id: str, upload_type: str, session: Session
+    ) -> None:
         Permissions._change_download_permissions(
             trial_id=trial_id, upload_type=upload_type, grant=False, session=session
         )
@@ -776,7 +808,7 @@ class Permissions(CommonColumns):
     @with_default_session
     def _change_download_permissions(
         trial_id: str, upload_type: str, grant: bool, session: Session
-    ):
+    ) -> None:
         """
         Allows for widespread granting/revoking of existing download permissions in GCS ACL
         Optionally filtered for specific trials and upload types

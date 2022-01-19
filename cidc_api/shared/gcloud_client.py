@@ -8,7 +8,7 @@ import warnings
 import hashlib
 from collections import namedtuple
 from concurrent.futures import Future
-from typing import BinaryIO, Callable, Generator, List, Optional, Tuple, Union
+from typing import Any, BinaryIO, Callable, Dict, List, Optional, Tuple, Union
 
 import requests
 from google.cloud import storage, pubsub
@@ -83,7 +83,7 @@ def upload_xlsx_to_gcs(
     template_type: str,
     filebytes: BinaryIO,
     upload_moment: str,
-):
+) -> storage.Blob:
     """
     Upload an xlsx template file to GOOGLE_ACL_DATA_BUCKET, returning the object URI.
     GOOGLE_DATA_BUCKET on prod.
@@ -129,7 +129,7 @@ def upload_xlsx_to_gcs(
 # # while removing any existing perm for the same prefix
 
 
-def grant_lister_access(user_email: str):
+def grant_lister_access(user_email: str) -> None:
     """
     Grant a user list access to the GOOGLE_ACL_DATA_BUCKET. List access is
     required for the user to download or read objects from this bucket.
@@ -143,7 +143,7 @@ def grant_lister_access(user_email: str):
     grant_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email, iam=True, expiring=False)
 
 
-def revoke_lister_access(user_email: str):
+def revoke_lister_access(user_email: str) -> None:
     """
     Revoke a user's list access to the GOOGLE_ACL_DATA_BUCKET. List access is
     required for the user to download or read objects from this bucket.
@@ -157,7 +157,7 @@ def revoke_lister_access(user_email: str):
     revoke_iam_gcs_access(bucket, GOOGLE_LISTER_ROLE, user_email)
 
 
-def grant_upload_access(user_email: str):
+def grant_upload_access(user_email: str) -> None:
     """
     Grant a user upload access to the GOOGLE_UPLOAD_BUCKET. Upload access
     means a user can write objects to the bucket but cannot delete,
@@ -169,7 +169,7 @@ def grant_upload_access(user_email: str):
     grant_gcs_access(bucket, GOOGLE_UPLOAD_ROLE, user_email, iam=True, expiring=False)
 
 
-def revoke_upload_access(user_email: str):
+def revoke_upload_access(user_email: str) -> None:
     """
     Revoke a user's upload access from GOOGLE_UPLOAD_BUCKET.
     """
@@ -212,7 +212,7 @@ def create_intake_bucket(user_email: str) -> storage.Bucket:
     return bucket
 
 
-def refresh_intake_access(user_email: str):
+def refresh_intake_access(user_email: str) -> None:
     """
     Re-grant a user's access to their intake bucket if it exists.
     """
@@ -247,11 +247,10 @@ def _execute_multiblob_acl_change(
     user_email_list: List[str],
     blob_list: List[storage.Blob],
     callback_fn: Callable[[storage.acl._ACLEntity], None],
-    storage_client: storage.Client,
-):
+) -> None:
     """
-    Batch HTTP requests into groups and then process all together
-    Handles batching and saving blobs, requiring only the changes in permissions to be provided.
+    Spools out each blob and each user with saving the blob.
+    callback_fn is called on each blob / user to make the changes in permissions there.
         See see https://googleapis.dev/python/storage/latest/acl.html
     After processing all of the users for each blob, blob.acl.save() is called.
 
@@ -263,46 +262,66 @@ def _execute_multiblob_acl_change(
     callback_fun : Callable[google.cloud.storage.acl._ACLEntity]
         each blob / user ACL entry is passed in turn
     """
-    # https://googleapis.dev/python/storage/latest/_modules/google/cloud/storage/batch.html#Batch
-    # Only storage.Batch._MAX_BATCH_SIZE = 1000 requests can be deferred
-    # for each blob, need 2 requests: one to get the initial ACL and one to save the changed one
+    for blob in blob_list:
+        for user_email in user_email_list:
+            blob_user = blob.acl.user(user_email)
+            callback_fn(blob_user)
 
-    # using integer divide so we only handle entire blobs
-    max_blobs_per_batch: int = storage.Batch._MAX_BATCH_SIZE // 2
+        blob.acl.save()
 
-    # modified from https://stackoverflow.com/questions/312443/how-do-you-split-a-list-or-iterable-into-evenly-sized-chunks/312464#312464
-    def chunks(lst, n=max_blobs_per_batch) -> Generator:
-        """
-        Yield successive n-sized chunks from lst.
-        Graceful ending by returning shorter final chunk.
-        """
-        for i in range(0, len(lst), n):
-            if i + n >= len(lst):
-                # handle end condition gracefully
-                yield lst[i:]
-            else:
-                yield lst[i : i + n]
 
-    for blob_list_chunk in chunks(blob_list):
-        with storage_client.batch():
-            # if more than _MAX_BATCH_SIZE requests are made before __exit__ is called,
-            # the next request raises ValueError("Too many deferred requests (max {%d})" % _MAX_BATCH_SIZE)
+def get_blobs(
+    trial_id: Optional[str], upload_type: Optional[str],
+) -> List[storage.Blob]:
+    prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
 
-            # see https://stackoverflow.com/questions/45100483/batch-request-with-google-cloud-storage-python-client
-            # and https://googleapis.dev/python/storage/latest/_modules/google/cloud/storage/batch.html#Batch
-            for blob in blob_list_chunk:
-                for user_email in user_email_list:
-                    blob_user = blob.acl.user(user_email)
-                    callback_fn(blob_user)
+    # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
+    blob_list = []
+    storage_client = _get_storage_client()
+    for prefix in prefixes:
+        blob_list.extend(
+            storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix)
+        )
+    return blob_list
 
-                blob.acl.save()
+
+def get_blob_names(trial_id: Optional[str], upload_type: Optional[str],) -> List[str]:
+    blob_list = get_blobs(trial_id=trial_id, upload_type=upload_type,)
+    return [blob.name for blob in blob_list]
+
+
+def grant_download_access_to_blob_names(
+    user_email: Union[str, List[str]], blob_name_list: List[str],
+) -> None:
+    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+    blob_list = [bucket.get_blob(name) for name in blob_name_list]
+    grant_download_access_to_blobs(user_email=user_email, blob_list=blob_list)
+
+
+def grant_download_access_to_blobs(
+    user_email: Union[str, List[str]], blob_list: List[storage.Blob],
+) -> None:
+    """
+    Using ACL, grant download access to all blobs given to the user(s) given.
+    NotImplementedError on prod for now
+    """
+    if ENV == "prod":
+        raise NotImplementedError("ACL is not implemented yet on production")
+    if isinstance(user_email, str):
+        user_email = [user_email]
+
+    _execute_multiblob_acl_change(
+        user_email_list=user_email,
+        blob_list=blob_list,
+        callback_fn=lambda obj: obj.grant_read(),
+    )
 
 
 def grant_download_access(
     user_email: Union[str, List[str]],
     trial_id: Optional[str],
     upload_type: Optional[str],
-):
+) -> None:
     """
     Give a user download access to all objects in a trial of a particular upload type.
     Also handles a list of users except on production.
@@ -314,11 +333,10 @@ def grant_download_access(
     If the user already has download access for this trial and upload type, idempotent.
     Download access is controlled by IAM on production and ACL elsewhere.
     """
-    prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
-
-    logger.info(f"Granting download access on prefixes {prefixes} to {user_email}")
-
     if ENV == "prod":
+        prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
+        logger.info(f"Granting download access on prefixes {prefixes} to {user_email}")
+
         bucket = _get_bucket(GOOGLE_DATA_BUCKET)
         # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
         policy = bucket.get_iam_policy(requested_policy_version=3)
@@ -354,34 +372,23 @@ def grant_download_access(
             raise e
 
     else:
+        logger.info(
+            f"Granting download access on trial {trial_id} upload {upload_type} to {user_email}"
+        )
+        blob_list = get_blobs(trial_id, upload_type)
 
-        try:
-            # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
-            storage_client = _get_storage_client()
-            blob_list = []
-            for prefix in prefixes:
-                blob_list.extend(
-                    storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix)
-                )
-
-            _execute_multiblob_acl_change(
-                user_email_list=[user_email]
-                if isinstance(user_email, str)
-                else user_email,
-                blob_list=blob_list,
-                callback_fn=lambda obj: obj.grant_read(),
-                storage_client=storage_client,
-            )
-        except Exception as e:
-            logger.error(str(e), exc_info=True)
-            raise e
+        _execute_multiblob_acl_change(
+            user_email_list=[user_email] if isinstance(user_email, str) else user_email,
+            blob_list=blob_list,
+            callback_fn=lambda obj: obj.grant_read(),
+        )
 
 
 def revoke_download_access(
     user_email: Union[str, List[str]],
     trial_id: Optional[str],
     upload_type: Optional[str],
-):
+) -> None:
     """
     Revoke a user's download access to all objects in a trial of a particular upload type.
     Also handles a list of users
@@ -452,7 +459,6 @@ def revoke_download_access(
             user_email_list=[user_email] if isinstance(user_email, str) else user_email,
             blob_list=blob_list,
             callback_fn=revoke,
-            storage_client=storage_client,
         )
 
 
@@ -489,7 +495,7 @@ def grant_gcs_access(
     user_email: str,
     iam: bool = True,
     expiring: bool = True,
-):
+) -> None:
     """
     Grant `user_email` the provided `role` on a storage object `obj`.
     `iam` access assumes `obj` is a bucket and will expire after `INACTIVE_USER_DAYS` days have elapsed.
@@ -548,7 +554,7 @@ MAX_REVOKE_ALL_ITERATIONS = 250
 
 def revoke_nonexpiring_gcs_access(
     bucket: storage.Bucket, role: str, user_email: str, prefixes: List[str] = [""]
-):
+) -> None:
     """Revoke a bucket IAM policy change made by calling `grant_gcs_access` with expiring=False."""
     # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
     policy = bucket.get_iam_policy(requested_policy_version=3)
@@ -570,7 +576,7 @@ def revoke_nonexpiring_gcs_access(
 
             # with only return others if removed_binding is not None
             elif len(other_conditions):
-                readd_bindings = _build_bindings_without_expiry(
+                readd_bindings = _build_iam_bindings_without_expiry(
                     bucket.name, role, user_email, other_conditions=other_conditions
                 )
                 policy.bindings.extend(readd_bindings)
@@ -582,9 +588,7 @@ def revoke_nonexpiring_gcs_access(
         raise e
 
 
-def revoke_iam_gcs_access(
-    bucket: storage.Bucket, role: str, user_email: str,
-):
+def revoke_iam_gcs_access(bucket: storage.Bucket, role: str, user_email: str,) -> None:
     """Revoke a bucket IAM policy made by calling `grant_gcs_access` with iam=True."""
     # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
     policy = bucket.get_iam_policy(requested_policy_version=3)
@@ -607,7 +611,7 @@ def revoke_iam_gcs_access(
         raise e
 
 
-def revoke_all_download_access(user_email: str):
+def revoke_all_download_access(user_email: str) -> None:
     """
     Completely revoke a user's download access to all objects in the data bucket.
     Download access is controlled by ACL.
@@ -633,7 +637,7 @@ user_member = lambda email: f"user:{email}"
 
 def _build_iam_binding(
     bucket: str, role: str, user_email: str, ttl_days: int = INACTIVE_USER_DAYS,
-) -> dict:
+) -> Dict[str, Any]:
     """
     Grant the user associated with `user_email` the provided IAM `role` when acting
     on objects in `bucket`. This permission remains active for `ttl_days` days.
@@ -684,7 +688,7 @@ def _build_iam_bindings_without_expiry(
     user_email: str,
     prefixes: List[str] = [""],
     other_conditions: List[str] = [],
-) -> List[dict]:
+) -> List[Dict[str, Any]]:
     """
     Only for prod
 
@@ -770,8 +774,8 @@ def _find_and_pop_iam_binding(
     Find an IAM policy binding for the given `user_email`, `policy`, and `role`, and pop
     it from the policy's bindings list if it exists.
     
-    On prod: Matches the `prefix` if given.
-    On prod: has second return
+    On prod: Matches the `prefix` if given, has single Dict[str, Any] return
+    On prod: has second List[str] return
         The rest of the conditions if they exist to be readded to the bindings later.
         If no matching binding is found and `return_next`, the last set of conditions for that
             role/user_email if that permission can be extended.
@@ -920,7 +924,7 @@ def _encode_and_publish(content: str, topic: str) -> Future:
     return report
 
 
-def publish_upload_success(job_id: int):
+def publish_upload_success(job_id: int) -> None:
     """Publish to the uploads topic that the upload job with the provided `job_id` succeeded."""
     report = _encode_and_publish(str(job_id), GOOGLE_UPLOAD_TOPIC)
 
@@ -930,7 +934,7 @@ def publish_upload_success(job_id: int):
         report.result()
 
 
-def publish_patient_sample_update(manifest_upload_id: int):
+def publish_patient_sample_update(manifest_upload_id: int) -> None:
     """Publish to the patient_sample_update topic that a new manifest has been uploaded."""
     report = _encode_and_publish(str(manifest_upload_id), GOOGLE_PATIENT_SAMPLE_TOPIC)
 
@@ -939,7 +943,7 @@ def publish_patient_sample_update(manifest_upload_id: int):
         report.result()
 
 
-def publish_artifact_upload(file_id: int):
+def publish_artifact_upload(file_id: int) -> None:
     """Publish a downloadable file ID to the artifact_upload topic"""
     report = _encode_and_publish(str(file_id), GOOGLE_ARTIFACT_UPLOAD_TOPIC)
 
@@ -948,7 +952,7 @@ def publish_artifact_upload(file_id: int):
         report.result()
 
 
-def send_email(to_emails: List[str], subject: str, html_content: str, **kw):
+def send_email(to_emails: List[str], subject: str, html_content: str, **kw) -> None:
     """
     Publish an email-to-send to the emails topic.
     `kw` are expected to be sendgrid json api style additional email parameters. 

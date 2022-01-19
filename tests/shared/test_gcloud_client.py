@@ -13,7 +13,9 @@ from cidc_api.shared import gcloud_client
 from cidc_api.config import settings
 from cidc_api.shared.gcloud_client import (
     create_intake_bucket,
+    get_blob_names,
     grant_download_access,
+    grant_download_access_to_blob_names,
     grant_lister_access,
     grant_upload_access,
     refresh_intake_access,
@@ -270,6 +272,29 @@ def test_refresh_intake_access(monkeypatch):
     assert args[0].name.startswith(GOOGLE_INTAKE_BUCKET)
     assert args[1:] == (GOOGLE_INTAKE_ROLE, EMAIL)
     assert "iam" in kwargs and kwargs["iam"]
+
+
+def test_grant_download_access_by_names(monkeypatch):
+    """
+    Check that get_blob_name returns the name of the blob to have the correct input
+    Check that grant_download_access_to_blob_names makes ACL calls as expected
+    """
+    client = _mock_gcloud_storage_client(monkeypatch)
+
+    _get_bucket = MagicMock()
+    _get_bucket.return_value = bucket = MagicMock()
+    bucket.get_blob.return_value = client.blobs[0]
+    monkeypatch.setattr("cidc_api.shared.gcloud_client._get_bucket", _get_bucket)
+
+    blob_names = get_blob_names("10021", "wes_analysis")
+    assert blob_names == [client.blobs[0].name]
+
+    grant_download_access_to_blob_names(EMAIL, blob_name_list=blob_names)
+    client.blobs[0].acl.user.assert_called_once_with(EMAIL)
+    client.blob_users[0].grant_read.assert_called_once()
+    client.blobs[0].acl.save.assert_called_once()
+    client.blobs[1].acl.user.assert_not_called()
+    client.blobs[1].acl.save.assert_not_called()
 
 
 def test_grant_download_access(monkeypatch):

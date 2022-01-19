@@ -9,6 +9,15 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.65` - 19 Jan 2022
+
+- `added` string-based wrappers for ACL control instead of purely Blobs
+- `added` function to return users allowed for a given trial id / upload type
+
+## Version `0.25.64` - 18 Jan 2022
+
+- `added` logging in ACL for non-specific KeyError
+
 ## Version `0.25.63` - 18 Jan 2022
 
 - `added` storage client batching for ACL-based download permission granting/revoking

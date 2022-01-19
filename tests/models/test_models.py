@@ -1100,6 +1100,8 @@ def test_permissions_broad_perms(clean_db, monkeypatch):
     gcloud_client = mock_gcloud_client(monkeypatch)
     user = Users(email="test@user.com")
     user.insert()
+    user2 = Users(email="foo@bar.com")
+    user2.insert()
     trial = TrialMetadata(trial_id=TRIAL_ID, metadata_json=METADATA)
     trial.insert()
     other_trial = TrialMetadata(
@@ -1150,6 +1152,29 @@ def test_permissions_broad_perms(clean_db, monkeypatch):
     assert perm is not None and perm.upload_type is None
     perm = Permissions.find_for_user_trial_type(user.id, "some random trial", "olink")
     assert perm is not None and perm.trial_id is None
+    del perm  # to prevent mis-pointing
+
+    # Getting all users for a particular user-type returns broader perms
+    # insert permission for second user to make sure returns list correctly
+    Permissions(
+        granted_to_user=user2.id,
+        trial_id=None,
+        upload_type="olink",
+        granted_by_user=user.id,
+    ).insert()
+    perm_list = Permissions.get_for_trial_type(trial.trial_id, "ihc")
+    assert (
+        len(perm_list) == 1
+        and perm_list[0].upload_type is None
+        and perm_list[0].granted_to_user == user.id
+    )
+    perm_list = Permissions.get_for_trial_type("some random trial", "olink")
+    print([p.granted_to_user == user.id for p in perm_list])
+    assert len(perm_list) == 2 and all(perm.trial_id is None for perm in perm_list)
+    assert all(
+        any(perm.granted_to_user == user for perm in perm_list)
+        for user in [user.id, user2.id]
+    )
 
 
 @db_test
