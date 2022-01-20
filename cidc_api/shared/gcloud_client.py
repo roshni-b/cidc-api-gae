@@ -30,6 +30,7 @@ from ..config.settings import (
     GOOGLE_EMAILS_TOPIC,
     GOOGLE_PATIENT_SAMPLE_TOPIC,
     GOOGLE_ARTIFACT_UPLOAD_TOPIC,
+    GOOGLE_GRANT_DOWNLOAD_PERMISSIONS_TOPIC,
     GOOGLE_MAX_CONDITIONAL_OPERATORS,
     GOOGLE_MAX_DOWNLOAD_CONDITIONS,
     GOOGLE_MAX_DOWNLOAD_PERMISSIONS,
@@ -115,6 +116,8 @@ def upload_xlsx_to_gcs(
     filebytes.seek(0)
     blob.upload_from_file(filebytes)
 
+    # TODO: deprecate
+    # The old data bucket will be deprecated upon successful testing of ACL-based permissions
     data_bucket = _get_bucket(
         GOOGLE_DATA_BUCKET if ENV == "prod" else GOOGLE_ACL_DATA_BUCKET
     )
@@ -137,6 +140,8 @@ def grant_lister_access(user_email: str) -> None:
     GOOGLE_DATA_BUCKET on prod.
     """
     logger.info(f"granting list to {user_email}")
+    # TODO: deprecate
+    # The old data bucket will be deprecated upon successful testing of ACL-based permissions
     bucket = _get_bucket(
         GOOGLE_DATA_BUCKET if ENV == "prod" else GOOGLE_ACL_DATA_BUCKET
     )
@@ -151,6 +156,8 @@ def revoke_lister_access(user_email: str) -> None:
     GOOGLE_DATA_BUCKET on prod.
     """
     logger.info(f"revoking list to {user_email}")
+    # TODO: deprecate
+    # The old data bucket will be deprecated upon successful testing of ACL-based permissions
     bucket = _get_bucket(
         GOOGLE_DATA_BUCKET if ENV == "prod" else GOOGLE_ACL_DATA_BUCKET
     )
@@ -270,9 +277,7 @@ def _execute_multiblob_acl_change(
         blob.acl.save()
 
 
-def get_blobs(
-    trial_id: Optional[str], upload_type: Optional[str],
-) -> List[storage.Blob]:
+def get_blob_names(trial_id: Optional[str], upload_type: Optional[str]) -> List[str]:
     prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
 
     # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
@@ -282,24 +287,11 @@ def get_blobs(
         blob_list.extend(
             storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix)
         )
-    return blob_list
-
-
-def get_blob_names(trial_id: Optional[str], upload_type: Optional[str],) -> List[str]:
-    blob_list = get_blobs(trial_id=trial_id, upload_type=upload_type,)
     return [blob.name for blob in blob_list]
 
 
 def grant_download_access_to_blob_names(
-    user_email: Union[str, List[str]], blob_name_list: List[str],
-) -> None:
-    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
-    blob_list = [bucket.get_blob(name) for name in blob_name_list]
-    grant_download_access_to_blobs(user_email=user_email, blob_list=blob_list)
-
-
-def grant_download_access_to_blobs(
-    user_email: Union[str, List[str]], blob_list: List[storage.Blob],
+    user_email_list: List[str], blob_name_list: List[str],
 ) -> None:
     """
     Using ACL, grant download access to all blobs given to the user(s) given.
@@ -307,11 +299,15 @@ def grant_download_access_to_blobs(
     """
     if ENV == "prod":
         raise NotImplementedError("ACL is not implemented yet on production")
-    if isinstance(user_email, str):
-        user_email = [user_email]
+
+    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+    blob_list = [bucket.get_blob(name) for name in blob_name_list]
+
+    if isinstance(user_email_list, str):
+        user_email_list = [user_email_list]
 
     _execute_multiblob_acl_change(
-        user_email_list=user_email,
+        user_email_list=user_email_list,
         blob_list=blob_list,
         callback_fn=lambda obj: obj.grant_read(),
     )
@@ -334,6 +330,9 @@ def grant_download_access(
     Download access is controlled by IAM on production and ACL elsewhere.
     """
     if ENV == "prod":
+        # TODO: deprecate
+        # This will be deprecated upon successful testing of the ACL `else` below
+        # The old data bucket will be deprecated upon successful testing of ACL-based permissions
         prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
         logger.info(f"Granting download access on prefixes {prefixes} to {user_email}")
 
@@ -372,16 +371,50 @@ def grant_download_access(
             raise e
 
     else:
-        logger.info(
-            f"Granting download access on trial {trial_id} upload {upload_type} to {user_email}"
-        )
-        blob_list = get_blobs(trial_id, upload_type)
+        user_email_list = [user_email] if isinstance(user_email, str) else user_email
+        del user_email
 
-        _execute_multiblob_acl_change(
-            user_email_list=[user_email] if isinstance(user_email, str) else user_email,
-            blob_list=blob_list,
-            callback_fn=lambda obj: obj.grant_read(),
+        logger.info(
+            f"Granting download access on trial {trial_id} upload {upload_type} to {user_email_list}"
         )
+
+        # ---- Handle through main grant permissions topic ----
+        # would time out in CFn
+        kwargs = {
+            "trial_id": trial_id,
+            "upload_type": upload_type,
+            "user_email_list": user_email_list,
+            "revoke": False,
+        }
+        report = _encode_and_publish(
+            str(kwargs), GOOGLE_GRANT_DOWNLOAD_PERMISSIONS_TOPIC
+        )
+        # Wait for response from pub/sub
+        if report:
+            report.result()
+
+
+def revoke_download_access_from_blob_names(
+    user_email_list: List[str], blob_name_list: List[str],
+) -> None:
+    """
+    Using ACL, grant download access to all blobs given to the users given.
+    NotImplementedError on prod for now
+    """
+    if ENV == "prod":
+        raise NotImplementedError("ACL is not implemented yet on production")
+
+    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+    blob_list = [bucket.get_blob(name) for name in blob_name_list]
+
+    def revoke(blob_user: storage.acl._ACLEntity):
+        blob_user.revoke_owner()
+        blob_user.revoke_write()
+        blob_user.revoke_read()
+
+    _execute_multiblob_acl_change(
+        blob_list=blob_list, callback_fn=revoke, user_email_list=user_email_list,
+    )
 
 
 def revoke_download_access(
@@ -396,12 +429,14 @@ def revoke_download_access(
     Return the GCS URIs from which access has been revoked.
     Download access is controlled by ACL.
     """
-    prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
-
-    logger.info(f"Revoking download access on {prefixes} from {user_email}")
 
     if ENV == "prod":
+        # TODO: deprecate
+        # This will be deprecated upon successful testing of the ACL `else` below
+        # The old data bucket will be deprecated upon successful testing of ACL-based permissions
+        prefixes = _build_trial_upload_prefixes(trial_id, upload_type)
         bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+        logger.info(f"Revoking download access on {prefixes} from {user_email}")
 
         # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
         policy = bucket.get_iam_policy(requested_policy_version=3)
@@ -442,24 +477,26 @@ def revoke_download_access(
             raise e
 
     else:
-        # https://googleapis.dev/python/storage/latest/client.html#google.cloud.storage.client.Client.list_blobs
-        storage_client = _get_storage_client()
-        blob_list = []
-        for prefix in prefixes:
-            blob_list.extend(
-                storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET, prefix=prefix)
-            )
-
-        def revoke(blob_user: storage.acl._ACLEntity):
-            blob_user.revoke_owner()
-            blob_user.revoke_writer()
-            blob_user.revoke_reader()
-
-        _execute_multiblob_acl_change(
-            user_email_list=[user_email] if isinstance(user_email, str) else user_email,
-            blob_list=blob_list,
-            callback_fn=revoke,
+        user_email_list = [user_email] if isinstance(user_email, str) else user_email
+        del user_email
+        logger.info(
+            f"Revoking download access on trial {trial_id} upload {upload_type} from {user_email_list}"
         )
+
+        # ---- Handle through main grant permissions topic ----
+        # would timeout in cloud function
+        kwargs = {
+            "trial_id": trial_id,
+            "upload_type": upload_type,
+            "user_email_list": user_email_list,
+            "revoke": True,
+        }
+        report = _encode_and_publish(
+            str(kwargs), GOOGLE_GRANT_DOWNLOAD_PERMISSIONS_TOPIC
+        )
+        # Wait for response from pub/sub
+        if report:
+            report.result()
 
 
 def _build_trial_upload_prefixes(
@@ -620,16 +657,27 @@ def revoke_all_download_access(user_email: str) -> None:
     storage_client = _get_storage_client()
 
     if ENV == "prod":
+        # TODO: deprecate
+        # The old data bucket will be deprecated upon successful testing of ACL-based permissions
         bucket = _get_bucket(GOOGLE_DATA_BUCKET)
         revoke_iam_gcs_access(bucket, GOOGLE_DOWNLOAD_ROLE, user_email)
 
     else:
-        for blob in storage_client.list_blobs(GOOGLE_ACL_DATA_BUCKET):
-            blob_user = blob.acl.user(user_email)
-            blob_user.revoke_owner()
-            blob_user.revoke_writer()
-            blob_user.revoke_reader()
-            blob.acl.save()
+
+        # ---- Handle through main grant permissions topic ----
+        # would timeout in cloud function
+        kwargs = {
+            "trial_id": None,
+            "upload_type": None,
+            "user_email_list": [user_email],
+            "revoke": True,
+        }
+        report = _encode_and_publish(
+            str(kwargs), GOOGLE_GRANT_DOWNLOAD_PERMISSIONS_TOPIC
+        )
+        # Wait for response from pub/sub
+        if report:
+            report.result()
 
 
 user_member = lambda email: f"user:{email}"
@@ -827,6 +875,8 @@ def _find_and_pop_iam_binding(
         )
     )
 
+    # TODO: deprecate
+    # The old data bucket will be deprecated upon successful testing of ACL-based permissions
     if ENV == "prod":
         # if it's an expiring permission, it'll be in the form: (prefix or prefix2) and time
         # # old permissions are in the form: time and prefix
@@ -856,6 +906,8 @@ def _find_and_pop_iam_binding(
 
 def get_signed_url(
     object_name: str,
+    # TODO: deprecate
+    # The old data bucket will be deprecated upon successful testing of ACL-based permissions
     bucket_name: str = GOOGLE_DATA_BUCKET if ENV == "prod" else GOOGLE_ACL_DATA_BUCKET,
     method: str = "GET",
     expiry_mins: int = 30,
