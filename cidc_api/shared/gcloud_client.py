@@ -300,7 +300,7 @@ def grant_download_access_to_blob_names(
     if ENV == "prod":
         raise NotImplementedError("ACL is not implemented yet on production")
 
-    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+    bucket = _get_bucket(GOOGLE_ACL_DATA_BUCKET)
     blob_list = [bucket.get_blob(name) for name in blob_name_list]
 
     if isinstance(user_email_list, str):
@@ -404,7 +404,7 @@ def revoke_download_access_from_blob_names(
     if ENV == "prod":
         raise NotImplementedError("ACL is not implemented yet on production")
 
-    bucket = _get_bucket(GOOGLE_DATA_BUCKET)
+    bucket = _get_bucket(GOOGLE_ACL_DATA_BUCKET)
     blob_list = [bucket.get_blob(name) for name in blob_name_list]
 
     def revoke(blob_user: storage.acl._ACLEntity):
