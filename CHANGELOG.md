@@ -9,6 +9,13 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.25.65` - 21 Jan 2022
+
+- `added` name-based revoking functions for ACL equivalent to the granting ones
+- `changed` other existing download permissions functions to use the ACL name-based equivalents
+- `fixed` naming conventions that caused issues with cross-repo integration
+- `added` more tests around ACL stuff
+
 ## Version `0.25.65` - 19 Jan 2022
 
 - `added` string-based wrappers for ACL control instead of purely Blobs
