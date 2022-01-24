@@ -22,6 +22,7 @@ from cidc_api.shared.gcloud_client import (
     revoke_all_download_access,
     revoke_download_access_from_blob_names,
     revoke_download_access,
+    revoke_intake_access,
     revoke_lister_access,
     revoke_upload_access,
     upload_xlsx_to_gcs,
@@ -280,6 +281,24 @@ def test_refresh_intake_access(monkeypatch):
     assert args[0].name.startswith(GOOGLE_INTAKE_BUCKET)
     assert args[1:] == (GOOGLE_INTAKE_ROLE, EMAIL)
     assert "iam" in kwargs and kwargs["iam"]
+
+
+def test_revoke_intake_access(monkeypatch):
+    _mock_gcloud_storage_client(
+        monkeypatch,
+        _build_iam_binding(GOOGLE_INTAKE_BUCKET, GOOGLE_INTAKE_ROLE, EMAIL),
+        lambda i: i,
+    )
+
+    revoke_iam_gcs_access = MagicMock()
+    monkeypatch.setattr(
+        "cidc_api.shared.gcloud_client.revoke_iam_gcs_access", revoke_iam_gcs_access
+    )
+
+    revoke_intake_access(EMAIL)
+    args, _ = revoke_iam_gcs_access.call_args_list[0]
+    assert args[0].name.startswith(GOOGLE_INTAKE_BUCKET)
+    assert args[1:] == (GOOGLE_INTAKE_ROLE, EMAIL)
 
 
 def test_grant_download_access_by_names(monkeypatch):

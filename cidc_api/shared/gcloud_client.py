@@ -230,6 +230,17 @@ def refresh_intake_access(user_email: str) -> None:
         grant_gcs_access(bucket, GOOGLE_INTAKE_ROLE, user_email, iam=True)
 
 
+def revoke_intake_access(user_email: str) -> None:
+    """
+    Re-grant a user's access to their intake bucket if it exists.
+    """
+    bucket_name = get_intake_bucket_name(user_email)
+    bucket = _get_bucket(bucket_name)
+
+    if bucket.exists():
+        revoke_iam_gcs_access(bucket, GOOGLE_INTAKE_ROLE, user_email)
+
+
 def upload_xlsx_to_intake_bucket(
     user_email: str, trial_id: str, upload_type: str, xlsx: FileStorage
 ) -> str:
@@ -625,7 +636,7 @@ def revoke_nonexpiring_gcs_access(
         raise e
 
 
-def revoke_iam_gcs_access(bucket: storage.Bucket, role: str, user_email: str,) -> None:
+def revoke_iam_gcs_access(bucket: storage.Bucket, role: str, user_email: str) -> None:
     """Revoke a bucket IAM policy made by calling `grant_gcs_access` with iam=True."""
     # see https://cloud.google.com/storage/docs/access-control/using-iam-permissions#code-samples_3
     policy = bucket.get_iam_policy(requested_policy_version=3)
