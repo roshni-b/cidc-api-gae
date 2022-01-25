@@ -257,8 +257,14 @@ def test_duplicate_user(clean_db):
 
 
 @db_test
-def test_disable_inactive_users(clean_db):
+def test_disable_inactive_users(clean_db, monkeypatch):
     """Check that the disable_inactive_users method disables users appropriately"""
+    revoke_user_permissions = MagicMock()
+    monkeypatch.setattr(
+        "cidc_api.models.models.Permissions.revoke_user_permissions",
+        revoke_user_permissions,
+    )
+
     # Create two users who should be disabled, and one who should not
     now = datetime.now()
     Users(email="1@", _accessed=now - timedelta(days=INACTIVE_USER_DAYS)).insert()
@@ -269,14 +275,16 @@ def test_disable_inactive_users(clean_db):
     for user in Users.list():
         assert user.disabled == False
 
-    disabled = Users.disable_inactive_users()
-    disabled = [u for u in disabled]
+    disabled = Users.disable_inactive_users(session=clean_db)
 
-    assert len(disabled)
+    assert len(disabled) == 2
 
     users = Users.list()
     assert len([u for u in users if u.disabled]) == len(disabled)
-    assert [u for u in users if not u.disabled][0].email == "3@"
+    assert sorted([u.email for u in users if u.disabled]) == sorted(disabled)
+    assert [u.email for u in users if not u.disabled] == ["3@"]
+
+    assert revoke_user_permissions.call_count == 2
 
 
 TRIAL_ID = "cimac-12345"
@@ -1246,9 +1254,9 @@ def test_permissions_delete(clean_db, monkeypatch, caplog):
 
 
 @db_test
-def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
+def test_permissions_grant_user_permissions(clean_db, monkeypatch):
     """
-    Smoke test that Permissions.grant_iam_permissions calls grant_download_access with the right arguments.
+    Smoke test that Permissions.grant_user_permissions calls grant_download_access with the right arguments.
     """
     refresh_intake_access = MagicMock()
     monkeypatch.setattr(
@@ -1280,13 +1288,13 @@ def test_permissions_grant_iam_permissions(clean_db, monkeypatch):
     )
 
     # IAM permissions not granted to network viewers
-    Permissions.grant_iam_permissions(user=user)
+    Permissions.grant_user_permissions(user=user)
     gcloud_client.grant_lister_access.assert_not_called()
     gcloud_client.grant_download_access.assert_not_called()
 
     # IAM permissions should be granted for any other role
     user.role = CIDCRole.CIMAC_USER.value
-    Permissions.grant_iam_permissions(user=user)
+    Permissions.grant_user_permissions(user=user)
     gcloud_client.grant_lister_access.assert_called_once_with(user.email)
     gcloud_client.grant_download_access.assert_has_calls(
         [

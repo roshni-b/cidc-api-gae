@@ -122,11 +122,14 @@ def update_user(user: Users, user_updates: Users):
     # refresh their IAM permissions.
     if user.disabled and user_updates.get("disabled") == False:
         user_updates["_accessed"] = datetime.now()
-        Permissions.grant_iam_permissions(user)
+        Permissions.grant_user_permissions(user)
 
-    user.update(changes=user_updates)
+    # If this user is being disabled, remove all of their download permissions.
+    if not user.disabled and user_updates.get("disabled") == True:
+        Permissions.revoke_user_permissions(user)
 
     # this is not user-input due to @with_lookup, so safe to return
+    user.update(changes=user_updates)
     return user
 
 

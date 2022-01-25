@@ -187,9 +187,9 @@ def test_update_user(cidc_api, clean_db, monkeypatch):
     assert res.json["approval_date"] is not None
     _accessed = res.json["_accessed"]
 
-    # Reenabling a disabled user updates that user's last access date.
+    # Disabling a user revokes that user's permssions.
     mock_permissions = MagicMock()
-    mock_permissions.grant_iam_permissions = MagicMock()
+    mock_permissions.revoke_user_permissions = MagicMock()
     monkeypatch.setattr("cidc_api.resources.users.Permissions", mock_permissions)
     res = client.patch(
         f"/users/{other_user.id}",
@@ -197,6 +197,9 @@ def test_update_user(cidc_api, clean_db, monkeypatch):
         json={"disabled": True},
     )
     assert res.status_code == 200
+    mock_permissions.revoke_user_permissions.assert_called()
+
+    # Reenabling a disabled user updates that user's last access date.
     res = client.patch(
         f"/users/{other_user.id}",
         headers={"If-Match": res.json["_etag"]},
@@ -204,7 +207,7 @@ def test_update_user(cidc_api, clean_db, monkeypatch):
     )
     assert res.status_code == 200
     assert res.json["_accessed"] > _accessed
-    mock_permissions.grant_iam_permissions.assert_called()
+    mock_permissions.grant_user_permissions.assert_called()
 
     # Trying to update a non-existing user yields 404
     res = client.patch(

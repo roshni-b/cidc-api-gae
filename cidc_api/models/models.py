@@ -99,6 +99,7 @@ from ..shared.gcloud_client import (
     publish_artifact_upload,
     refresh_intake_access,
     revoke_download_access,
+    revoke_intake_access,
     revoke_lister_access,
 )
 from ..config.logging import get_logger
@@ -345,7 +346,7 @@ class Users(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def find_by_email(email: str, session: Session) -> Optional:
+    def find_by_email(email: str, session: Session) -> Optional["Users"]:
         """
         Search for a record in the Users table with the given email.
         If found, return the record. If not found, return None.
@@ -376,21 +377,29 @@ class Users(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def disable_inactive_users(session: Session, commit: bool = True):
+    def disable_inactive_users(session: Session, commit: bool = True) -> List[str]:
         """
         Disable any users who haven't accessed the API in more than `settings.INACTIVE_USER_DAYS`.
+        Returns list of user emails that have been disabled.
         """
         user_inactivity_cutoff = datetime.today() - timedelta(days=INACTIVE_USER_DAYS)
         update_query = (
             update(Users)
             .where(Users._accessed < user_inactivity_cutoff)
             .values(disabled=True)
-            .returning(Users.email)
+            .returning(Users.id)
         )
-        res = session.execute(update_query)
+        disabled_user_ids: List[int] = [uid for uid in session.execute(update_query)]
         if commit:
             session.commit()
-        return res
+
+        disabled_users = [
+            Users.find_by_id(uid, session=session) for uid in disabled_user_ids
+        ]
+        for u in disabled_users:
+            Permissions.revoke_user_permissions(u, session=session)
+
+        return [u.email for u in disabled_users]
 
     @staticmethod
     @with_default_session
@@ -740,34 +749,45 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def grant_iam_permissions(user: Users, session: Session) -> None:
+    def grant_user_permissions(user: Users, session: Session) -> None:
         """
-        Grant each of the given `user`'s IAM permissions. If the permissions
-        have already been granted, calling this will extend their expiry date.
+        Grant each of the given `user`'s permissions. Idempotent.
         """
         # Don't make any GCS changes if this user doesn't have download access
         if user.role == CIDCRole.NETWORK_VIEWER.value:
             return
 
-        filter_for_user = lambda q: q.filter(Permissions.granted_to_user == user.id)
-        perms = Permissions.list(
-            page_size=Permissions.count(session=session, filter_=filter_for_user),
-            filter_=filter_for_user,
-            session=session,
-        )
+        perms = Permissions.find_for_user(user.id)
         # if they have any download permissions, they need the CIDC Lister role
         if len(perms):
             grant_lister_access(user.email)
         for perm in perms:
-            # Regrant each permission to reset the TTL for this permission to
-            # `settings.INACTIVE_USER_DAYS` from today.
+            # Regrant each permission: idempotent.
             grant_download_access(user.email, perm.trial_id, perm.upload_type)
-
-        # If this user has a CIDCRole that requires GCS objects.list
-        # add the custom IAM role: CIDC Object Lister
 
         # Regrant all of the user's intake bucket upload permissions, if they have any
         refresh_intake_access(user.email)
+
+    @staticmethod
+    @with_default_session
+    def revoke_user_permissions(user: Users, session: Session) -> None:
+        """
+        Revoke each of the given `user`'s permissions. Idempotent.
+        """
+        # Don't make any GCS changes if this user doesn't have download access
+        if user.role == CIDCRole.NETWORK_VIEWER.value:
+            return
+
+        perms = Permissions.find_for_user(user.id, session=session)
+        # since we're revoking all, should revoke the CIDC Lister role too
+        if len(perms):
+            revoke_lister_access(user.email)
+        for perm in perms:
+            # Revoke each permission.
+            revoke_download_access(user.email, perm.trial_id, perm.upload_type)
+
+        # Revoke all of the user's intake bucket upload permissions, if they have any
+        revoke_intake_access(user.email)
 
     @classmethod
     @with_default_session
