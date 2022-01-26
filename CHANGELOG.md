@@ -9,6 +9,12 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.26.0` - 25 Jan 2022
+
+- `removed` non-ACL based download permissions systems for production
+- `removed` admin end point to trigger download permissions cloud function; trigger manually from GCP
+- `changed` disabling inactive users to only return emails for newly disabled
+
 ## Version `0.25.68` - 24 Jan 2022
 
 - `added` calls to revoke permissions when user is disabled, both manually and for inactivity

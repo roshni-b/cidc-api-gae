@@ -270,18 +270,26 @@ def test_disable_inactive_users(clean_db, monkeypatch):
     Users(email="1@", _accessed=now - timedelta(days=INACTIVE_USER_DAYS)).insert()
     Users(email="2@", _accessed=now - timedelta(days=INACTIVE_USER_DAYS + 5)).insert()
     Users(email="3@", _accessed=now - timedelta(days=INACTIVE_USER_DAYS - 1)).insert()
+    Users(
+        email="4@",
+        _accessed=now - timedelta(days=INACTIVE_USER_DAYS - 1),
+        disabled=True,
+    ).insert()
 
-    # All users start off enabled
+    # 3 users start off enabled
+    # 1 starts disabled to test that not returned for CFn email
     for user in Users.list():
-        assert user.disabled == False
+        if user.email != "4@":
+            assert user.disabled == False
 
     disabled = Users.disable_inactive_users(session=clean_db)
 
+    # Remember, 4@ was already disabled
     assert len(disabled) == 2
 
     users = Users.list()
-    assert len([u for u in users if u.disabled]) == len(disabled)
-    assert sorted([u.email for u in users if u.disabled]) == sorted(disabled)
+    assert len([u for u in users if u.disabled]) == len(disabled) + 1
+    assert sorted(["1@", "2@"]) == sorted(disabled)
     assert [u.email for u in users if not u.disabled] == ["3@"]
 
     assert revoke_user_permissions.call_count == 2
