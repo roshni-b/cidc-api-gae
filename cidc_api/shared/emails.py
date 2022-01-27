@@ -6,7 +6,7 @@ from functools import wraps
 from cidc_schemas.prism import generate_analysis_configs_from_upload_patch
 
 from . import gcloud_client
-from ..config.settings import ENV, GOOGLE_ACL_DATA_BUCKET, GOOGLE_DATA_BUCKET
+from ..config.settings import ENV, GOOGLE_ACL_DATA_BUCKET
 
 CIDC_MAILING_LIST = "cidc@jimmy.harvard.edu"
 
@@ -80,7 +80,7 @@ def new_upload_alert(upload, full_metadata) -> dict:
         full_metadata,
         upload.metadata_patch,
         upload.upload_type,
-        GOOGLE_DATA_BUCKET if ENV == "prod" else GOOGLE_ACL_DATA_BUCKET,
+        GOOGLE_ACL_DATA_BUCKET,
     )
 
     subject = (
