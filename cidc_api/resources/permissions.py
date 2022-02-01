@@ -1,5 +1,3 @@
-from typing import List
-
 from webargs import fields
 from webargs.flaskparser import use_args
 from flask import Blueprint

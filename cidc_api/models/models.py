@@ -31,12 +31,13 @@ os.environ["TZ"] = "UTC"
 from datetime import datetime, timedelta
 from enum import Enum as EnumBaseClass
 from functools import wraps
-from typing import BinaryIO, Dict, Optional, List, Union, Callable, Tuple
+from typing import Any, BinaryIO, Dict, Optional, List, Union, Callable, Tuple
 
 import pandas as pd
 from flask import current_app as app
 from google.cloud.storage import Blob
 from sqlalchemy import (
+    and_,
     Column,
     Boolean,
     DateTime,
@@ -97,6 +98,7 @@ from ..shared.gcloud_client import (
     publish_artifact_upload,
     refresh_intake_access,
     revoke_download_access,
+    revoke_intake_access,
     revoke_lister_access,
 )
 from ..config.logging import get_logger
@@ -343,7 +345,7 @@ class Users(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def find_by_email(email: str, session: Session) -> Optional:
+    def find_by_email(email: str, session: Session) -> Optional["Users"]:
         """
         Search for a record in the Users table with the given email.
         If found, return the record. If not found, return None.
@@ -374,21 +376,31 @@ class Users(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def disable_inactive_users(session: Session, commit: bool = True):
+    def disable_inactive_users(session: Session, commit: bool = True) -> List[str]:
         """
         Disable any users who haven't accessed the API in more than `settings.INACTIVE_USER_DAYS`.
+        Returns list of user emails that have been disabled.
         """
         user_inactivity_cutoff = datetime.today() - timedelta(days=INACTIVE_USER_DAYS)
         update_query = (
             update(Users)
-            .where(Users._accessed < user_inactivity_cutoff)
+            .where(
+                and_(Users._accessed < user_inactivity_cutoff, Users.disabled == False)
+            )
             .values(disabled=True)
-            .returning(Users.email)
+            .returning(Users.id)
         )
-        res = session.execute(update_query)
+        disabled_user_ids: List[int] = [uid for uid in session.execute(update_query)]
         if commit:
             session.commit()
-        return res
+
+        disabled_users = [
+            Users.find_by_id(uid, session=session) for uid in disabled_user_ids
+        ]
+        for u in disabled_users:
+            Permissions.revoke_user_permissions(u, session=session)
+
+        return [u.email for u in disabled_users]
 
     @staticmethod
     @with_default_session
@@ -503,13 +515,15 @@ class Permissions(CommonColumns):
     EVERY = None
 
     @validates("upload_type")
-    def validate_upload_type(self, key, value):
+    def validate_upload_type(self, key, value: Any) -> Any:
         if value not in ALL_UPLOAD_TYPES and value != self.EVERY:
             raise ValueError(f"cannot grant permission on invalid upload type: {value}")
         return value
 
     @with_default_session
-    def insert(self, session: Session, commit: bool = True, compute_etag: bool = True):
+    def insert(
+        self, session: Session, commit: bool = True, compute_etag: bool = True
+    ) -> None:
         """
         Insert this permission record into the database and add a corresponding IAM policy binding
         on the GCS data bucket.
@@ -611,7 +625,7 @@ class Permissions(CommonColumns):
     @with_default_session
     def delete(
         self, deleted_by: Union[Users, int], session: Session, commit: bool = True
-    ):
+    ) -> None:
         """
         Delete this permission record from the database and revoke the corresponding IAM policy binding
         on the GCS data bucket.
@@ -653,15 +667,44 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def find_for_user(user_id: int, session: Session) -> List:
+    def find_for_user(user_id: int, session: Session) -> List["Permissions"]:
         """Find all Permissions granted to the given user."""
         return session.query(Permissions).filter_by(granted_to_user=user_id).all()
 
     @staticmethod
     @with_default_session
+    def get_for_trial_type(
+        trial_id: str, upload_type: str, session: Session
+    ) -> List["Permissions"]:
+        """
+        Check if a Permissions record exists for the given user, trial, and type.
+        The result may be a trial- or assay-level permission that encompasses the 
+        given trial id or upload type.
+        """
+        return (
+            session.query(Permissions)
+            .filter(
+                (
+                    (Permissions.trial_id == trial_id)
+                    & (Permissions.upload_type == upload_type)
+                )
+                | (
+                    (Permissions.trial_id == Permissions.EVERY)
+                    & (Permissions.upload_type == upload_type)
+                )
+                | (
+                    (Permissions.trial_id == trial_id)
+                    & (Permissions.upload_type == Permissions.EVERY)
+                ),
+            )
+            .all()
+        )
+
+    @staticmethod
+    @with_default_session
     def find_for_user_trial_type(
         user_id: int, trial_id: str, upload_type: str, session: Session
-    ):
+    ) -> Optional["Permissions"]:
         """
         Check if a Permissions record exists for the given user, trial, and type.
         The result may be a trial- or assay-level permission that encompasses the 
@@ -689,40 +732,51 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def grant_iam_permissions(user: Users, session: Session):
+    def grant_user_permissions(user: Users, session: Session) -> None:
         """
-        Grant each of the given `user`'s IAM permissions. If the permissions
-        have already been granted, calling this will extend their expiry date.
+        Grant each of the given `user`'s permissions. Idempotent.
         """
         # Don't make any GCS changes if this user doesn't have download access
         if user.role == CIDCRole.NETWORK_VIEWER.value:
             return
 
-        filter_for_user = lambda q: q.filter(Permissions.granted_to_user == user.id)
-        perms = Permissions.list(
-            page_size=Permissions.count(session=session, filter_=filter_for_user),
-            filter_=filter_for_user,
-            session=session,
-        )
+        perms = Permissions.find_for_user(user.id)
         # if they have any download permissions, they need the CIDC Lister role
         if len(perms):
             grant_lister_access(user.email)
         for perm in perms:
-            # Regrant each permission to reset the TTL for this permission to
-            # `settings.INACTIVE_USER_DAYS` from today.
+            # Regrant each permission: idempotent.
             grant_download_access(user.email, perm.trial_id, perm.upload_type)
-
-        # If this user has a CIDCRole that requires GCS objects.list
-        # add the custom IAM role: CIDC Object Lister
 
         # Regrant all of the user's intake bucket upload permissions, if they have any
         refresh_intake_access(user.email)
+
+    @staticmethod
+    @with_default_session
+    def revoke_user_permissions(user: Users, session: Session) -> None:
+        """
+        Revoke each of the given `user`'s permissions. Idempotent.
+        """
+        # Don't make any GCS changes if this user doesn't have download access
+        if user.role == CIDCRole.NETWORK_VIEWER.value:
+            return
+
+        perms = Permissions.find_for_user(user.id, session=session)
+        # since we're revoking all, should revoke the CIDC Lister role too
+        if len(perms):
+            revoke_lister_access(user.email)
+        for perm in perms:
+            # Revoke each permission.
+            revoke_download_access(user.email, perm.trial_id, perm.upload_type)
+
+        # Revoke all of the user's intake bucket upload permissions, if they have any
+        revoke_intake_access(user.email)
 
     @classmethod
     @with_default_session
     def grant_download_permissions_for_upload_job(
         cls, upload: "UploadJobs", session: Session
-    ):
+    ) -> None:
         perms = (
             session.query(cls)
             .filter_by(trial_id=upload.trial_id, upload_type=upload.upload_type)
@@ -737,50 +791,106 @@ class Permissions(CommonColumns):
 
     @staticmethod
     @with_default_session
-    def grant_all_download_permissions(session: Session):
-        Permissions._change_all_download_permissions(grant=True, session=session)
+    def grant_download_permissions(
+        trial_id: str, upload_type: str, session: Session
+    ) -> None:
+        Permissions._change_download_permissions(
+            trial_id=trial_id, upload_type=upload_type, grant=True, session=session
+        )
 
     @staticmethod
     @with_default_session
-    def revoke_all_download_permissions(session: Session):
-        Permissions._change_all_download_permissions(grant=False, session=session)
+    def revoke_download_permissions(
+        trial_id: str, upload_type: str, session: Session
+    ) -> None:
+        Permissions._change_download_permissions(
+            trial_id=trial_id, upload_type=upload_type, grant=False, session=session
+        )
 
     @staticmethod
     @with_default_session
-    def _change_all_download_permissions(grant: bool, session: Session):
-        perms = Permissions.list(page_size=Permissions.count(), session=session)
+    def _change_download_permissions(
+        trial_id: str, upload_type: str, grant: bool, session: Session
+    ) -> None:
+        """
+        Allows for widespread granting/revoking of existing download permissions in GCS ACL
+        Optionally filtered for specific trials and upload types
+        If granting, also adds lister IAM permission for each user
+        If revoking, DOES NOT remove lister IAM permission from any user
 
-        user_store = {}
-        already_listed = []
-        perm_dict = defaultdict(lambda: defaultdict(list))
-        for perm in perms:
-            user = user_store.get(perm.granted_to_user)
-            if user is None:
-                user = Users.find_by_id(perm.granted_to_user, session=session)
-                user_store[perm.granted_to_user] = user
+        Parameters
+        ----------
+        trial_id: str
+            only affect permissions for this trial
+            None for all trials
+        upload_type: str
+            only affect permissions for this upload type 
+            None for all upload types
+        grant: bool
+            whether to grant or remove the (filtered) permissions
+            if True, adds lister IAM permission
+        session: Session
+            filled by @with_default_session if not provided
+        """
+        filters = [
+            # set the condition for the join
+            Permissions.granted_to_user == Users.id,
+            # admins have blanket access via IAM
+            Users.role != CIDCRole.ADMIN.value,
+        ]
+        if grant:
+            # NCI users and disable aren't granted download permissions
+            # but we should be able to un-grant ie revoke them
+            filters.extend(
+                [
+                    Users.role != CIDCRole.NCI_BIOBANK_USER.value,
+                    Users.disabled == False,
+                ]
+            )
+        if trial_id:
+            filters.append(
+                or_(
+                    Permissions.trial_id == trial_id, Permissions.trial_id == None
+                ),  # null for cross-trial
+            )
+        if upload_type:
+            filters.append(
+                or_(
+                    Permissions.upload_type == upload_type,
+                    Permissions.upload_type == None,
+                ),  # null for cross-assay
+            )
 
-            if user.is_admin() or user.is_nci_user() or user.disabled:
-                continue
+        # List[Tuple[Permissions, Users]]
+        perms_and_users = session.query(Permissions, Users).filter(*filters).all()
+
+        # group by trial and upload type
+        # Dict[str, Dict[str, List[str]]] = {trial_id: {upload_type: [user_email, ...], ...}, ...}
+        sorted_permissions = defaultdict(lambda: defaultdict(list))
+        # also handle user lister IAM permission if granting
+        already_listed: List[str] = []
+        for perm, user in perms_and_users:
+            # make sure we put it only for the desired scope
+            sorted_permissions[trial_id if trial_id else perm.trial_id][
+                upload_type if upload_type else perm.upload_type
+            ].append(user.email)
 
             # if granting things, grant_lister_access on every user
-            elif grant and user.email not in already_listed:
+            # idempotent, amounting to "add or refresh"
+            if grant and user.email not in already_listed:
                 grant_lister_access(user.email)
                 already_listed.append(user.email)
+            # if un-granting ie revoking things, don't call revoke_lister_access
+            # with the filtering, we don't know if the users have any other
+            # ACL permissions remaining that weren't affected here
 
-            # if un-granting things, revoke_lister_access on every user
-            elif not grant and user.email not in already_listed:
-                revoke_lister_access(user.email)
-                already_listed.append(user.email)
-
-            perm_dict[perm.trial_id][perm.upload_type].append(user.email)
-        del perm, perms  # to prevent mispointing
-
-        for trial_id, trial_perms in perm_dict.items():
+        # now that we've filtered and separated, just do them all
+        # new values will override passed args
+        for trial_id, trial_perms in sorted_permissions.items():
             for upload_type, users in trial_perms.items():
-                if grant:
-                    grant_download_access(users, trial_id, upload_type)
-                else:
-                    revoke_download_access(users, trial_id, upload_type)
+                (grant_download_access if grant else revoke_download_access)(
+                    users, trial_id, upload_type
+                )
 
 
 class ValidationMultiError(Exception):

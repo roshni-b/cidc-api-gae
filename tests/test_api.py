@@ -429,7 +429,6 @@ def test_endpoint_urls(cidc_api):
         "/",
         "/admin/test_csms",
         "/admin/load_from_blobs",
-        "/admin/grant_all_download_permissions",
         "/downloadable_files/",
         "/downloadable_files/filelist",
         "/downloadable_files/compressed_batch",

@@ -5,6 +5,8 @@ from setuptools import setup
 with open("requirements.modules.txt") as f:
     requirements = f.read().splitlines()
 
+from cidc_api import __version__
+
 setup(
     name="cidc_api_modules",
     description="SQLAlchemy data models and configuration tools used in the CIDC API",
@@ -20,6 +22,6 @@ setup(
         "cidc_api.models.templates",
     ],
     url="https://github.com/CIMAC-CIDC/cidc_api-gae",
-    version="0.25.55",
+    version=__version__,
     zip_safe=False,
 )

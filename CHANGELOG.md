@@ -9,6 +9,76 @@ This Changelog tracks changes to this project. The notes below include a summary
 - `fixed` for any bug fixes.
 - `security` in case of vulnerabilities.
 
+## Version `0.26.0` - 25 Jan 2022
+
+- `removed` non-ACL based download permissions systems for production
+- `removed` admin end point to trigger download permissions cloud function; trigger manually from GCP
+- `changed` disabling inactive users to only return emails for newly disabled
+
+## Version `0.25.68` - 24 Jan 2022
+
+- `added` calls to revoke permissions when user is disabled, both manually and for inactivity
+
+## Version `0.25.67` - 21 Jan 2022
+
+- `fixed` point to new ACL-controlled bucket in ACL control functions
+
+## Version `0.25.66` - 21 Jan 2022
+
+- `added` name-based revoking functions for ACL equivalent to the granting ones
+- `changed` other existing download permissions functions to use the ACL name-based equivalents
+- `fixed` naming conventions that caused issues with cross-repo integration
+- `added` more tests around ACL stuff
+
+## Version `0.25.65` - 19 Jan 2022
+
+- `added` string-based wrappers for ACL control instead of purely Blobs
+- `added` function to return users allowed for a given trial id / upload type
+
+## Version `0.25.64` - 18 Jan 2022
+
+- `added` logging in ACL for non-specific KeyError
+
+## Version `0.25.63` - 18 Jan 2022
+
+- `added` storage client batching for ACL-based download permission granting/revoking
+
+## Version `0.25.62` - 13 Jan 2022
+
+- `changed` \*_all_download_permissions to \*_download_permissions, including endpoint address
+- `added` upload_type kwarg to grant_download_permissions
+- `added` trial_id and upload_type kwargs to revoke_download_permissions
+
+## Version `0.25.61` - 12 Jan 2022
+
+- `fixed` passed session to solve ACL-blocking KeyError
+
+## Version `0.25.60` - 12 Jan 2022
+
+- `fixed` `attempt` made grant_all_download_permissions mimic grant_iam_permissions
+- `added` logging for with_default_session failures
+
+## Version `0.25.59` - 10 Jan 2022
+
+- `added` trial_id kwarg to grant_all_download_permissions
+
+## Version `0.25.58` - 07 Jan 2022
+
+- `changed` schema version bump to add comments to biofx analysis templates
+
+## Version `0.25.57` - 06 Jan 2022
+
+- `fixed` can't apply expiry condition to upload buckets as they are ACL-controlled
+
+## Version `0.25.56` - 06 Jan 2022
+
+- `fixed` typo by adding missing `and`
+
+## Version `0.25.55` - 05 Jan 2022
+
+- `added` back IAM download functionality for production environment only, partially reverting commit 7504926685dcd00b0c20b41911ec8aba7f8b98b0
+- `change` version definition location from `setup.py` to `__init__.py` to match schemas/cli
+
 ## Version `0.25.54` - 22 Dec 2021
 
 - `changed` admin grant all download permissions to run through cloud function
